@@ -1,0 +1,9098 @@
+# 0. Introduction
+
+## 0.1 Objectif du document
+
+Ce document décrit les règles fonctionnelles d'une application PC permettant de jouer en ligne à une version numérique de Kemet avec 3 joueurs.
+
+Il doit servir de référence principale pour :
+
+* concevoir le moteur de jeu ;
+* modéliser les données ;
+* développer l'interface ;
+* implémenter les règles ;
+* écrire les tests ;
+* éviter les ambiguïtés lors du développement par une IA ou un développeur.
+
+Ce document décrit les règles du jeu telles qu'elles doivent être implémentées dans l'application.
+Il ne s'agit pas d'un livret pédagogique destiné aux joueurs, mais d'un cahier des charges fonctionnel.
+
+---
+
+## 0.2 Objectif de l'application
+
+L'application attendue est une application PC permettant à 3 joueurs de jouer en ligne.
+
+L'application doit permettre à un utilisateur de :
+
+* créer une partie ;
+* rejoindre une partie existante ;
+* quitter une partie ;
+* se reconnecter à une partie en cours ;
+* reprendre une partie interrompue.
+
+La partie se joue sans limite de temps.
+
+Lorsqu'un joueur doit effectuer une action, la partie attend sa décision.
+
+Aucune intelligence artificielle ne remplace un joueur absent.
+
+---
+
+## 0.3 Nombre de joueurs
+
+Le jeu est conçu pour exactement 3 joueurs.
+
+Une partie ne peut commencer que lorsque 3 joueurs sont présents.
+
+Chaque joueur possède :
+
+* une couleur ;
+* une cité ;
+* des unités ;
+* des pyramides ;
+* des cartes Combat ;
+* des cartes Intervention Divine ;
+* des ressources Ank ;
+* des tuiles Pouvoir ;
+* des prêtres Ta-Seti.
+
+---
+
+## 0.4 Objectif du jeu
+
+Le but du jeu est d'être le premier joueur à commencer un Tour d'Action normal avec au moins 10 Points de Victoire.
+
+La victoire n'est jamais vérifiée immédiatement après un gain de Point de Victoire.
+
+Elle est vérifiée uniquement :
+
+* au début du Tour d'Action normal du joueur actif ;
+* avant que ce joueur ne réalise une action.
+
+Si ce joueur possède 10 Points de Victoire ou plus à ce moment :
+
+* la partie se termine immédiatement ;
+* ce joueur est déclaré vainqueur.
+
+---
+
+## 0.5 Structure générale d'une partie
+
+Une partie est composée d'une succession de jours.
+
+Chaque jour contient trois phases :
+
+1. Phase d'Aube
+2. Phase de Jour
+3. Phase de Nuit
+
+La Phase d'Aube détermine l'ordre du tour.
+
+La Phase de Jour permet aux joueurs d'effectuer leurs actions.
+
+La Phase de Nuit résout les revenus, effets de nuit et réinitialisations.
+
+---
+
+## 0.6 Principes généraux d'implémentation
+
+Le jeu doit être implémenté comme un système strictement déterministe.
+
+Toutes les actions doivent être validées par le moteur de règles avant d'être appliquées.
+
+Une action illégale doit être refusée sans modifier l'état de la partie.
+
+Le serveur ou le moteur principal doit conserver l'état complet de la partie, notamment :
+
+* position des unités ;
+* position des prêtres ;
+* pyramides ;
+* tuiles Pouvoir ;
+* cartes Combat disponibles ;
+* cartes ID ;
+* ressources Ank ;
+* Points de Victoire ;
+* ordre du tour ;
+* état de la Phase de Jour ;
+* jetons Action utilisés ;
+* effets temporaires ;
+* bonus journaliers ;
+* historique minimal des actions.
+
+Après chaque action validée, l'état de la partie doit pouvoir être sauvegardé.
+
+---
+
+## 0.7 Jeu en ligne et attente des joueurs
+
+La partie est jouée au tour par tour.
+
+À tout instant, le jeu attend la décision d'un ou plusieurs joueurs selon le contexte :
+
+* joueur actif pendant un Tour d'Action ;
+* joueurs impliqués pendant un combat ;
+* joueurs participant à la Phase d'Aube ;
+* joueur devant faire un choix de retraite, rapatriement, carte ou pouvoir.
+
+Il n'existe pas de limite de temps.
+
+Si un joueur quitte ou se déconnecte :
+
+* la partie reste en attente ;
+* l'état de la partie est conservé ;
+* le joueur peut se reconnecter ultérieurement.
+
+---
+
+## 0.8 Définitions principales
+
+### Joueur
+
+Participant à la partie.
+Chaque joueur contrôle une couleur, une cité, des unités, des pyramides, des cartes, des ressources et des pouvoirs.
+
+### Unité
+
+Élément militaire de base présent sur le plateau principal.
+
+Chaque unité apporte 1 Force en combat.
+
+Une unité détruite retourne dans la réserve de son propriétaire.
+
+### Armée
+
+Ensemble d'unités d'un même joueur présentes sur un même emplacement.
+
+Une armée peut contenir une créature et un ou plusieurs prêtres.
+
+### Créature
+
+Tuile spéciale accompagnant généralement une armée.
+
+Une créature ne compte pas comme une unité.
+
+Une armée ne peut normalement pas posséder plus d'une créature, sauf effet spécifique comme Chiron.
+
+### Prêtre
+
+Élément Ta-Seti appartenant à un joueur.
+
+Un joueur possède 3 prêtres.
+
+Une armée contenant au moins un prêtre bénéficie de tous les pouvoirs Ta-Seti permanents acquis par son propriétaire.
+
+Plusieurs prêtres dans une même armée n'apportent pas d'effet supplémentaire.
+
+### Pyramide
+
+Élément situé dans une cité.
+
+Chaque pyramide possède :
+
+* une couleur ;
+* un niveau de 1 à 4.
+
+Une pyramide contrôlée permet d'acheter des tuiles Pouvoir de sa couleur.
+
+Une pyramide de niveau 4 rapporte 1 Point de Victoire temporaire à son contrôleur.
+
+### Tuile Pouvoir
+
+Effet permanent, immédiat, créature ou capacité spéciale acheté par un joueur.
+
+Une tuile Pouvoir possède :
+
+* une couleur ;
+* un niveau ;
+* un coût ;
+* un nom ;
+* un effet.
+
+Un joueur ne peut jamais posséder deux tuiles portant le même nom.
+
+### Ank
+
+Ressource principale du jeu.
+
+Les Ank servent notamment à :
+
+* acheter des pouvoirs ;
+* recruter ;
+* faire évoluer les pyramides ;
+* payer certaines cartes ID ;
+* payer certaines téléportations.
+
+Un joueur ne peut jamais posséder plus de 11 Ank.
+
+### Point de Victoire
+
+Valeur utilisée pour déterminer le vainqueur.
+
+Il existe des Points de Victoire permanents et temporaires.
+
+Les Points de Victoire temporaires peuvent être perdus lorsque la condition qui les accorde disparaît.
+
+### Carte Combat
+
+Carte utilisée pendant l'Aube et pendant les combats.
+
+Chaque joueur possède le même ensemble de 8 cartes Combat.
+
+### Carte Intervention Divine
+
+Carte spéciale pouvant être utilisée pendant un combat ou pendant la Phase de Jour selon son type.
+
+### Jeton Action
+
+Jeton placé pendant la Phase de Jour pour réaliser une action.
+
+Chaque joueur dispose de 5 jetons Action classiques par jour.
+
+### Jeton Gris
+
+Jeton Action supplémentaire permanent obtenu par certains pouvoirs.
+
+Il doit être joué immédiatement avant ou après un jeton Action classique.
+
+### Jeton Doré
+
+Jeton Action supplémentaire permanent spécialisé obtenu par certains pouvoirs.
+
+Il doit être joué immédiatement avant ou après un jeton Action classique.
+
+### Jeton Aube
+
+Jeton utilisé pendant la Phase d'Aube pour augmenter la puissance d'Aube.
+
+Chaque Jeton Aube ajoute +1 à la valeur d'Aube du joueur.
+
+### Plateau Ta-Seti
+
+Plateau secondaire représenté par un graphe orienté.
+
+Les prêtres des joueurs y progressent pour obtenir des récompenses.
+
+---
+
+## 0.9 Règle d'unicité des noms
+
+Lorsqu'une tuile existe en plusieurs exemplaires, plusieurs joueurs peuvent l'acquérir.
+
+Cependant, un même joueur ne peut jamais posséder deux tuiles portant le même nom.
+
+Exemples :
+
+* deux joueurs différents peuvent posséder chacun une tuile "Prière +1 Ank" ;
+* un même joueur ne peut pas posséder deux tuiles "Prière +1 Ank" ;
+* un joueur ne peut posséder qu'une seule tuile "Point de Victoire", quelle que soit sa couleur.
+
+---
+
+## 0.10 Règle générale de calcul des coûts
+
+Les réductions de coût se cumulent.
+
+Formule générale :
+
+Coût final = max(0, Coût de base - Somme des réductions applicables)
+
+Le coût final ne peut jamais être négatif.
+
+Cette règle s'applique sauf indication contraire explicite.
+
+---
+
+## 0.11 Informations publiques et privées
+
+Les informations publiques comprennent notamment :
+
+* position des unités ;
+* position des pyramides ;
+* tuiles Pouvoir achetées ;
+* nombre d'Ank ;
+* Points de Victoire ;
+* créatures en jeu ;
+* prêtres visibles sur le plateau ;
+* ordre du tour.
+
+Les informations privées comprennent notamment :
+
+* cartes Combat disponibles dans la main du joueur ;
+* cartes Combat défaussées face cachée ;
+* cartes ID en main ;
+* cartes jouées face cachée pendant l'Aube ;
+* cartes jouées face cachée pendant un combat avant révélation.
+
+Le moteur de jeu doit empêcher un joueur de consulter des informations privées qui ne lui appartiennent pas, sauf effet spécifique comme Préscience.
+1. Plateau
+1.1 Vue d'ensemble
+
+Le plateau représente la région située au nord du fleuve.
+
+Il est composé de :
+
+3 cités de joueurs ;
+plusieurs zones désertiques ;
+4 temples :
+Temple 1 ;
+Temple 2 ;
+Temple 3 ;
+Temple Bleu ;
+un réseau de déplacements défini par une matrice d'adjacence ;
+des murailles entourant chaque cité ;
+des emplacements liés au fleuve.
+
+Le fleuve lui-même ne fait pas partie du plateau jouable.
+
+1.2 Types d'emplacements
+Cité
+
+Une cité est un ensemble d'emplacements appartenant initialement à un joueur.
+
+Chaque cité contient :
+
+plusieurs cases de recrutement ;
+les pyramides du joueur ;
+des murailles.
+
+Les unités présentes dans leur propre cité bénéficient de :
+
++1 Force
+
+en combat.
+
+Désert
+
+Les déserts constituent les zones neutres du plateau.
+
+Ils servent principalement :
+
+aux déplacements ;
+aux combats ;
+à l'accès aux temples ;
+à l'accès aux cités adverses.
+Temple
+
+Les temples procurent des avantages lors de la phase de nuit.
+
+Il existe :
+
+Temple 1 (T1)
+
+Récompense de nuit :
+
++2 Ank
+Temple 2 (T2)
+
+Récompense de nuit :
+
++3 Ank
+Temple 3 (T3)
+
+Récompense de nuit :
+
+Sacrifier 1 unité
+→ gagner 5 Ank
+
+Le sacrifice est optionnel.
+
+Temple Bleu
+
+Récompense de nuit :
+
+Sacrifier 2 unités
+→ gagner 1 Point de Victoire permanent
+
+Le sacrifice est optionnel.
+
+1.3 Emplacements liés au fleuve
+
+Certains emplacements sont considérés comme liés au fleuve.
+
+Cette propriété est notamment utilisée par le pouvoir Kraken.
+
+Les emplacements liés au fleuve sont :
+
+Temple Bleu ;
+Temple 3 ;
+le désert situé entre Temple Bleu et Temple 3 ;
+le désert associé à Temple 2.
+
+Ces emplacements possèdent la propriété :
+
+isRiverLinked = true
+
+Tous les autres emplacements possèdent :
+
+isRiverLinked = false
+1.4 Murailles
+
+Chaque cité est entourée de murailles.
+
+Règle générale
+
+Une armée ne peut pas traverser une muraille ennemie.
+
+Exception
+
+Une armée située sur le désert faisant face à une cité peut franchir la muraille pour entrer dans cette cité.
+
+Passe-Muraille
+
+Certaines capacités permettent d'ignorer cette restriction :
+
+pouvoir Rouge Passe-Muraille ;
+Jeton Doré Rouge ;
+carte ID Passe-Muraille ;
+certains pouvoirs Ta-Seti.
+1.5 Portails et téléportation
+
+Certains emplacements possèdent un portail.
+
+Téléportation normale
+
+Une téléportation permet de se déplacer :
+
+Portail de départ
+→ Obélisque visible
+
+Coût :
+
+2 Ank
+
+Certaines tuiles réduisent ce coût.
+
+La téléportation peut être utilisée :
+
+avant un déplacement ;
+après un déplacement ;
+entre deux portions d'un même déplacement.
+Téléportation par carte ID
+
+Une carte ID permet :
+
+Payer 1 Ank
+→ se téléporter vers un obélisque
+
+Cette téléportation est intégrée au déplacement en cours.
+
+1.6 Adjacence
+
+Les déplacements sont définis par une matrice d'adjacence.
+
+Deux emplacements sont adjacents si une liaison existe entre eux.
+
+Une armée peut uniquement se déplacer vers un emplacement adjacent, sauf lorsqu'une capacité de téléportation est utilisée.
+
+1.7 Limites d'occupation
+
+Par défaut :
+
+5 unités maximum
+
+par armée.
+
+Avec le pouvoir Légion :
+
+7 unités maximum
+
+Certaines créatures modifient également cette limite.
+
+1.8 Contrôle des emplacements
+
+Une armée contrôle l'emplacement sur lequel elle se trouve.
+
+Les temples et pyramides suivent des règles spécifiques décrites dans les chapitres correspondants.
+
+1.9 Matrice d'adjacence
+
+La matrice d'adjacence complète du plateau sera documentée dans cette section.
+
+Elle constituera la référence officielle pour :
+
+les déplacements ;
+les combats ;
+les téléportations ;
+le contrôle territorial.
+
+1.9 Matrice d'adjacence officielle
+Cité du Joueur 1
+J1C1 ↔ J1C2, J1C3, DJ1
+
+J1C2 ↔ J1C1, J1C3, DJ1
+
+J1C3 ↔ J1C1, J1C2, DJ1
+
+DJ1 ↔ J1C1, J1C2, J1C3, T1, D12, DT2
+Cité du Joueur 2
+J2C1 ↔ J2C2, J2C3, DJ2
+
+J2C2 ↔ J2C1, J2C3, DJ2
+
+J2C3 ↔ J2C1, J2C2, DJ2
+
+DJ2 ↔ J2C1, J2C2, J2C3, T1, D12, D23, DT2
+Cité du Joueur 3
+J3C1 ↔ J3C2, J3C3, DJ3
+
+J3C2 ↔ J3C1, J3C3, DJ3
+
+J3C3 ↔ J3C1, J3C2, DJ3
+
+DJ3 ↔ J3C1, J3C2, J3C3, T1, D23, DT2
+Zone centrale
+T1 ↔ DJ1, DJ2, DJ3, D12, D23
+
+D12 ↔ DJ1, DJ2, T1, DT2
+
+D23 ↔ DJ2, DJ3, T1, DT2
+
+DT2 ↔ DJ1, DJ2, DJ3, D12, D23, T2
+
+T2 ↔ DT2
+Zone isolée du fleuve
+TB ↔ DT3
+
+DT3 ↔ TB, T3
+
+T3 ↔ DT3
+1.10 Portails et Obélisques
+Portails de départ
+
+Les portails de départ sont :
+
+J1C1
+J1C2
+J1C3
+
+J2C1
+J2C2
+J2C3
+
+J3C1
+J3C2
+J3C3
+
+Une téléportation classique peut partir de n'importe lequel de ces emplacements.
+
+Obélisques visibles
+
+Les obélisques visibles sont :
+
+D12
+D23
+T1
+T2
+T3
+
+Une téléportation classique permet de se déplacer :
+
+Portail de départ
+→ Obélisque visible
+1.11 Emplacements liés au fleuve
+
+Les emplacements liés au fleuve sont :
+
+DT2
+T2
+DT3
+T3
+TB
+
+Cette propriété est utilisée notamment par :
+
+le Kraken ;
+certains pouvoirs futurs ;
+certains effets Ta-Seti.
+
+Attribut technique :
+
+isRiverLinked = true
+
+Tous les autres emplacements possèdent :
+
+isRiverLinked = false
+
+
+# 2. Mise en place
+
+## 2.1 Préparation générale
+
+Une partie se joue avec exactement 3 joueurs.
+
+Chaque joueur reçoit :
+
+* une couleur ;
+* une cité ;
+* 12 unités dans sa réserve ;
+* 7 Ank ;
+* les 8 cartes Combat ;
+* 2 cartes ID ;
+* 3 prêtres Ta-Seti ;
+* les jetons Action de base.
+
+Les Points de Victoire initiaux sont :
+
+```text
+0 Point de Victoire
+```
+
+pour tous les joueurs.
+
+---
+
+## 2.2 Attribution des cités
+
+Chaque joueur reçoit une cité :
+
+```text
+Joueur 1 → Cité J1
+Joueur 2 → Cité J2
+Joueur 3 → Cité J3
+```
+
+Chaque cité contient :
+
+* 3 emplacements de cité ;
+* 3 portails de départ ;
+* les pyramides du joueur.
+
+---
+
+## 2.3 Mise en place des unités
+
+Chaque joueur place ses unités initiales dans sa cité.
+
+Placement initial :
+
+```text
+J1C1 : 3 unités
+J1C2 : 3 unités
+J1C3 : 3 unités
+```
+
+Même principe pour les cités J2 et J3.
+
+Chaque joueur débute donc avec :
+
+```text
+9 unités en jeu
+3 unités dans sa réserve
+```
+
+---
+
+## 2.4 Mise en place des pyramides
+
+Chaque joueur possède :
+
+* 1 pyramide Rouge ;
+* 1 pyramide Bleue ;
+* 1 pyramide Blanche.
+
+Toutes les pyramides commencent au niveau :
+
+```text
+0
+```
+
+Chaque pyramide doit être placée sur un emplacement différent de la cité.
+
+Un emplacement de cité ne peut contenir qu'une seule pyramide.
+
+---
+
+## 2.5 Choix de l'ordre initial
+
+Un ordre initial est déterminé aléatoirement.
+
+Cet ordre sert à :
+
+* la sélection des couleurs ;
+* la sélection des pyramides ;
+* le choix du premier pouvoir gratuit.
+
+Notation :
+
+```text
+Premier joueur
+Deuxième joueur
+Troisième joueur
+```
+
+---
+
+## 2.6 Pouvoir gratuit initial
+
+Après la mise en place des pyramides :
+
+Le dernier joueur choisit :
+
+* une tuile Pouvoir de niveau 1 ;
+* dont il possède la couleur de pyramide correspondante.
+
+Ensuite :
+
+```text
+Troisième joueur
+→ Deuxième joueur
+→ Premier joueur
+```
+
+choisissent chacun une tuile selon la même règle.
+
+Conditions :
+
+* la tuile doit être disponible ;
+* les coûts sont ignorés ;
+* les restrictions de couleur s'appliquent normalement.
+
+Cette acquisition est gratuite.
+
+---
+
+## 2.7 Cartes Combat
+
+Chaque joueur reçoit les mêmes 8 cartes Combat :
+
+### Carte 1
+
+```text
+5 Force
+Perdre 2 unités après le combat
+```
+
+### Carte 2
+
+```text
+4 Force
+1 Goutte de sang
+```
+
+### Carte 3
+
+```text
+3 Force
+1 Goutte de sang
+```
+
+### Carte 4
+
+```text
+3 Force
+1 Bouclier
+```
+
+### Carte 5
+
+```text
+2 Force
+2 Boucliers
+```
+
+### Carte 6
+
+```text
+2 Force
+2 Gouttes de sang
+1 Bouclier
+```
+
+### Carte 7
+
+```text
+1 Force
+3 Gouttes de sang
+```
+
+### Carte 8
+
+```text
+1 Force
+1 Goutte de sang
+3 Boucliers
+```
+
+Toutes les cartes sont disponibles en début de partie.
+
+---
+
+## 2.8 Cartes ID
+
+Chaque joueur commence avec :
+
+```text
+2 cartes ID
+```
+
+piochées aléatoirement.
+
+La pioche ID est mélangée avant le début de la partie.
+
+---
+
+## 2.9 Mise en place de Ta-Seti
+
+Chaque joueur reçoit :
+
+```text
+3 prêtres
+```
+
+Tous les prêtres sont placés sur :
+
+```text
+N0
+```
+
+le nœud de départ du plateau Ta-Seti.
+
+Les prêtres de plusieurs joueurs peuvent occuper simultanément le même nœud.
+
+---
+
+## 2.10 Préparation des récompenses Ta-Seti
+
+Les emplacements de récompenses sont remplis aléatoirement.
+
+### Nœuds initiaux
+
+Types :
+
+```text
+Pouvoir immédiat
+Aucun effet
+Pouvoir immédiat
+```
+
+---
+
+### Nœuds intermédiaires
+
+Types :
+
+```text
+Pouvoir immédiat
+Pouvoir permanent
+Pouvoir permanent
+Pouvoir immédiat
+```
+
+---
+
+### Nœuds avancés
+
+Types :
+
+```text
+Pouvoir immédiat + tuile usage unique
+Pouvoir permanent
+Pouvoir permanent
+Pouvoir immédiat + tuile usage unique
+```
+
+Les récompenses sont tirées aléatoirement dans leurs réserves respectives.
+
+---
+
+## 2.11 Disponibilité des bonus journaliers Ta-Seti
+
+Les bonus journaliers sont disponibles au début de la partie :
+
+### Branche Bouclier
+
+```text
+Disponible
+```
+
+### Branche Goutte de sang
+
+```text
+Disponible
+```
+
+### Branche Force
+
+```text
+Disponible
+```
+
+---
+
+## 2.12 État initial des joueurs
+
+Au début de la partie :
+
+```text
+Points de Victoire : 0
+Ank : 7
+Cartes ID : 2
+Prêtres Ta-Seti : 3
+Unités en réserve : 3
+Unités sur le plateau : 9
+```
+
+Tous les pouvoirs, créatures et tuiles non acquis sont placés dans leurs réserves respectives.
+
+---
+
+## 2.13 Début de partie
+
+Une fois la mise en place terminée :
+
+* la première Phase d'Aube commence ;
+* chaque joueur participe à la sélection de sa carte d'Aube ;
+* la partie suit ensuite le déroulement normal décrit dans le chapitre suivant.
+# 3. Structure d'un Tour
+
+## 3.1 Vue d'ensemble
+
+Une partie est composée d'une succession de jours.
+
+Chaque jour est constitué des phases suivantes :
+
+```text
+1. Aube
+2. Jour
+3. Nuit
+```
+
+Ces phases sont toujours résolues dans cet ordre.
+
+---
+
+## 3.2 Phase d'Aube
+
+La Phase d'Aube sert à déterminer l'ordre du tour du jour à venir.
+
+Chaque joueur :
+
+1. choisit une carte Combat face cachée ;
+2. défausse une autre carte Combat face cachée ;
+3. peut ajouter autant de jetons Aube qu'il le souhaite.
+
+L'ordre de réalisation est :
+
+```text
+Dernier joueur
+→ Deuxième joueur
+→ Premier joueur
+```
+
+Les cartes sont ensuite révélées.
+
+Chaque joueur calcule sa valeur d'Aube :
+
+```text
+Valeur de la carte Combat
++
+Nombre de jetons Aube utilisés
+```
+
+Le joueur possédant la plus grande valeur devient premier joueur.
+
+Le deuxième devient deuxième joueur.
+
+Le troisième devient troisième joueur.
+
+En cas d'égalité :
+
+* priorité au joueur qui était devant dans l'ordre du tour précédent.
+
+Les cartes utilisées et les jetons Aube dépensés sont défaussés.
+
+---
+
+## 3.3 Phase de Jour
+
+La Phase de Jour constitue la phase principale du jeu.
+
+Les joueurs jouent dans l'ordre déterminé lors de l'Aube.
+
+Chaque joueur effectue l'intégralité de sa journée avant que le joueur suivant ne commence la sienne.
+
+---
+
+## 3.4 Journée d'un joueur
+
+Chaque joueur dispose de :
+
+```text
+5 jetons Action de base
+```
+
+Ces jetons doivent être répartis sur les différents niveaux d'action.
+
+Le joueur est libre de choisir :
+
+* l'ordre d'utilisation ;
+* les actions réalisées ;
+* le moment où il joue ses cartes ID hors combat.
+
+---
+
+## 3.5 Niveaux d'actions
+
+### Niveau 1
+
+Actions disponibles :
+
+```text
+Déplacement
+Recrutement
+```
+
+---
+
+### Niveau 2
+
+Actions disponibles :
+
+```text
+Déplacement
+Évolution de pyramide
+Prière
+```
+
+---
+
+### Niveau 3
+
+Actions disponibles :
+
+```text
+Achat de pouvoir
+Prière
+```
+
+---
+
+## 3.6 Contraintes de placement
+
+À la fin de sa journée :
+
+Le joueur doit avoir placé au moins un jeton sur chacun des niveaux :
+
+```text
+Niveau 1
+Niveau 2
+Niveau 3
+```
+
+L'ordre d'utilisation est totalement libre.
+
+---
+
+## 3.7 Répétition des actions
+
+Une même action peut être réalisée plusieurs fois dans la journée à condition :
+
+* d'utiliser des emplacements d'action différents ;
+* de respecter les règles normales des jetons.
+
+Exemples autorisés :
+
+```text
+Déplacement Niveau 1
+Déplacement Niveau 2
+```
+
+```text
+Prière Niveau 2
+Prière Niveau 3
+```
+
+Exemple interdit :
+
+```text
+Utiliser deux fois la même case Action
+```
+
+---
+
+## 3.8 Jetons Gris
+
+Certains pouvoirs accordent un Jeton Gris permanent.
+
+Un joueur ne peut jamais posséder :
+
+```text
+2 Jetons Gris
+```
+
+simultanément.
+
+Le Jeton Gris représente :
+
+```text
+1 action supplémentaire permanente
+```
+
+Ce jeton :
+
+* ne constitue pas un tour supplémentaire ;
+* doit être joué immédiatement avant ou immédiatement après un jeton Action classique ;
+* suit les restrictions indiquées sur le pouvoir qui l'accorde.
+
+---
+
+## 3.9 Jetons Dorés
+
+Certains pouvoirs accordent un Jeton Doré permanent.
+
+Un joueur ne peut jamais posséder :
+
+```text
+2 Jetons Dorés
+```
+
+simultanément.
+
+Un joueur peut toutefois posséder :
+
+```text
+1 Jeton Gris
++
+1 Jeton Doré
+```
+
+Les actions autorisées dépendent du pouvoir ayant fourni le Jeton Doré.
+
+Exemples :
+
+* Déplacement Passe-Muraille ;
+* Recrutement ou Déplacement ;
+* Déplacement supplémentaire.
+
+Comme les Jetons Gris :
+
+* ils ne créent pas un nouveau tour ;
+* ils doivent être joués immédiatement avant ou immédiatement après un jeton classique.
+
+---
+
+## 3.10 Cartes ID hors combat
+
+Pendant sa journée, un joueur peut jouer des cartes ID hors combat à n'importe quel moment autorisé.
+
+Ces cartes ne consomment pas d'action sauf indication contraire.
+
+Exemples :
+
+* Téléportation ;
+* Pluie de Feu ;
+* Passe-Muraille ;
+* Gain d'Ank ;
+* Gain d'unités.
+
+---
+
+## 3.11 Déclencheurs automatiques
+
+Certaines actions provoquent immédiatement des effets supplémentaires.
+
+Exemples :
+
+### Déplacement
+
+Peut déclencher :
+
+* un combat ;
+* une avancée Ta-Seti ;
+* des effets de liaison Ta-Seti.
+
+---
+
+### Achat de pouvoir
+
+Peut déclencher :
+
+* des effets immédiats ;
+* des gains de cartes ;
+* des gains d'unités ;
+* une avancée Ta-Seti.
+
+---
+
+### Phase de Jour
+
+Certaines capacités se déclenchent pendant la journée sans utiliser d'action :
+
+* sacrifice volontaire d'un prêtre Ta-Seti ;
+* utilisation de certaines tuiles ;
+* utilisation de certaines cartes ID.
+
+---
+
+## 3.12 Fin de journée
+
+Lorsqu'un joueur a utilisé tous ses jetons disponibles :
+
+* sa journée prend fin ;
+* le joueur suivant commence sa propre journée.
+
+Une fois le troisième joueur terminé :
+
+* la Phase de Nuit commence.
+
+---
+
+## 3.13 Vérification de victoire
+
+Aucune victoire n'est vérifiée pendant la Phase de Jour.
+
+Un joueur peut dépasser :
+
+```text
+10 Points de Victoire
+```
+
+sans gagner immédiatement.
+
+La victoire sera vérifiée conformément aux règles du chapitre Introduction.
+
+# 4. Phase d'Aube
+
+## 4.1 Objectif
+
+La Phase d'Aube détermine l'ordre du tour du jour à venir.
+
+Elle permet également :
+
+* de renouveler progressivement les cartes Combat disponibles ;
+* d'utiliser les jetons Aube accumulés ;
+* de préparer les combats futurs.
+
+Chaque joueur participe simultanément à cette phase.
+
+---
+
+## 4.2 Cartes Combat disponibles
+
+Chaque joueur possède un paquet personnel composé de :
+
+```text
+8 cartes Combat
+```
+
+Les cartes utilisées pendant l'Aube ou pendant les combats sont temporairement indisponibles jusqu'à reconstitution complète du paquet.
+
+À tout moment, un joueur possède :
+
+* des cartes disponibles ;
+* des cartes défaussées ;
+* éventuellement une carte utilisée pour l'Aube du tour en cours.
+
+---
+
+## 4.3 Sélection des cartes
+
+Chaque joueur choisit simultanément :
+
+### Carte d'Aube
+
+Une carte Combat est sélectionnée face cachée.
+
+Cette carte servira à déterminer l'ordre du tour.
+
+---
+
+### Carte défaussée
+
+Une seconde carte Combat est choisie puis défaussée face cachée.
+
+Cette carte devient indisponible jusqu'à récupération complète du paquet.
+
+---
+
+## 4.4 Utilisation des jetons Aube
+
+Après avoir choisi sa carte d'Aube, chaque joueur peut ajouter autant de jetons Aube qu'il le souhaite.
+
+Chaque jeton utilisé apporte :
+
+```text
++1 Valeur d'Aube
+```
+
+Les jetons utilisés sont définitivement dépensés.
+
+---
+
+## 4.5 Révélation
+
+Une fois tous les joueurs prêts :
+
+* les cartes d'Aube sont révélées ;
+* les jetons Aube utilisés sont révélés.
+
+Chaque joueur calcule sa valeur d'Aube.
+
+---
+
+## 4.6 Calcul de la valeur d'Aube
+
+Formule :
+
+Valeur d'Aube = Valeur de la carte Combat + Jetons Aube utilisés
+
+Exemple :
+
+```text
+Carte Combat : 4
+
+Jetons Aube : 2
+
+Valeur d'Aube : 6
+```
+
+---
+
+## 4.7 Détermination de l'ordre du tour
+
+Le joueur ayant la plus grande valeur devient :
+
+```text
+Premier joueur
+```
+
+Le deuxième plus grand résultat devient :
+
+```text
+Deuxième joueur
+```
+
+Le dernier devient :
+
+```text
+Troisième joueur
+```
+
+---
+
+## 4.8 Gestion des égalités
+
+En cas d'égalité :
+
+la priorité revient au joueur qui était devant dans l'ordre du tour précédent.
+
+Exemple :
+
+Ordre précédent :
+
+```text
+J1
+J2
+J3
+```
+
+Résultat Aube :
+
+```text
+J1 = 5
+J2 = 5
+J3 = 3
+```
+
+Nouvel ordre :
+
+```text
+J1
+J2
+J3
+```
+
+---
+
+## 4.9 Défausse des cartes utilisées
+
+À la fin de l'Aube :
+
+* la carte d'Aube utilisée est défaussée ;
+* la carte défaussée reste défaussée.
+
+Le joueur perd donc deux cartes disponibles.
+
+---
+
+## 4.10 Reconstitution du paquet Combat
+
+Lorsqu'un joueur ne possède plus suffisamment de cartes pour effectuer normalement une Phase d'Aube :
+
+il récupère immédiatement l'ensemble de ses 8 cartes Combat.
+
+Toutes les cartes Combat redeviennent disponibles.
+
+Cette récupération intervient avant la sélection des cartes de la nouvelle Aube.
+
+---
+
+## 4.11 Conséquences stratégiques
+
+La Phase d'Aube représente un choix important :
+
+* utiliser une carte forte pour obtenir l'initiative ;
+* conserver certaines cartes pour les combats futurs ;
+* dépenser ou économiser les jetons Aube.
+
+Chaque décision influence à la fois :
+
+* l'ordre du tour ;
+* les combats futurs ;
+* la gestion du paquet Combat.
+
+---
+
+## 4.12 Fin de la Phase d'Aube
+
+Une fois l'ordre du tour déterminé :
+
+* le premier joueur commence sa journée ;
+* la Phase de Jour débute.
+
+La partie suit alors les règles du chapitre suivant.
+# 5. Phase de Jour
+
+## 5.1 Objectif
+
+La Phase de Jour constitue la phase principale du jeu.
+
+C'est durant cette phase que les joueurs :
+
+* déplacent leurs armées ;
+* recrutent ;
+* améliorent leurs pyramides ;
+* achètent des pouvoirs ;
+* utilisent leurs cartes ID ;
+* déclenchent les combats ;
+* progressent sur Ta-Seti.
+
+Les joueurs jouent l'un après l'autre selon l'ordre déterminé lors de la Phase d'Aube.
+
+---
+
+## 5.2 Déroulement général
+
+Chaque joueur effectue l'intégralité de sa journée avant que le joueur suivant ne commence.
+
+L'ordre est donc :
+
+```text
+Premier joueur
+→ Deuxième joueur
+→ Troisième joueur
+```
+
+Une fois le troisième joueur terminé :
+
+```text
+Phase de Nuit
+```
+
+---
+
+## 5.3 Jetons Action
+
+Chaque joueur dispose au début de sa journée de :
+
+```text
+5 Jetons Action
+```
+
+Ces jetons représentent les actions disponibles pour la journée.
+
+Chaque jeton est placé sur une case Action puis immédiatement résolu.
+
+Une fois utilisé :
+
+* le jeton reste sur sa case ;
+* la case devient indisponible pour le reste de la journée.
+
+---
+
+## 5.4 Répartition obligatoire
+
+À la fin de sa journée :
+
+le joueur doit avoir utilisé au moins :
+
+```text
+1 action Niveau 1
+1 action Niveau 2
+1 action Niveau 3
+```
+
+Les deux jetons restants peuvent être placés librement.
+
+---
+
+## 5.5 Actions disponibles
+
+### Niveau 1
+
+```text
+Déplacement
+Recrutement
+```
+
+---
+
+### Niveau 2
+
+```text
+Déplacement
+Évolution de pyramide
+Prière
+```
+
+---
+
+### Niveau 3
+
+```text
+Achat de pouvoir
+Prière
+```
+
+---
+
+## 5.6 Ordre de résolution
+
+Lorsqu'un joueur réalise une action :
+
+1. paiement éventuel du coût ;
+2. résolution de l'action ;
+3. résolution des effets déclenchés ;
+4. résolution des combats éventuels ;
+5. vérification des effets permanents ;
+6. retour au joueur actif.
+
+---
+
+## 5.7 Actions supplémentaires
+
+Certaines capacités accordent des actions supplémentaires.
+
+Ces actions ne remplacent jamais une action normale.
+
+Elles s'ajoutent simplement aux actions disponibles.
+
+Sources possibles :
+
+* Jeton Gris ;
+* Jeton Doré ;
+* certains pouvoirs ;
+* certains effets Ta-Seti.
+
+---
+
+## 5.8 Jeton Gris
+
+Le Jeton Gris représente :
+
+```text
+1 action supplémentaire permanente
+```
+
+Restrictions :
+
+* ne crée pas un tour supplémentaire ;
+* doit être joué immédiatement avant ou immédiatement après un jeton classique ;
+* ne peut jamais être conservé pour plus tard dans la journée.
+
+Un joueur ne peut jamais posséder deux Jetons Gris.
+
+---
+
+## 5.9 Jeton Doré
+
+Le Jeton Doré représente une action spécialisée supplémentaire.
+
+L'action disponible dépend du pouvoir ayant fourni le Jeton.
+
+Exemples :
+
+* Déplacement Passe-Muraille ;
+* Recrutement ou Déplacement ;
+* Déplacement supplémentaire.
+
+Restrictions :
+
+* doit être joué immédiatement avant ou immédiatement après un jeton classique ;
+* ne constitue pas un tour supplémentaire.
+
+Un joueur ne peut jamais posséder deux Jetons Dorés.
+
+---
+
+## 5.10 Utilisation des cartes ID
+
+Les cartes ID hors combat peuvent être jouées pendant la journée.
+
+Sauf indication contraire :
+
+* elles ne consomment pas d'action ;
+* elles peuvent être jouées à tout moment de la journée du joueur.
+
+Exemples :
+
+```text
+Téléportation
+Passe-Muraille
+Pluie de Feu
+Gain d'Ank
+Gain d'unités
+```
+
+---
+
+## 5.11 Progression Ta-Seti
+
+Lorsqu'un joueur pose un jeton Action sur une action :
+
+```text
+Déplacement
+```
+
+il déclenche immédiatement une avancée Ta-Seti.
+
+Cette avancée est résolue :
+
+```text
+avant le déplacement
+```
+
+du plateau principal.
+
+Le joueur choisit :
+
+* quel prêtre avance ;
+* quelle liaison est empruntée.
+
+Tous les bonus Ta-Seti associés sont résolus immédiatement.
+
+---
+
+## 5.12 Effets immédiats
+
+Certaines actions déclenchent des effets supplémentaires.
+
+Exemples :
+
+### Achat d'un pouvoir
+
+Peut immédiatement :
+
+* donner des unités ;
+* donner des Ank ;
+* faire avancer un prêtre ;
+* faire évoluer une pyramide ;
+* donner une carte ID.
+
+---
+
+### Évolution de pyramide
+
+Peut modifier :
+
+* les pouvoirs accessibles ;
+* les Points de Victoire ;
+* le contrôle de la pyramide.
+
+---
+
+### Déplacement
+
+Peut :
+
+* déclencher un combat ;
+* prendre le contrôle d'une pyramide ;
+* déclencher des effets de créatures ;
+* déclencher des effets Ta-Seti.
+
+---
+
+## 5.13 Informations publiques
+
+Pendant la Phase de Jour, les éléments suivants sont visibles :
+
+* position des armées ;
+* créatures ;
+* prêtres visibles ;
+* pyramides ;
+* Ank ;
+* Points de Victoire ;
+* pouvoirs achetés.
+
+Les cartes ID en main restent privées.
+
+---
+
+## 5.14 Fin de la journée d'un joueur
+
+La journée d'un joueur se termine lorsque :
+
+* tous ses jetons utilisables ont été joués ;
+* tous les effets en attente ont été résolus.
+
+Le joueur suivant commence alors immédiatement sa propre journée.
+
+---
+
+## 5.15 Fin de la Phase de Jour
+
+Lorsque le troisième joueur a terminé sa journée :
+
+* aucun autre joueur ne peut effectuer d'action ;
+* tous les effets en attente sont résolus ;
+* la Phase de Nuit commence.
+
+La Phase de Nuit est décrite dans le chapitre suivant.
+
+# 6. Déplacement
+
+## 6.1 Principe général
+
+Le déplacement permet à une armée de se déplacer d'un emplacement à un autre sur le plateau principal.
+
+Un déplacement est réalisé lorsqu'un joueur utilise :
+
+* une action Déplacement Niveau 1 ;
+* une action Déplacement Niveau 2 ;
+* un Jeton Gris ou Doré autorisant un déplacement ;
+* un effet spécial permettant un déplacement.
+
+---
+
+## 6.2 Capacité de déplacement
+
+Par défaut, une armée possède :
+
+```text
+Capacité de déplacement = 1
+```
+
+Cela signifie qu'elle peut franchir une liaison du plateau.
+
+Une capacité supérieure permet d'enchaîner plusieurs déplacements consécutifs dans la même action.
+
+Exemple :
+
+```text
+Capacité = 3
+
+J1C1
+→ DJ1
+→ D12
+→ T1
+```
+
+---
+
+## 6.3 Bonus de déplacement
+
+Certaines capacités augmentent la capacité de déplacement :
+
+### Créatures
+
+* Phoenix : +1 déplacement
+* Scarabée : +2 déplacements
+* Scorpion : +2 déplacements
+* Chiron : +1 déplacement
+* Bouliste : +1 déplacement
+* Minotaure : +1 déplacement
+* Éléphant : +1 déplacement
+
+### Pouvoirs
+
+* Furie Bestiale : +1 déplacement
+
+### Ta-Seti
+
+* Pouvoir permanent +1 déplacement
+* Liaison N11 → N21 : +1 déplacement pour le déplacement en cours
+* Liaison N11 → N22 : +1 déplacement pour le déplacement en cours
+
+### Cartes ID
+
+* +1 déplacement pour le déplacement en cours
+
+Tous ces bonus sont cumulables sauf indication contraire.
+
+---
+
+## 6.4 Début d'un déplacement
+
+Lorsqu'un joueur annonce une action Déplacement :
+
+1. il choisit une armée ;
+2. il détermine sa capacité de déplacement ;
+3. il résout l'avancée Ta-Seti correspondante ;
+4. il effectue son déplacement.
+
+---
+
+## 6.5 Fractionnement du déplacement
+
+Une capacité de déplacement supérieure à 1 peut être utilisée librement.
+
+Exemple :
+
+```text
+Capacité : 3
+
+DJ1
+→ D12
+→ T1
+→ D23
+```
+
+Le joueur choisit librement l'itinéraire parmi les liaisons autorisées.
+
+---
+
+## 6.6 Arrêt volontaire
+
+Le joueur peut toujours interrompre son déplacement avant d'avoir utilisé toute sa capacité.
+
+Exemple :
+
+```text
+Capacité : 4
+
+Utilisé : 2
+
+Le déplacement s'arrête volontairement.
+```
+
+Les points restants sont perdus.
+
+---
+
+## 6.7 Téléportation pendant un déplacement
+
+Une téléportation peut être utilisée à n'importe quel moment du déplacement.
+
+Exemple :
+
+```text
+DJ1
+→ D12
+→ Téléportation
+→ T3
+→ DT3
+```
+
+La téléportation ne met pas fin au déplacement en cours.
+
+Les points de déplacement restants peuvent être utilisés normalement.
+
+---
+
+## 6.8 Passe-Muraille
+
+Une armée bénéficiant du Passe-Muraille peut franchir librement les murailles.
+
+Sources possibles :
+
+* Pouvoir Rouge Passe-Muraille
+* Carte ID Passe-Muraille
+* Pouvoir Ta-Seti Passe-Muraille
+* Jeton Doré Rouge
+
+L'effet s'applique selon les règles propres à sa source.
+
+---
+
+## 6.9 Entrée dans une cité ennemie
+
+Une armée peut pénétrer dans une cité ennemie :
+
+* par le désert associé ;
+* grâce à Passe-Muraille ;
+* grâce à une téléportation autorisée.
+
+Les règles de combat normales s'appliquent.
+
+---
+
+## 6.10 Déplacement et combat
+
+Lorsqu'une armée entre sur un emplacement contenant une armée ennemie :
+
+```text
+Combat immédiat
+```
+
+Le déplacement s'arrête immédiatement.
+
+Les points de déplacement restants sont perdus.
+
+Le combat est résolu intégralement avant toute autre action.
+
+---
+
+## 6.11 Déplacement sur une pyramide
+
+Si une armée termine son déplacement sur une pyramide adverse :
+
+* elle en devient le contrôleur.
+
+Le contrôle est conservé tant qu'une armée du joueur occupe cet emplacement.
+
+---
+
+## 6.12 Récupération d'une pyramide de sa cité
+
+Le propriétaire d'origine récupère immédiatement le contrôle de sa pyramide lorsqu'une de ses armées traverse l'emplacement.
+
+Il n'est pas nécessaire de s'y arrêter.
+
+---
+
+## 6.13 Déplacement et Cerbère
+
+Une armée accompagnée de Cerbère peut se déplacer normalement.
+
+Cependant :
+
+* Cerbère peut être laissé sur place ;
+* au moins une unité doit rester avec Cerbère ;
+* les unités laissées avec Cerbère forment une armée distincte.
+
+Cerbère bloque les mouvements ennemis vers son emplacement.
+
+---
+
+## 6.14 Déplacement et Kraken
+
+Le Kraken ne se déplace jamais.
+
+Le Kraken reste dans le lac.
+
+Toutes les armées du joueur situées sur un emplacement lié au fleuve bénéficient :
+
+```text
++1 Force
+```
+
+qu'elles soient en attaque ou en défense.
+
+---
+
+## 6.15 Déplacement et prêtres Ta-Seti
+
+Les prêtres présents dans une armée se déplacent avec celle-ci.
+
+Un prêtre ne peut jamais être séparé volontairement de son armée.
+
+Si le dernier prêtre quitte une armée :
+
+* cette armée perd immédiatement l'accès aux pouvoirs Ta-Seti.
+
+---
+
+## 6.16 Recrutement pendant un déplacement
+
+Certains effets Ta-Seti permettent :
+
+```text
+Recruter 1 unité
+```
+
+ou
+
+```text
+Recruter 3 unités
+```
+
+pendant un déplacement.
+
+Ces recrutements sont résolus immédiatement.
+
+Les unités peuvent :
+
+* être placées dans la cité ;
+* compléter une armée existante.
+
+Les limites de taille d'armée doivent être respectées.
+
+---
+
+## 6.17 Déplacements supplémentaires
+
+Certaines capacités accordent :
+
+```text
++1 déplacement
+```
+
+pour le déplacement en cours.
+
+Ce bonus augmente uniquement la capacité du déplacement actuel.
+
+Il ne crée pas une nouvelle action.
+
+---
+
+## 6.18 Fin du déplacement
+
+Le déplacement prend fin lorsque :
+
+* la capacité est entièrement utilisée ;
+* le joueur s'arrête volontairement ;
+* un combat est déclenché ;
+* une règle spéciale y met fin.
+
+Tous les effets temporaires liés au déplacement prennent alors fin sauf indication contraire.
+
+# 7. Combat
+
+## 7.1 Déclenchement d'un combat
+
+Un combat est déclenché lorsqu'une armée entre sur un emplacement occupé par une armée adverse.
+
+Le combat est obligatoire.
+
+Le déplacement s'arrête immédiatement.
+
+Les points de déplacement restants sont perdus.
+
+---
+
+## 7.2 Participants
+
+Le combat oppose :
+
+* l'armée attaquante ;
+* l'armée défenseure.
+
+Les autres armées présentes sur le plateau n'interviennent pas.
+
+---
+
+## 7.3 Séquence générale
+
+Un combat est résolu dans l'ordre suivant :
+
+```text
+1. Déclaration du combat
+2. Choix de la carte Combat
+3. Défausse d'une carte Combat
+4. Choix des cartes ID Combat
+5. Révélation des cartes Combat
+6. Révélation des cartes ID
+7. Résolution des cartes ID
+8. Effets modifiant les cartes Combat
+9. Calcul de la Force finale
+10. Détermination du vainqueur
+11. Calcul des pertes
+12. Application des pertes
+13. Résolution des effets de victoire
+14. Retraite
+15. Rapatriement éventuel
+16. Attribution des récompenses
+```
+
+---
+
+## 7.4 Choix des cartes Combat
+
+Chaque joueur choisit :
+
+* 1 carte Combat face cachée ;
+* 1 carte Combat à défausser face cachée.
+
+La carte jouée participe au combat.
+
+La carte défaussée devient indisponible.
+
+---
+
+## 7.5 Choix des cartes ID Combat
+
+Chaque joueur peut jouer autant de cartes ID Combat qu'il le souhaite, sous réserve de pouvoir payer leurs coûts.
+
+Les cartes sont choisies face cachée.
+
+---
+
+## 7.6 Révélation
+
+Les cartes Combat sont révélées simultanément.
+
+Les cartes ID sont ensuite révélées simultanément.
+
+---
+
+## 7.7 Préscience
+
+Un joueur bénéficiant de Préscience peut voir la carte Combat adverse avant de choisir la sienne.
+
+Sources possibles :
+
+* Pouvoir Bleu Préscience
+* Pouvoir Ta-Seti Préscience
+* Tuile bicolore Préscience des ID
+
+Si plusieurs effets de Préscience existent, ils ne se cumulent pas.
+
+---
+
+## 7.8 Modification des cartes Combat
+
+Certaines cartes ID peuvent modifier la carte Combat après révélation.
+
+### Changement de stratégie
+
+Après révélation des cartes Combat et des cartes ID :
+
+Le joueur échange :
+
+* sa carte Combat jouée ;
+* avec sa carte Combat défaussée.
+
+L'échange est effectué avant le calcul de la Force.
+
+---
+
+## 7.9 Calcul de la Force
+
+### Force de base
+
+Chaque unité apporte :
+
+```text
++1 Force
+```
+
+Formule :
+
+```text
+Force =
+Unités
++
+Carte Combat
++
+Bonus
+```
+
+---
+
+## 7.10 Sources de Force
+
+### Créatures
+
+Exemples :
+
+* Phoenix
+* Scarabée
+* Scorpion
+* Chiron
+* Kraken
+* etc.
+
+---
+
+### Pouvoirs
+
+Exemples :
+
+* Force en attaque
+* Force en défense
+* Furie Bestiale
+
+---
+
+### Temples
+
+Les bonus temporaires de temples sont pris en compte.
+
+---
+
+### Ta-Seti
+
+Tous les pouvoirs permanents applicables sont pris en compte.
+
+---
+
+### Jetons Aube
+
+Les jetons Aube n'ont aucun effet en combat.
+
+---
+
+## 7.11 Bonus d'attaque
+
+Les bonus indiqués :
+
+```text
++1 Force en attaque
+```
+
+ne s'appliquent que si le joueur est attaquant.
+
+---
+
+## 7.12 Bonus de défense
+
+Les bonus indiqués :
+
+```text
++1 Force en défense
+```
+
+ne s'appliquent que si le joueur est défenseur.
+
+---
+
+## 7.13 Détermination du vainqueur
+
+Le joueur possédant la Force la plus élevée remporte le combat.
+
+---
+
+## 7.14 Égalité
+
+En cas d'égalité :
+
+```text
+Le défenseur gagne.
+```
+
+---
+
+## 7.15 Gouttes de sang
+
+Les gouttes de sang représentent les pertes infligées.
+
+Sources possibles :
+
+* Carte Combat
+* Créatures
+* Cartes ID
+* Pouvoirs
+* Ta-Seti
+
+---
+
+## 7.16 Protections
+
+Les protections réduisent les pertes.
+
+Sources possibles :
+
+* Carte Combat
+* Créatures
+* Pouvoirs
+* Cartes ID
+
+Formule :
+
+```text
+Pertes =
+Gouttes de sang
+-
+Protections
+```
+
+Minimum :
+
+```text
+0
+```
+
+---
+
+## 7.17 Gouttes noires
+
+Une goutte noire :
+
+```text
+ignore toutes les protections
+```
+
+Elle inflige automatiquement une perte.
+
+---
+
+## 7.18 Méduse
+
+La Méduse retire toutes les protections adverses avant le calcul des pertes.
+
+Cet effet intervient après révélation des cartes.
+
+---
+
+## 7.19 Serpent
+
+Le Serpent annule tous les avantages des créatures adverses pendant le combat.
+
+Les caractéristiques de la créature adverse sont ignorées.
+
+Les autres sources de bonus continuent de fonctionner.
+
+---
+
+## 7.20 Combat Brutal
+
+Si la tuile Ta-Seti Combat Brutal est utilisée :
+
+Seuls comptent :
+
+* les unités ;
+* les cartes Combat.
+
+Sont ignorés :
+
+* créatures ;
+* pouvoirs ;
+* cartes ID ;
+* Ta-Seti ;
+* bonus de temples ;
+* bonus de pyramides ;
+* tous les autres bonus.
+
+Les effets imprimés sur les cartes Combat restent actifs.
+
+---
+
+## 7.21 Pertes
+
+Les pertes sont appliquées simultanément.
+
+Les unités détruites retournent dans la réserve de leur propriétaire.
+
+---
+
+## 7.22 Créatures détruites
+
+Lorsqu'une armée contenant une créature est détruite :
+
+* la créature n'est pas perdue ;
+* elle peut immédiatement être réaffectée à une armée située dans la cité du joueur ;
+* cette armée ne doit pas déjà posséder de créature.
+
+Cette règle s'applique à toutes les créatures.
+
+---
+
+## 7.23 Prêtres détruits
+
+Un prêtre détruit :
+
+* retourne au nœud de départ Ta-Seti ;
+* ne retourne jamais dans la réserve.
+
+Si une armée perd son dernier prêtre :
+
+* elle perd immédiatement l'accès aux pouvoirs Ta-Seti.
+
+---
+
+## 7.24 Récompense du perdant
+
+Le perdant gagne toujours :
+
+```text
+1 Jeton Aube
+```
+
+quel que soit le résultat du combat.
+
+Cette récompense n'est jamais doublée.
+
+---
+
+## 7.25 Récompenses de victoire
+
+Certaines cartes ID et certains pouvoirs accordent des récompenses en cas de victoire :
+
+Exemples :
+
+* +4 Ank
+* Recruter 3 unités
+* Double Point
+* Guerre Sainte
+* Dévoreuse des Mondes
+
+Chaque effet est résolu après la détermination du vainqueur.
+
+---
+
+## 7.26 Dévoreuse des Mondes
+
+Si la Dévoreuse des Mondes participe au combat :
+
+* son propriétaire remporte le combat ;
+* au moins 2 unités ennemies sont détruites ;
+
+alors :
+
+```text
++1 Point de Victoire permanent
+```
+
+est gagné.
+
+Cet effet peut se produire à chaque combat.
+
+---
+
+## 7.27 Double Point
+
+Avant le combat, un joueur peut jouer la tuile Ta-Seti Double Point.
+
+Effet :
+
+Si ce joueur gagne :
+
+```text
++1 Point de Victoire permanent
+```
+
+Si ce joueur perd :
+
+```text
+-1 Point de Victoire
+```
+
+L'effet ne concerne jamais l'adversaire.
+
+---
+
+## 7.28 Retraite
+
+Après résolution des pertes :
+
+Le perdant doit retraiter.
+
+Les règles détaillées de retraite sont décrites dans le chapitre correspondant.
+
+---
+
+## 7.29 Rapatriement
+
+Une armée peut être rapatriée selon les règles normales.
+
+Chaque unité rapatriée rapporte :
+
+```text
++1 Ank
+```
+
+Les unités retournent dans la réserve.
+
+---
+
+## 7.30 Fin du combat
+
+Le combat prend fin lorsque :
+
+* toutes les pertes sont appliquées ;
+* toutes les récompenses sont résolues ;
+* toutes les retraites sont terminées ;
+* tous les rapatriements sont terminés.
+
+La partie reprend alors normalement.
+
+# 8. Cartes Combat
+
+## 8.1 Généralités
+
+Chaque joueur possède un paquet personnel de :
+
+```text
+8 cartes Combat
+```
+
+Toutes les cartes sont identiques pour tous les joueurs.
+
+Une carte Combat utilisée :
+
+* pendant l'Aube ;
+* pendant un combat ;
+
+devient indisponible jusqu'à la reconstitution complète du paquet.
+
+---
+
+## 8.2 Utilisation pendant l'Aube
+
+Lors de chaque Aube :
+
+Le joueur :
+
+* choisit 1 carte Combat ;
+* défausse 1 carte Combat.
+
+La valeur de la carte choisie sert à déterminer l'ordre du tour.
+
+---
+
+## 8.3 Utilisation pendant un combat
+
+Lors d'un combat :
+
+Le joueur :
+
+* choisit 1 carte Combat ;
+* défausse 1 carte Combat.
+
+La carte jouée participe au calcul du combat.
+
+La carte défaussée est simplement retirée du paquet disponible.
+
+---
+
+## 8.4 Caractéristiques d'une carte Combat
+
+Une carte Combat peut contenir :
+
+### Force
+
+Permet de déterminer le vainqueur.
+
+### Gouttes de sang
+
+Détermine les pertes infligées.
+
+### Protections
+
+Réduit les pertes subies.
+
+### Effets spéciaux
+
+Effets appliqués pendant ou après le combat.
+
+---
+
+## 8.5 Révélation
+
+Les cartes Combat sont révélées simultanément.
+
+Les effets des cartes sont ensuite pris en compte dans le calcul du combat.
+
+---
+
+# 8.6 Liste des cartes Combat
+
+## Carte 1 – Assaut Total
+
+```text
+Force : 5
+Gouttes : 0
+Protections : 0
+
+Effet :
+Perdez 2 unités après le combat.
+```
+
+Cette perte est appliquée même en cas de victoire.
+
+---
+
+## Carte 2 – Attaque Puissante
+
+```text
+Force : 4
+Gouttes : 1
+Protections : 0
+```
+
+---
+
+## Carte 3 – Offensive
+
+```text
+Force : 3
+Gouttes : 1
+Protections : 0
+```
+
+---
+
+## Carte 4 – Défense Active
+
+```text
+Force : 3
+Gouttes : 0
+Protections : 1
+```
+
+---
+
+## Carte 5 – Bouclier
+
+```text
+Force : 2
+Gouttes : 0
+Protections : 2
+```
+
+---
+
+## Carte 6 – Combat Équilibré
+
+```text
+Force : 2
+Gouttes : 2
+Protections : 1
+```
+
+---
+
+## Carte 7 – Bain de Sang
+
+```text
+Force : 1
+Gouttes : 3
+Protections : 0
+```
+
+---
+
+## Carte 8 – Mur de Boucliers
+
+```text
+Force : 1
+Gouttes : 1
+Protections : 3
+```
+
+---
+
+# 8.7 Effets spéciaux
+
+## Assaut Total
+
+La perte de 2 unités :
+
+* intervient après le combat ;
+* n'est pas une goutte de sang ;
+* ne peut pas être empêchée par des protections.
+
+Si le joueur possède moins de 2 unités :
+
+* il perd toutes les unités restantes.
+
+---
+
+# 8.8 Modification des cartes Combat
+
+Certaines capacités peuvent modifier l'utilisation des cartes Combat.
+
+Exemples :
+
+### Préscience
+
+Permet de voir la carte adverse avant de choisir la sienne.
+
+### Changement de stratégie
+
+Permet d'échanger :
+
+* la carte jouée ;
+* avec la carte défaussée ;
+
+après révélation des cartes.
+
+---
+
+# 8.9 Reconstitution du paquet
+
+Lorsqu'un joueur ne possède plus suffisamment de cartes pour effectuer normalement une Aube :
+
+Il récupère immédiatement :
+
+```text
+les 8 cartes Combat
+```
+
+Toutes les cartes redeviennent disponibles.
+
+---
+
+# 8.10 Combat Brutal
+
+Lorsqu'un Combat Brutal est utilisé :
+
+Les valeurs imprimées sur les cartes Combat continuent de fonctionner normalement.
+
+Les cartes Combat deviennent alors la seule source de :
+
+* Force ;
+* Gouttes de sang ;
+* Protections ;
+
+en dehors des unités présentes dans les armées.
+
+---
+
+# 8.11 Informations privées
+
+Avant leur révélation :
+
+Les cartes Combat sont secrètes.
+
+Un joueur ne peut jamais consulter :
+
+* la carte choisie par un adversaire ;
+* la carte défaussée par un adversaire ;
+
+sauf effet spécifique autorisé par une règle.
+
+---
+
+# 8.12 Informations publiques
+
+Après leur révélation :
+
+Les cartes Combat jouées deviennent publiques.
+
+Les cartes défaussées restent connues puisque révélées à la fin du combat ou de l'Aube lors de la gestion du paquet.
+
+---
+
+# 8.13 Résumé des cartes
+
+| Carte             | Force | Gouttes | Protections | Effet                           |
+| ----------------- | ----- | ------- | ----------- | ------------------------------- |
+| Assaut Total      | 5     | 0       | 0           | Perdez 2 unités après le combat |
+| Attaque Puissante | 4     | 1       | 0           | Aucun                           |
+| Offensive         | 3     | 1       | 0           | Aucun                           |
+| Défense Active    | 3     | 0       | 1           | Aucun                           |
+| Bouclier          | 2     | 0       | 2           | Aucun                           |
+| Combat Équilibré  | 2     | 2       | 1           | Aucun                           |
+| Bain de Sang      | 1     | 3       | 0           | Aucun                           |
+| Mur de Boucliers  | 1     | 1       | 3           | Aucun                           |
+|                   |       |         |             |                                 |
+
+Cette liste constitue la référence officielle pour toutes les résolutions de combat.
+# 9. Cartes Intervention Divine (ID)
+
+## 9.1 Généralités
+
+Les cartes Intervention Divine (ID) représentent des événements, miracles, tactiques ou interventions spéciales.
+
+Elles permettent de modifier le déroulement normal du jeu.
+
+Il existe deux catégories :
+
+```text
+Cartes ID Combat
+Cartes ID Hors Combat
+```
+
+---
+
+## 9.2 Main de cartes ID
+
+Les cartes ID sont conservées en main.
+
+La main est privée.
+
+Un joueur ne peut consulter que ses propres cartes ID.
+
+---
+
+## 9.3 Pioche initiale
+
+Chaque joueur commence la partie avec :
+
+```text
+2 cartes ID
+```
+
+piochées aléatoirement.
+
+---
+
+## 9.4 Pioche pendant la partie
+
+Par défaut :
+
+Chaque joueur gagne :
+
+```text
+1 carte ID
+```
+
+à chaque Phase de Nuit.
+
+Certains pouvoirs permettent de gagner des cartes supplémentaires.
+
+---
+
+## 9.5 Défausse
+
+Une carte ID jouée est placée dans la défausse ID.
+
+Certaines capacités permettent de récupérer des cartes dans cette défausse.
+
+---
+
+## 9.6 Coût des cartes ID
+
+Certaines cartes possèdent un coût.
+
+Ce coût est payé au moment où la carte est jouée.
+
+Si le joueur ne peut pas payer :
+
+* la carte ne peut pas être jouée.
+
+---
+
+# 9.7 Cartes ID Combat
+
+Les cartes ID Combat sont jouées pendant un combat.
+
+Elles sont choisies face cachée puis révélées simultanément.
+
+---
+
+## Renfort Divin
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+```text
++1 Force
+```
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+## Renfort Divin Majeur
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+```text
++2 Force
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+---
+
+## Protection Divine
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+```text
++1 Protection
+```
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+## Protection Divine Majeure
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+```text
++2 Protections
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+---
+
+## Sang Divin
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+```text
++1 Goutte de sang
+```
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+## Sang Divin Majeur
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+```text
++2 Gouttes de sang
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+---
+
+## Butin de Guerre
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+Si le joueur gagne :
+
+```text
++4 Ank
+```
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+## Recrutement de Victoire
+
+Nombre d'exemplaires :
+
+```text
+3
+```
+
+Effet :
+
+Si le joueur gagne :
+
+```text
+Recruter 3 unités
+```
+
+Les unités peuvent :
+
+* être placées dans la cité ;
+* compléter une armée existante.
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+## Aucun Saignement
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Effet :
+
+Si le joueur remporte le combat :
+
+```text
+0 perte
+```
+
+Les gouttes de sang adverses sont ignorées.
+
+Les pertes automatiques provenant d'autres effets continuent de s'appliquer.
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+## Changement de Stratégie
+
+Moment :
+
+Après révélation des cartes Combat et des cartes ID.
+
+Effet :
+
+Le joueur échange :
+
+* sa carte Combat jouée ;
+* avec sa carte Combat défaussée.
+
+Toutes les caractéristiques de la nouvelle carte deviennent actives.
+
+Coût :
+
+```text
+0 Ank
+```
+
+---
+
+# 9.8 Cartes ID Hors Combat
+
+Les cartes ID Hors Combat peuvent être jouées pendant la Phase de Jour.
+
+Sauf indication contraire :
+
+* elles ne consomment pas d'action ;
+* elles peuvent être jouées à n'importe quel moment du tour du joueur.
+
+---
+
+## Gain de 2 Ank
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Effet :
+
+```text
++2 Ank
+```
+
+---
+
+## Taxation Divine
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Effet :
+
+Le joueur gagne :
+
+```text
++1 Ank
+```
+
+Chaque adversaire perd :
+
+```text
+1 Ank
+```
+
+Un joueur ne peut jamais descendre sous :
+
+```text
+0 Ank
+```
+
+---
+
+## Renforts
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Effet :
+
+```text
++2 unités
+```
+
+Les unités peuvent être placées :
+
+* dans la cité ;
+* dans une armée existante.
+
+---
+
+## Récupération d'ID
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+Effet :
+
+Choisir une carte ID dans la défausse.
+
+L'ajouter à sa main.
+
+---
+
+## Marche Forcée
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Effet :
+
+```text
++1 déplacement
+```
+
+pour le déplacement en cours.
+
+---
+
+## Téléportation
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+Effet :
+
+Se téléporter vers un obélisque visible.
+
+Cette téléportation s'intègre au déplacement en cours.
+
+---
+
+## Passe-Muraille
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+Effet :
+
+L'armée obtient :
+
+```text
+Passe-Muraille
+```
+
+pour le déplacement en cours.
+
+---
+
+## Pluie de Feu
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Coût :
+
+```text
+1 Ank
+```
+
+Effet :
+
+Détruire immédiatement une unité adverse.
+
+Restrictions :
+
+* un prêtre ne peut pas être ciblé ;
+* exception : un prêtre peut être ciblé s'il s'agit de la dernière unité de son armée.
+
+Les immunités normales s'appliquent.
+
+---
+
+## La Fuite
+
+Nombre d'exemplaires :
+
+```text
+1
+```
+
+Effet :
+
+Lors d'un combat :
+
+Le joueur déplace son armée d'un emplacement adjacent.
+
+Le combat prend fin immédiatement.
+
+L'attaquant :
+
+* ne peut pas poursuivre l'armée en fuite ;
+* peut poursuivre le déplacement qu'il était en train d'effectuer si sa capacité de déplacement restante le permet.
+
+---
+
+## Annulation d'ID
+
+Nombre d'exemplaires :
+
+```text
+2
+```
+
+Effet :
+
+Annuler une carte ID adverse.
+
+Moment :
+
+Peut être jouée :
+
+* hors de son tour ;
+* en réaction à une autre carte ID.
+
+La carte annulée est défaussée sans effet.
+
+---
+
+# 9.9 Informations privées
+
+Les cartes ID en main sont toujours privées.
+
+Le nombre de cartes ID possédées par chaque joueur est public.
+
+Le contenu de la main ne l'est pas.
+
+---
+
+# 9.10 Taille maximale de main
+
+Aucune limite de main n'existe.
+
+Un joueur peut posséder autant de cartes ID qu'il le souhaite.
+
+---
+
+# 9.11 Défausse vide
+
+Si une carte demande de récupérer une ID dans la défausse et qu'aucune carte n'est disponible :
+
+L'effet est perdu.
+
+---
+
+# 9.12 Référence officielle
+
+La présente section constitue la référence officielle pour :
+
+* les coûts ;
+* les quantités ;
+* les moments d'utilisation ;
+* les effets ;
+
+de toutes les cartes Intervention Divine du jeu.
+
+# 10. Ressources
+
+## 10.1 Généralités
+
+Les ressources représentent les éléments utilisés pour développer sa civilisation, recruter des armées, acheter des pouvoirs et progresser vers la victoire.
+
+Les ressources du jeu sont :
+
+* les Ank ;
+* les Jetons Aube ;
+* les unités ;
+* les Points de Victoire.
+
+Chaque ressource possède ses propres règles de gain, de dépense et de stockage.
+
+---
+
+# 10.2 Ank
+
+## Définition
+
+L'Ank est la ressource économique principale du jeu.
+
+Elle est utilisée notamment pour :
+
+* recruter des unités ;
+* acheter des pouvoirs ;
+* faire évoluer les pyramides ;
+* jouer certaines cartes ID ;
+* utiliser certaines capacités spéciales.
+
+---
+
+## Valeur minimale
+
+Un joueur ne peut jamais posséder moins de :
+
+```text
+0 Ank
+```
+
+---
+
+## Valeur maximale
+
+Un joueur ne peut jamais posséder plus de :
+
+```text
+11 Ank
+```
+
+Tout Ank gagné au-delà de cette limite est perdu.
+
+---
+
+## Ank de départ
+
+Chaque joueur commence la partie avec :
+
+```text
+7 Ank
+```
+
+---
+
+## Gains d'Ank automatiques
+
+### Phase de Nuit
+
+Chaque joueur gagne :
+
+```text
+2 Ank
+```
+
+par défaut.
+
+---
+
+### Temples
+
+Temple 1 :
+
+```text
++2 Ank
+```
+
+Temple 2 :
+
+```text
++3 Ank
+```
+
+Temple 3 :
+
+```text
+Sacrifier 1 unité
+→ +5 Ank
+```
+
+---
+
+### Rapatriement
+
+Chaque unité rapatriée rapporte :
+
+```text
++1 Ank
+```
+
+L'unité retourne ensuite dans la réserve.
+
+---
+
+### Cartes ID
+
+Certaines cartes permettent de gagner des Ank.
+
+Exemples :
+
+```text
++2 Ank
++1 Ank et les adversaires perdent 1 Ank
++4 Ank en cas de victoire
+```
+
+---
+
+### Pouvoirs
+
+De nombreux pouvoirs accordent :
+
+* des gains immédiats ;
+* des gains nocturnes ;
+* des gains lors des combats.
+
+---
+
+### Ta-Seti
+
+Certaines liaisons accordent :
+
+```text
++1 Ank
++2 Ank
++3 Ank
+```
+
+lorsqu'elles sont empruntées.
+
+---
+
+## Dépenses d'Ank
+
+Les Ank peuvent être dépensés pour :
+
+### Recrutement
+
+```text
+1 Ank = 1 unité
+```
+
+---
+
+### Évolution de pyramide
+
+Selon le coût défini dans le chapitre Pyramides.
+
+---
+
+### Achat de pouvoirs
+
+Selon le coût indiqué sur la tuile.
+
+---
+
+### Cartes ID
+
+Exemples :
+
+```text
+Téléportation
+Passe-Muraille
+Pluie de Feu
+```
+
+---
+
+### Capacités spéciales
+
+Certaines créatures ou pouvoirs imposent des coûts supplémentaires.
+
+Exemple :
+
+```text
+Bouquetin
+```
+
+Le joueur doit payer :
+
+```text
+2 Ank
+```
+
+pour engager le combat contre une armée contenant cette créature.
+
+---
+
+# 10.3 Jetons Aube
+
+## Définition
+
+Les Jetons Aube servent à influencer l'ordre du tour.
+
+Ils sont utilisés exclusivement pendant la Phase d'Aube.
+
+---
+
+## Gain
+
+Le principal moyen d'obtenir des Jetons Aube est :
+
+```text
+Perdre un combat
+```
+
+Le perdant gagne toujours :
+
+```text
+1 Jeton Aube
+```
+
+---
+
+## Utilisation
+
+Chaque Jeton Aube utilisé apporte :
+
+```text
++1 Valeur d'Aube
+```
+
+---
+
+## Consommation
+
+Les Jetons Aube utilisés sont définitivement dépensés.
+
+---
+
+## Limite
+
+Aucune limite de stockage n'existe.
+
+---
+
+# 10.4 Unités
+
+## Définition
+
+Les unités représentent les forces militaires de base.
+
+Chaque unité apporte :
+
+```text
++1 Force
+```
+
+en combat.
+
+---
+
+## Réserve
+
+Les unités qui ne sont pas présentes sur le plateau se trouvent dans la réserve du joueur.
+
+---
+
+## Début de partie
+
+Chaque joueur possède :
+
+```text
+12 unités
+```
+
+au total.
+
+Répartition initiale :
+
+```text
+9 sur le plateau
+3 en réserve
+```
+
+---
+
+## Recrutement
+
+Le recrutement permet de transférer des unités de la réserve vers :
+
+* la cité ;
+* une armée.
+
+Selon les règles applicables.
+
+---
+
+## Destruction
+
+Une unité détruite retourne immédiatement dans la réserve de son propriétaire.
+
+---
+
+## Sacrifice
+
+Certaines capacités demandent de sacrifier des unités.
+
+Une unité sacrifiée :
+
+* est retirée du plateau ;
+* retourne dans la réserve.
+
+---
+
+# 10.5 Limites d'armée
+
+Par défaut :
+
+```text
+5 unités maximum
+```
+
+par armée.
+
+---
+
+## Légion
+
+Avec le pouvoir :
+
+```text
+Légion
+```
+
+une armée peut contenir :
+
+```text
+7 unités maximum
+```
+
+---
+
+## Bouliste
+
+Une armée contenant le Bouliste bénéficie également de :
+
+```text
+7 unités maximum
+```
+
+---
+
+# 10.6 Prêtres Ta-Seti
+
+## Définition
+
+Les prêtres constituent une ressource spéciale liée au plateau Ta-Seti.
+
+Chaque joueur possède :
+
+```text
+3 prêtres
+```
+
+---
+
+## Position
+
+Un prêtre peut être :
+
+* sur le plateau Ta-Seti ;
+* intégré à une armée ;
+* revenu au nœud de départ.
+
+---
+
+## Destruction
+
+Un prêtre détruit :
+
+```text
+retourne à N0
+```
+
+Il ne rejoint jamais la réserve.
+
+---
+
+# 10.7 Points de Victoire
+
+## Définition
+
+Les Points de Victoire déterminent le vainqueur.
+
+---
+
+## Types
+
+### Points permanents
+
+Ils ne peuvent pas être perdus sauf effet explicite.
+
+Exemples :
+
+* Temple Bleu ;
+* Double Point ;
+* Sphinx ;
+* Dévoreuse des Mondes ;
+* certaines tuiles Point.
+
+---
+
+### Points temporaires
+
+Ils sont perdus lorsque leur condition disparaît.
+
+Exemples :
+
+* contrôle de temples ;
+* contrôle de pyramides.
+
+---
+
+## Vérification de victoire
+
+La victoire est vérifiée :
+
+```text
+au début du tour normal du joueur
+```
+
+et jamais immédiatement lors du gain d'un point.
+
+---
+
+## Objectif
+
+Un joueur gagne la partie lorsqu'il possède :
+
+```text
+10 Points de Victoire ou plus
+```
+
+au moment de cette vérification.
+
+---
+
+# 10.8 Contrôle des ressources
+
+Toutes les ressources doivent être visibles dans l'interface du jeu.
+
+Informations publiques :
+
+* Ank ;
+* Jetons Aube ;
+* Points de Victoire ;
+* unités sur le plateau ;
+* unités dans la réserve.
+
+Informations privées :
+
+* contenu de la main de cartes ID.
+
+---
+
+# 10.9 Ordre de résolution des gains
+
+Lorsqu'un même événement génère plusieurs gains :
+
+Les effets sont résolus dans l'ordre choisi par le joueur actif.
+
+Sauf si une règle spécifique impose un ordre particulier.
+
+Cette règle s'applique notamment :
+
+* aux gains d'Ank ;
+* aux gains de cartes ID ;
+* aux gains d'unités ;
+* aux gains de Points de Victoire.
+
+# 11. Pyramides
+
+## 11.1 Généralités
+
+Les pyramides représentent le développement technologique et religieux d'un joueur.
+
+Elles permettent :
+
+* d'acheter des pouvoirs ;
+* de contrôler certaines zones ;
+* d'obtenir des Points de Victoire ;
+* de débloquer des capacités avancées.
+
+Chaque joueur possède :
+
+```text
+1 pyramide Rouge
+1 pyramide Bleue
+1 pyramide Blanche
+```
+
+La couleur Noire ne possède pas de pyramide.
+
+Les pouvoirs noirs sont achetés grâce aux règles spécifiques du chapitre correspondant.
+
+---
+
+## 11.2 Niveau des pyramides
+
+Chaque pyramide possède un niveau :
+
+```text
+0
+1
+2
+3
+4
+```
+
+Au début de la partie :
+
+```text
+Toutes les pyramides sont niveau 0.
+```
+
+---
+
+## 11.3 Évolution des pyramides
+
+L'évolution d'une pyramide utilise une action :
+
+```text
+Évolution de pyramide
+```
+
+du Niveau 2.
+
+Le joueur choisit :
+
+* une pyramide qu'il contrôle ;
+* le niveau cible souhaité.
+
+Une pyramide peut être augmentée de plusieurs niveaux lors d'une même action.
+
+---
+
+## 11.4 Coût d'évolution
+
+Le coût d'évolution est égal au niveau final atteint.
+
+Exemples :
+
+### Niveau 0 → Niveau 1
+
+```text
+Coût = 1 Ank
+```
+
+---
+
+### Niveau 1 → Niveau 2
+
+```text
+Coût = 2 Ank
+```
+
+---
+
+### Niveau 2 → Niveau 3
+
+```text
+Coût = 3 Ank
+```
+
+---
+
+### Niveau 3 → Niveau 4
+
+```text
+Coût = 4 Ank
+```
+
+---
+
+### Niveau 0 → Niveau 4 directement
+
+```text
+1 + 2 + 3 + 4
+=
+10 Ank
+```
+
+---
+
+## 11.5 Réduction des coûts
+
+Certaines capacités réduisent le coût d'évolution.
+
+Exemple :
+
+```text
+Réduction évolution de pyramide : -1 par niveau
+```
+
+Chaque niveau acheté voit son coût réduit séparément.
+
+Exemple :
+
+```text
+0 → 3
+
+(1-1)
++
+(2-1)
++
+(3-1)
+
+=
+3 Ank
+```
+
+Le coût ne peut jamais devenir négatif.
+
+---
+
+## 11.6 Contrôle des pyramides
+
+Par défaut :
+
+Chaque joueur contrôle toutes les pyramides de sa propre cité.
+
+---
+
+## 11.7 Perte de contrôle
+
+Lorsqu'une armée adverse termine son déplacement sur une pyramide :
+
+* elle en devient immédiatement le contrôleur.
+
+Le propriétaire initial perd le contrôle.
+
+---
+
+## 11.8 Récupération du contrôle
+
+Le propriétaire d'origine récupère automatiquement le contrôle lorsqu'une de ses armées traverse l'emplacement de la pyramide.
+
+Il n'est pas nécessaire :
+
+* de s'arrêter ;
+* de terminer son déplacement dessus.
+
+Le simple passage suffit.
+
+---
+
+## 11.9 Effets du contrôle
+
+Contrôler une pyramide permet :
+
+### Achat de pouvoirs
+
+Le joueur peut acheter des pouvoirs de cette couleur.
+
+---
+
+### Niveau de pyramide
+
+Le niveau actuel reste celui déjà construit.
+
+Le contrôleur bénéficie immédiatement du niveau atteint.
+
+---
+
+### Points de Victoire
+
+Une pyramide de niveau 4 rapporte :
+
+```text
++1 Point de Victoire
+```
+
+à son contrôleur.
+
+Ce point est perdu dès que le contrôle est perdu.
+
+---
+
+## 11.10 Achat de pouvoirs
+
+Pour acheter un pouvoir d'une couleur :
+
+Le joueur doit contrôler une pyramide de cette couleur.
+
+---
+
+## 11.11 Pouvoirs conservés
+
+Lorsqu'un joueur perd le contrôle d'une pyramide :
+
+* il conserve tous les pouvoirs déjà achetés ;
+* il ne peut simplement plus acheter de nouveaux pouvoirs de cette couleur.
+
+---
+
+## 11.12 Pyramides et pouvoirs bicolores
+
+Certaines tuiles nécessitent plusieurs couleurs.
+
+Exemple :
+
+```text
+1 Rouge
+1 Bleu
+```
+
+Le joueur doit contrôler les pyramides requises.
+
+Les règles particulières des tuiles bicolores sont décrites dans leur chapitre dédié.
+
+---
+
+## 11.13 Niveau 4
+
+Le niveau 4 représente le niveau maximal.
+
+Une pyramide niveau 4 :
+
+* permet l'achat des pouvoirs niveau 4 ;
+* rapporte 1 Point de Victoire temporaire à son contrôleur.
+
+---
+
+## 11.14 Effets nocturnes sur les pyramides
+
+Certaines capacités permettent :
+
+```text
+Augmenter une pyramide d'un niveau pendant la Nuit.
+```
+
+Exemple :
+
+```text
+Pouvoir Blanc niveau 3
+```
+
+Le joueur choisit une pyramide qu'il contrôle.
+
+L'effet est également déclenché immédiatement lors de l'achat de ce pouvoir.
+
+---
+
+## 11.15 Tuile bicolore de domination des pyramides
+
+Pouvoir :
+
+```text
+2 Bleu
+2 Blanc
+```
+
+Effet :
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire
+```
+
+pour chaque pyramide de niveau 3 ou plus qu'il contrôle selon les règles du pouvoir.
+
+Les autres joueurs peuvent retirer ce point en reprenant le contrôle de la pyramide.
+
+Ils ne peuvent cependant pas obtenir eux-mêmes ce point tant que la pyramide n'est pas niveau 4.
+
+---
+
+## 11.16 Informations publiques
+
+Les informations suivantes sont publiques :
+
+* couleur de la pyramide ;
+* niveau ;
+* contrôleur actuel ;
+* emplacement.
+
+Tout joueur peut consulter ces informations à tout moment.
+
+---
+
+## 11.17 Résumé
+
+Les pyramides constituent :
+
+* le principal moyen d'accéder aux pouvoirs ;
+* une source importante de Points de Victoire ;
+* un objectif stratégique majeur.
+
+Le contrôle des pyramides est dynamique et peut changer plusieurs fois au cours d'une même partie.
+
+# 12. Temples
+
+## 12.1 Généralités
+
+Les temples constituent une source majeure :
+
+* d'Ank ;
+* de Points de Victoire ;
+* d'avantages stratégiques.
+
+Un temple est contrôlé par le joueur possédant au moins une armée sur son emplacement.
+
+Plusieurs armées de joueurs différents ne peuvent jamais coexister sur un même temple puisqu'un combat est immédiatement déclenché.
+
+---
+
+## 12.2 Liste des temples
+
+Le plateau contient :
+
+```text
+Temple 1 (T1)
+Temple 2 (T2)
+Temple 3 (T3)
+Temple Bleu (TB)
+```
+
+---
+
+## 12.3 Contrôle des temples
+
+Un joueur contrôle un temple lorsqu'il possède une armée sur son emplacement.
+
+Le contrôle est perdu immédiatement lorsque :
+
+* l'armée quitte le temple ;
+* l'armée est détruite ;
+* l'armée retraite ;
+* un adversaire prend l'emplacement.
+
+---
+
+## 12.4 Points de Victoire des temples
+
+Les temples non bleus procurent des Points de Victoire temporaires.
+
+Chaque temple non bleu contrôlé rapporte :
+
+```text
++1 Point de Victoire
+```
+
+Tant que le joueur conserve une armée sur ce temple.
+
+Ces points sont immédiatement perdus lorsque le contrôle du temple est perdu.
+
+---
+
+## 12.5 Bonus de contrôle multiple
+
+Pendant la Phase de Nuit :
+
+Si un joueur contrôle simultanément :
+
+```text
+2 temples non bleus
+```
+
+il gagne :
+
+```text
++1 Point de Victoire permanent
+```
+
+Conditions :
+
+* les deux temples doivent encore être contrôlés au moment de la Nuit ;
+* il doit rester au moins une unité sur chaque temple ;
+* les temples doivent être des temples non bleus.
+
+Ce gain est cumulatif d'une nuit à l'autre.
+
+---
+
+## 12.6 Temple 1 (T1)
+
+Pendant la Phase de Nuit :
+
+Le contrôleur gagne :
+
+```text
++2 Ank
+```
+
+Aucun coût ni sacrifice n'est nécessaire.
+
+---
+
+## 12.7 Temple 2 (T2)
+
+Pendant la Phase de Nuit :
+
+Le contrôleur gagne :
+
+```text
++3 Ank
+```
+
+Aucun coût ni sacrifice n'est nécessaire.
+
+---
+
+## 12.8 Temple 3 (T3)
+
+Pendant la Phase de Nuit :
+
+Le contrôleur peut choisir :
+
+### Option 1
+
+Ne rien faire.
+
+### Option 2
+
+Sacrifier :
+
+```text
+1 unité
+```
+
+pour gagner :
+
+```text
++5 Ank
+```
+
+L'unité sacrifiée retourne dans la réserve de son propriétaire.
+
+Ce choix est effectué à chaque Phase de Nuit.
+
+---
+
+## 12.9 Temple Bleu (TB)
+
+Le Temple Bleu ne procure aucun Point de Victoire temporaire.
+
+Pendant la Phase de Nuit :
+
+Le contrôleur peut choisir :
+
+### Option 1
+
+Ne rien faire.
+
+### Option 2
+
+Sacrifier :
+
+```text
+2 unités
+```
+
+pour gagner :
+
+```text
++1 Point de Victoire permanent
+```
+
+Les unités sacrifiées retournent dans la réserve.
+
+---
+
+## 12.10 Ordre de résolution pendant la Nuit
+
+Les effets des temples sont résolus pendant la Phase de Nuit.
+
+Ordre recommandé :
+
+```text
+1. Vérification du contrôle des temples
+2. Attribution des Points de Victoire temporaires
+3. Vérification du bonus des 2 temples
+4. Résolution des effets des temples
+5. Sacrifices éventuels
+6. Gains d'Ank
+7. Gains de Points de Victoire permanents
+```
+
+---
+
+## 12.11 Temple et combat
+
+Un combat peut être déclenché normalement sur un temple.
+
+Les règles de combat sont identiques aux autres emplacements.
+
+Le vainqueur devient immédiatement contrôleur du temple.
+
+---
+
+## 12.12 Temple et recrutement
+
+Le recrutement normal ne dépend pas du contrôle d'un temple.
+
+Les temples ne modifient pas les règles de recrutement sauf via certains pouvoirs spécifiques.
+
+---
+
+## 12.13 Temple et téléportation
+
+Les temples pouvant servir d'obélisques visibles suivent les règles normales de téléportation.
+
+Actuellement :
+
+```text
+T1
+T2
+T3
+```
+
+sont des obélisques visibles.
+
+Le Temple Bleu n'est pas un obélisque visible.
+
+---
+
+## 12.14 Interaction avec le pouvoir Noir : Double Contrôle des Temples
+
+Pouvoir Noir Niveau 2.
+
+Effet :
+
+Le bonus de contrôle des temples pendant la Nuit est doublé.
+
+Au lieu de :
+
+```text
++1 Point de Victoire permanent
+```
+
+le joueur gagne :
+
+```text
++2 Points de Victoire permanents
+```
+
+s'il contrôle simultanément au moins deux temples non bleus lors de la Phase de Nuit.
+
+---
+
+## 12.15 Informations publiques
+
+Les informations suivantes sont publiques :
+
+* temple contrôlé ;
+* joueur contrôleur ;
+* armée présente ;
+* récompenses associées.
+
+Tous les joueurs peuvent consulter ces informations à tout moment.
+
+---
+
+## 12.16 Résumé
+
+### Temple 1
+
+```text
++2 Ank
+```
+
+### Temple 2
+
+```text
++3 Ank
+```
+
+### Temple 3
+
+```text
+Sacrifier 1 unité
+→ +5 Ank
+```
+
+### Temple Bleu
+
+```text
+Sacrifier 2 unités
+→ +1 Point de Victoire permanent
+```
+
+### Contrôle de temples
+
+```text
++1 Point de Victoire temporaire
+par temple non bleu contrôlé
+```
+
+### Contrôle simultané de 2 temples non bleus
+
+```text
++1 Point de Victoire permanent à la Nuit
+```
+
+(ou +2 avec le pouvoir Noir correspondant).
+
+
+# 13. Créatures
+
+## 13.1 Généralités
+
+Les créatures sont des unités spéciales pouvant accompagner les armées.
+
+Chaque créature possède :
+
+* un nom unique ;
+* une Force ;
+* une capacité de déplacement ;
+* éventuellement des pouvoirs spéciaux.
+
+Une créature appartient toujours à un seul joueur.
+
+---
+
+## 13.2 Affectation à une armée
+
+Une créature doit être associée à une armée.
+
+Elle se déplace avec cette armée.
+
+---
+
+## 13.3 Limite de créatures
+
+Par défaut :
+
+```text
+1 créature maximum par armée
+```
+
+Exception :
+
+```text
+Chiron
+```
+
+permet à son armée d'accueillir une seconde créature.
+
+---
+
+## 13.4 Destruction
+
+Les créatures ne sont jamais détruites.
+
+Lorsqu'une armée contenant une créature disparaît :
+
+* la créature est immédiatement transférée à une armée située dans la cité du joueur ;
+* si aucune armée valide n'existe, la créature est placée dans la cité du joueur.
+
+---
+
+# 13.5 Créatures Rouges
+
+## Cerbère
+
+Caractéristiques :
+
+```text
+Force : 1
+Déplacement : 1
+```
+
+Pouvoir :
+
+Cerbère peut être laissé sur un emplacement.
+
+Conditions :
+
+* au moins une unité doit rester avec lui ;
+* il forme alors une armée distincte.
+
+Effet :
+
+Aucune armée ennemie ne peut entrer sur son emplacement.
+
+---
+
+## Phoenix
+
+Caractéristiques :
+
+```text
+Force : 1
+Déplacement : 2
+```
+
+Pouvoir :
+
+```text
++1 capacité de déplacement
+```
+
+pour l'armée qui l'accompagne.
+
+---
+
+## Scarabée
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 2
+```
+
+Pouvoir :
+
+```text
++2 capacité de déplacement
+```
+
+pour l'armée.
+
+---
+
+## Méduse
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 1
+```
+
+Pouvoir :
+
+En combat :
+
+```text
+Toutes les protections adverses sont annulées.
+```
+
+Les gouttes noires restent inchangées.
+
+---
+
+## Scorpion
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 2
+```
+
+Pouvoir :
+
+```text
++2 capacité de déplacement
+```
+
+pour l'armée.
+
+---
+
+# 13.6 Créatures Bleues
+
+## Éléphant
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 2
+```
+
+Pouvoir :
+
+```text
++1 capacité de déplacement
+```
+
+---
+
+## Serpent
+
+Caractéristiques :
+
+```text
+Force : 1
+Déplacement : 1
+```
+
+Pouvoir :
+
+Pendant un combat :
+
+```text
+Toutes les capacités des créatures adverses sont ignorées.
+```
+
+Les bonus provenant :
+
+* des pouvoirs ;
+* des cartes ID ;
+* de Ta-Seti ;
+
+continuent de fonctionner.
+
+---
+
+## Bouliste
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 1
+```
+
+Pouvoir :
+
+L'armée bénéficie de :
+
+```text
+Limite de 7 unités
+```
+
+au lieu de 5.
+
+---
+
+## Kraken
+
+Caractéristiques :
+
+```text
+Force : 0
+Déplacement : 0
+```
+
+Pouvoir :
+
+Le Kraken accompagne simultanément toutes les armées du joueur.
+
+Il n'occupe aucun emplacement.
+
+Toutes les armées du joueur situées sur un emplacement lié au fleuve gagnent :
+
+```text
++1 Force
+```
+
+Cet effet est cumulable entre plusieurs armées.
+
+---
+
+# 13.7 Créatures Blanches
+
+## Chiron
+
+Caractéristiques :
+
+```text
+Force : 1
+Déplacement : 1
+```
+
+Pouvoirs :
+
+```text
++1 Force
++1 capacité de déplacement
+```
+
+pour l'armée.
+
+De plus :
+
+```text
+L'armée peut accueillir une seconde créature.
+```
+
+Chiron compte lui-même comme une créature.
+
+---
+
+## Minotaure
+
+Caractéristiques :
+
+```text
+Force : 1
+Déplacement : 1
+```
+
+Pouvoir :
+
+L'armée est immunisée à toutes les sources de saignement sauf :
+
+```text
+les gouttes provenant de la carte Combat adverse.
+```
+
+---
+
+## Momie
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 1
+```
+
+Pouvoir :
+
+Lors de chaque Nuit :
+
+```text
++1 carte ID
+```
+
+Cet effet est également déclenché immédiatement lors de l'acquisition de la Momie.
+
+---
+
+# 13.8 Créatures Noires
+
+## Bouquetin
+
+Caractéristiques :
+
+```text
+Force : 1
+Déplacement : 1
+```
+
+Pouvoir :
+
+Pour attaquer une armée contenant le Bouquetin :
+
+l'attaquant doit payer :
+
+```text
+2 Ank
+```
+
+Si le coût n'est pas payé :
+
+* le déplacement est impossible ;
+* aucun combat n'est déclenché.
+
+---
+
+## Sphinx Volant
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 0
+```
+
+Pouvoirs :
+
+Téléportation :
+
+Le Sphinx Volant peut se déplacer :
+
+```text
+d'un obélisque vers un autre obélisque
+```
+
+sans utiliser de déplacement classique.
+
+Combat :
+
+```text
++1 Force en défense
++1 Goutte noire
+```
+
+---
+
+## Dévoreuse des Mondes
+
+Caractéristiques :
+
+```text
+Force : 2
+Déplacement : 1
+```
+
+Pouvoirs :
+
+Immunité :
+
+```text
+Immunisée à la Pluie de Feu.
+```
+
+Récompense :
+
+Si :
+
+* son armée gagne le combat ;
+* au moins 2 unités ennemies sont détruites ;
+
+alors son propriétaire gagne :
+
+```text
++1 Point de Victoire permanent
+```
+
+Cet effet peut se produire à chaque combat remporté.
+
+---
+
+# 13.9 Créatures et Ta-Seti
+
+Les créatures bénéficient normalement :
+
+* des bonus de Force ;
+* des bonus de déplacement ;
+* des autres effets permanents ;
+
+accordés à l'armée qui les accompagne.
+
+---
+
+# 13.10 Créatures et prêtres
+
+Une armée contenant :
+
+* une créature ;
+* un ou plusieurs prêtres ;
+
+bénéficie simultanément :
+
+* des capacités de la créature ;
+* des pouvoirs Ta-Seti.
+
+---
+
+# 13.11 Informations publiques
+
+Les informations suivantes sont publiques :
+
+* créature possédée ;
+* emplacement ;
+* armée associée ;
+* propriétaire.
+
+Tous les joueurs peuvent consulter ces informations à tout moment.
+
+---
+
+# 13.12 Résumé des créatures
+
+| Créature             | Force | Déplacement | Effet principal                       |
+| -------------------- | ----- | ----------- | ------------------------------------- |
+| Cerbère              | 1     | 1           | Bloque un emplacement                 |
+| Phoenix              | 1     | 2           | +1 déplacement                        |
+| Scarabée             | 2     | 2           | +2 déplacement                        |
+| Méduse               | 2     | 1           | Annule protections                    |
+| Scorpion             | 2     | 2           | +2 déplacement                        |
+| Éléphant             | 2     | 2           | +1 déplacement                        |
+| Serpent              | 1     | 1           | Ignore créatures adverses             |
+| Bouliste             | 2     | 1           | Armée de 7 unités                     |
+| Kraken               | 0     | 0           | +1 Force près du fleuve               |
+| Chiron               | 1     | 1           | +1 Force, +1 déplacement, 2 créatures |
+| Minotaure            | 1     | 1           | Immunité aux saignements spéciaux     |
+| Momie                | 2     | 1           | +1 carte ID par Nuit                  |
+| Bouquetin            | 1     | 1           | Coût d'attaque : 2 Ank                |
+| Sphinx Volant        | 2     | 0           | Téléportation + défense               |
+| Dévoreuse des Mondes | 2     | 1           | PV sur victoire                       |
+# 14. Pouvoirs Rouges
+
+## 14.1 Généralités
+
+Les pouvoirs rouges représentent la voie militaire.
+
+Ils améliorent principalement :
+
+* la mobilité ;
+* la puissance offensive ;
+* les capacités de combat ;
+* les créatures agressives.
+
+Pour acheter un pouvoir rouge :
+
+* le joueur doit contrôler une pyramide rouge ;
+* la pyramide doit être d'un niveau au moins égal au niveau du pouvoir ;
+* le coût du pouvoir doit être payé.
+
+---
+
+# 14.2 Niveau 1
+
+## Cerbère
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Phoenix
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Jeton Doré Rouge
+
+Type :
+
+```text
+Jeton Doré
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur obtient un Jeton Doré permanent.
+
+Ce jeton permet :
+
+```text
+Déplacement
+ou
+Recrutement
+```
+
+Il doit être joué immédiatement avant ou après un jeton normal.
+
+---
+
+## Passe-Muraille
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Toutes les armées du joueur bénéficient en permanence de :
+
+```text
+Passe-Muraille
+```
+
+---
+
+# 14.3 Niveau 2
+
+## Scarabée
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Méduse
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Point Rouge
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Initiative Guerrière
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Lorsque le joueur gagne un combat :
+
+```text
++1 Jeton Aube
+```
+
+---
+
+# 14.4 Niveau 3
+
+## Scorpion
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Furie Divine
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Toutes les armées du joueur gagnent :
+
+```text
++1 Force en attaque
+```
+
+---
+
+## Point Rouge Majeur
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Jeton Gris Rouge
+
+Type :
+
+```text
+Jeton Gris
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Le joueur reçoit un Jeton Gris permanent.
+
+---
+
+# 14.5 Niveau 4
+
+## Déplacement Fulgurant
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Toutes les armées du joueur gagnent :
+
+```text
++1 capacité de déplacement
+```
+
+---
+
+## Téléportation Offensive
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Les téléportations coûtent :
+
+```text
+0 Ank
+```
+
+au lieu de leur coût normal.
+
+---
+
+## Point Rouge Suprême
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Furie Bestiale
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Toutes les armées du joueur gagnent :
+
+```text
++1 Force
++1 capacité de déplacement
++1 Goutte de sang
+```
+
+---
+
+# 14.6 Résumé des pouvoirs rouges
+
+| Niveau | Pouvoir                 | Type      |
+| ------ | ----------------------- | --------- |
+| 1      | Cerbère                 | Créature  |
+| 1      | Phoenix                 | Créature  |
+| 1      | Jeton Doré Rouge        | Jeton     |
+| 1      | Passe-Muraille          | Permanent |
+| 2      | Scarabée                | Créature  |
+| 2      | Méduse                  | Créature  |
+| 2      | Point Rouge             | Point     |
+| 2      | Initiative Guerrière    | Permanent |
+| 3      | Scorpion                | Créature  |
+| 3      | Furie Divine            | Permanent |
+| 3      | Point Rouge Majeur      | Point     |
+| 3      | Jeton Gris Rouge        | Jeton     |
+| 4      | Déplacement Fulgurant   | Permanent |
+| 4      | Téléportation Offensive | Permanent |
+| 4      | Point Rouge Suprême     | Point     |
+| 4      | Furie Bestiale          | Permanent |
+
+---
+
+# 15. Pouvoirs Bleus
+
+## 15.1 Généralités
+
+Les pouvoirs bleus représentent la voie de la maîtrise du territoire, de la défense et du contrôle stratégique.
+
+Ils améliorent principalement :
+
+* la mobilité ;
+* le contrôle des temples ;
+* la téléportation ;
+* la défense ;
+* l'accès à certaines créatures.
+
+Pour acheter un pouvoir bleu :
+
+* le joueur doit contrôler une pyramide bleue ;
+* la pyramide doit être d'un niveau au moins égal au niveau du pouvoir ;
+* le coût du pouvoir doit être payé.
+
+---
+
+# 15.2 Niveau 1
+
+## Éléphant
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Serpent
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Téléportation Réduite
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le coût normal de téléportation est réduit de :
+
+```text
+1 Ank
+```
+
+---
+
+## Point Bleu
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+# 15.3 Niveau 2
+
+## Bouliste
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Kraken
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Victoire Défensive
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Lorsqu'un joueur remporte un combat en défense :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Point Bleu Majeur
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+# 15.4 Niveau 3
+
+## Préscience
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Avant un combat :
+
+Le joueur peut voir la carte Combat adverse avant de choisir la sienne.
+
+---
+
+## Jeton Doré Bleu
+
+Type :
+
+```text
+Jeton Doré
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Le joueur reçoit un Jeton Doré permanent.
+
+Ce jeton permet :
+
+```text
+Déplacement supplémentaire
+```
+
+Il doit être joué immédiatement avant ou après un jeton normal.
+
+---
+
+## Point Bleu Supérieur
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Maître des Obélisques
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Les téléportations du joueur coûtent :
+
+```text
+0 Ank
+```
+
+---
+
+# 15.5 Niveau 4
+
+## Maître des Temples
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Pendant la Nuit :
+
+Chaque temple contrôlé rapporte :
+
+```text
++1 Ank supplémentaire
+```
+
+---
+
+## Contrôle Absolu
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Les points temporaires provenant des temples sont doublés.
+
+---
+
+## Point Bleu Suprême
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Gardiens du Royaume
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Toutes les armées du joueur gagnent :
+
+```text
++1 Force en défense
+```
+
+---
+
+# 15.6 Résumé des pouvoirs bleus
+
+| Niveau | Pouvoir               | Type      |
+| ------ | --------------------- | --------- |
+| 1      | Éléphant              | Créature  |
+| 1      | Serpent               | Créature  |
+| 1      | Téléportation Réduite | Permanent |
+| 1      | Point Bleu            | Point     |
+| 2      | Bouliste              | Créature  |
+| 2      | Kraken                | Créature  |
+| 2      | Victoire Défensive    | Permanent |
+| 2      | Point Bleu Majeur     | Point     |
+| 3      | Préscience            | Permanent |
+| 3      | Jeton Doré Bleu       | Jeton     |
+| 3      | Point Bleu Supérieur  | Point     |
+| 3      | Maître des Obélisques | Permanent |
+| 4      | Maître des Temples    | Permanent |
+| 4      | Contrôle Absolu       | Permanent |
+| 4      | Point Bleu Suprême    | Point     |
+| 4      | Gardiens du Royaume   | Permanent |
+
+---
+
+# 16. Pouvoirs Blancs
+
+## 16.1 Généralités
+
+Les pouvoirs blancs représentent la voie économique, religieuse et du développement.
+
+Ils améliorent principalement :
+
+* la génération d'Ank ;
+* les cartes ID ;
+* les pyramides ;
+* le recrutement ;
+* les effets de Nuit.
+
+Pour acheter un pouvoir blanc :
+
+* le joueur doit contrôler une pyramide blanche ;
+* la pyramide doit être d'un niveau au moins égal au niveau du pouvoir ;
+* le coût du pouvoir doit être payé.
+
+---
+
+# 16.2 Niveau 1
+
+## Renforts
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur ajoute immédiatement :
+
+```text
+3 unités
+```
+
+à sa réserve.
+
+La réserve maximale passe de :
+
+```text
+12 → 15 unités
+```
+
+Ces 3 unités sont immédiatement disponibles.
+
+---
+
+## Jeton Doré Blanc
+
+Type :
+
+```text
+Jeton Doré
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur reçoit un Jeton Doré permanent.
+
+Ce jeton permet :
+
+```text
+1 Prière supplémentaire
+```
+
+Il doit être joué immédiatement avant ou après un jeton normal.
+
+---
+
+## Recrutement Local
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur peut recruter :
+
+* dans sa cité ;
+* sur n'importe laquelle de ses armées.
+
+Les limites de taille d'armée doivent être respectées.
+
+---
+
+## Point Blanc
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+# 16.3 Niveau 2
+
+## Ank Sacré
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Le joueur gagne :
+
+```text
++2 Ank
+```
+
+à chaque Phase de Nuit.
+
+L'effet est également déclenché immédiatement lors de l'achat.
+
+---
+
+## Chiron
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Minotaure
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Architectes Sacrés
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Les coûts d'évolution des pyramides sont réduits de :
+
+```text
+1 Ank par niveau acheté
+```
+
+---
+
+## Savoir Divin
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Le joueur gagne :
+
+```text
++1 carte ID
+```
+
+à chaque Nuit.
+
+L'effet est également déclenché immédiatement lors de l'achat.
+
+---
+
+# 16.4 Niveau 3
+
+## Choix Divin
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Au lieu de piocher une carte ID :
+
+Le joueur regarde :
+
+```text
+5 cartes ID
+```
+
+et en choisit :
+
+```text
+1
+```
+
+La première fois que ce pouvoir est acquis :
+
+Le joueur applique immédiatement cet effet.
+
+---
+
+## Point Blanc Majeur
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Grande Pyramide
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Lors de chaque Nuit :
+
+Le joueur augmente de :
+
+```text
++1 niveau
+```
+
+une pyramide qu'il contrôle.
+
+L'effet est également appliqué immédiatement lors de l'achat.
+
+---
+
+## Guerre Sainte
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Lorsqu'il remporte un combat :
+
+```text
++4 Ank
+```
+
+---
+
+# 16.5 Niveau 4
+
+## Momie
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Jeton Gris Blanc
+
+Type :
+
+```text
+Jeton Gris
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Le joueur reçoit un Jeton Gris permanent.
+
+---
+
+## Grand Trésor
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Le joueur gagne :
+
+```text
++5 Ank
+```
+
+à chaque Phase de Nuit.
+
+L'effet est également déclenché immédiatement lors de l'achat.
+
+---
+
+## Prêtre de Râ
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Tous les coûts payés pendant la Phase de Jour sont réduits de :
+
+```text
+1 Ank
+```
+
+Exceptions :
+
+Les coûts des cartes ID Combat ne sont jamais réduits.
+
+Les coûts payés pendant un combat ne sont jamais réduits.
+
+---
+
+# 16.6 Résumé des pouvoirs blancs
+
+| Niveau | Pouvoir            | Type      |
+| ------ | ------------------ | --------- |
+| 1      | Renforts           | Permanent |
+| 1      | Jeton Doré Blanc   | Jeton     |
+| 1      | Recrutement Local  | Permanent |
+| 1      | Point Blanc        | Point     |
+| 2      | Ank Sacré          | Permanent |
+| 2      | Chiron             | Créature  |
+| 2      | Minotaure          | Créature  |
+| 2      | Architectes Sacrés | Permanent |
+| 2      | Savoir Divin       | Permanent |
+| 3      | Choix Divin        | Permanent |
+| 3      | Point Blanc Majeur | Point     |
+| 3      | Grande Pyramide    | Permanent |
+| 3      | Guerre Sainte      | Permanent |
+| 4      | Momie              | Créature  |
+| 4      | Jeton Gris Blanc   | Jeton     |
+| 4      | Grand Trésor       | Permanent |
+| 4      | Prêtre de Râ       | Permanent |
+
+---
+
+## 16.7 Règles particulières
+
+### Grande Pyramide
+
+Le joueur choisit librement :
+
+* la pyramide ;
+* la couleur ;
+
+à chaque déclenchement.
+
+La pyramide doit être sous son contrôle.
+
+---
+
+### Choix Divin
+
+Le joueur n'effectue plus de pioche ID classique.
+
+Chaque gain de carte ID est remplacé par :
+
+```text
+Regarder 5 cartes
+→ en conserver 1
+→ remettre les autres dans la pioche
+```
+
+---
+
+### Prêtre de Râ
+
+Exemples de coûts réduits :
+
+* recrutement ;
+* téléportation ;
+* évolution de pyramide ;
+* achat de pouvoir ;
+* Pluie de Feu ;
+* Passe-Muraille ;
+* récupération d'ID.
+
+Exemples de coûts non réduits :
+
+* +2 Force ;
+* +2 Protection ;
+* +2 Gouttes de sang ;
+* toute carte ID Combat payante.
+
+# 17. Pouvoirs Noirs
+
+## 17.1 Généralités
+
+Les pouvoirs noirs représentent la voie de la corruption, du sacrifice, de l'agression indirecte et des avantages économiques liés à la guerre.
+
+Ils ne nécessitent pas de pyramide noire.
+
+Pour acheter un pouvoir noir :
+
+* le joueur doit disposer d'un emplacement d'achat valide ;
+* le coût indiqué doit être payé.
+
+---
+
+# 17.2 Niveau 1
+
+## Point Noir
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Renfort Noir
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur ajoute immédiatement :
+
+```text
+3 unités
+```
+
+à sa réserve.
+
+Les 3 unités sont immédiatement disponibles.
+
+---
+
+## Jeton Doré Noir
+
+Type :
+
+```text
+Jeton Doré
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Le joueur reçoit un Jeton Doré permanent.
+
+Ce jeton permet :
+
+```text
+Acheter un deuxième pouvoir
+dans une couleur déjà utilisée
+pendant cette journée.
+```
+
+Conditions :
+
+* le coût normal du pouvoir est payé ;
+* le coût du Jeton Doré est déjà acquis ;
+* le pouvoir acheté coûte :
+
+```text
+Coût normal +1 Ank
+```
+
+Cette action ne nécessite pas une nouvelle couleur de pyramide.
+
+---
+
+## Revenant
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+1
+```
+
+Effet :
+
+Lorsqu'une de vos unités est détruite :
+
+```text
++1 Ank
+```
+
+---
+
+# 17.3 Niveau 2
+
+## Bouquetin
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Profiteur de Guerre
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Lorsqu'une de vos armées attaque :
+
+```text
++2 Ank
+```
+
+Le gain est immédiat.
+
+Le combat n'a pas besoin d'être remporté.
+
+---
+
+## Revenant Majeur
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Lorsqu'une de vos unités est détruite :
+
+```text
++1 Ank
+```
+
+(Cette tuile est distincte mais produit le même effet.)
+
+---
+
+## Temple Noir
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+2
+```
+
+Effet :
+
+Pendant la Nuit :
+
+Le bonus permanent accordé par le contrôle simultané de :
+
+```text
+2 temples non bleus
+```
+
+est doublé.
+
+Au lieu de :
+
+```text
++1 Point de Victoire permanent
+```
+
+le joueur gagne :
+
+```text
++2 Points de Victoire permanents
+```
+
+---
+
+# 17.4 Niveau 3
+
+## Point Noir Majeur
+
+Type :
+
+```text
+Point de Victoire
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Sphinx Volant
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Jeton Doré Noir Majeur
+
+Type :
+
+```text
+Jeton Doré
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Le joueur reçoit :
+
+```text
+1 déplacement supplémentaire
+```
+
+à chaque journée.
+
+Ce déplacement est réalisé via un Jeton Doré.
+
+Le jeton doit être joué immédiatement avant ou après un jeton normal.
+
+---
+
+## Goutte Noire
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+3
+```
+
+Effet :
+
+Toutes les armées du joueur gagnent :
+
+```text
++1 Goutte noire
+```
+
+en combat.
+
+Cette goutte ignore toutes les protections.
+
+---
+
+# 17.5 Niveau 4
+
+## Dévoreuse des Mondes
+
+Type :
+
+```text
+Créature
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Voir chapitre Créatures.
+
+---
+
+## Jeton Gris Noir
+
+Type :
+
+```text
+Jeton Gris
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Le joueur reçoit un Jeton Gris permanent.
+
+---
+
+## Furie Bestiale
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Toutes les armées du joueur gagnent :
+
+```text
++1 Force
++1 Déplacement
++1 Goutte de sang
+```
+
+---
+
+## Gain d'Ank
+
+Type :
+
+```text
+Pouvoir permanent
+```
+
+Coût :
+
+```text
+4
+```
+
+Effet :
+
+Pendant chaque Phase de Jour :
+
+hors combat :
+
+```text
++1 Ank
+```
+
+à chaque déclenchement applicable.
+
+L'effet est également appliqué immédiatement lors de l'achat.
+
+---
+
+# 17.6 Résumé des pouvoirs noirs
+
+| Niveau | Pouvoir                | Type      |
+| ------ | ---------------------- | --------- |
+| 1      | Point Noir             | Point     |
+| 1      | Renfort Noir           | Permanent |
+| 1      | Jeton Doré Noir        | Jeton     |
+| 1      | Revenant               | Permanent |
+| 2      | Bouquetin              | Créature  |
+| 2      | Profiteur de Guerre    | Permanent |
+| 2      | Revenant Majeur        | Permanent |
+| 2      | Temple Noir            | Permanent |
+| 3      | Point Noir Majeur      | Point     |
+| 3      | Sphinx Volant          | Créature  |
+| 3      | Jeton Doré Noir Majeur | Jeton     |
+| 3      | Goutte Noire           | Permanent |
+| 4      | Dévoreuse des Mondes   | Créature  |
+| 4      | Jeton Gris Noir        | Jeton     |
+| 4      | Furie Bestiale         | Permanent |
+| 4      | Gain d'Ank             | Permanent |
+
+---
+
+## 17.7 Remarques de validation
+
+Par rapport à nos échanges, je suis sûr des éléments suivants :
+
+* Bouquetin ;
+* Doublement du bonus des temples ;
+* Sphinx Volant ;
+* Dévoreuse des Mondes ;
+* Jeton Doré permettant un second achat dans une couleur déjà utilisée ;
+* Gain de 2 Ank lors d'une attaque ;
+* Gain d'1 Ank lors de la perte d'une unité ;
+* Jeton Doré déplacement ;
+* Jeton Gris ;
+* Furie Bestiale.
+
+Les intitulés exacts de certaines tuiles (notamment les noms) pourront être harmonisés lors de la rédaction finale du document.
+
+# 18. Pouvoirs Bicolores
+
+## 18.1 Généralités
+
+Les pouvoirs bicolores représentent des connaissances avancées nécessitant la maîtrise simultanée de plusieurs pyramides.
+
+Pour acheter un pouvoir bicolore :
+
+* le joueur doit contrôler les pyramides requises ;
+* les niveaux requis doivent être atteints ;
+* le coût doit être payé.
+
+---
+
+## 18.2 Règle des couleurs
+
+Une tuile bicolore indique deux exigences.
+
+Exemple :
+
+```text
+1 Rouge
+1 Bleu
+```
+
+signifie :
+
+* pyramide Rouge niveau 1 ou plus ;
+* pyramide Bleue niveau 1 ou plus.
+
+Les niveaux supérieurs sont acceptés.
+
+---
+
+# 18.3 Préscience des Cartes ID
+
+## Conditions
+
+```text
+1 Rouge
+1 Bleu
+```
+
+## Type
+
+```text
+Pouvoir permanent
+```
+
+## Effet
+
+Le joueur peut consulter les cartes ID des autres joueurs.
+
+Toutes les mains de cartes ID deviennent visibles pour lui.
+
+Cet effet est permanent.
+
+---
+
+# 18.4 Révélation Divine
+
+## Conditions
+
+```text
+2 Blanc
+1 Rouge
+```
+
+## Type
+
+```text
+Pouvoir immédiat
+```
+
+## Moment
+
+* immédiatement lors de l'achat ;
+* puis pendant chaque Phase de Nuit.
+
+---
+
+## Effet
+
+Le joueur choisit un nombre quelconque de cartes ID de sa main.
+
+Ces cartes sont défaussées.
+
+Il pioche ensuite :
+
+```text
+Nombre de cartes défaussées
++1
+```
+
+cartes ID.
+
+Exemple :
+
+```text
+Défausse 3 cartes
+→ pioche 4 cartes
+```
+
+---
+
+# 18.5 Domination des Pyramides
+
+## Conditions
+
+```text
+2 Bleu
+2 Blanc
+```
+
+## Type
+
+```text
+Pouvoir permanent
+```
+
+---
+
+## Effet
+
+Le joueur gagne immédiatement :
+
+```text
++1 Point de Victoire
+```
+
+pour chaque pyramide de niveau 3 ou plus qu'il contrôle.
+
+---
+
+## Perte du point
+
+Si le joueur perd le contrôle de cette pyramide :
+
+```text
+-1 Point de Victoire
+```
+
+correspondant.
+
+---
+
+## Restriction
+
+Les autres joueurs peuvent retirer ce point en prenant le contrôle de la pyramide.
+
+Ils ne peuvent cependant pas obtenir eux-mêmes ce point si la pyramide n'est pas :
+
+```text
+Niveau 4
+```
+
+---
+
+# 18.6 Disponibilité
+
+Chaque pouvoir bicolore n'existe qu'en un seul exemplaire.
+
+Lorsqu'il est acheté :
+
+* il devient indisponible ;
+* aucun autre joueur ne peut l'acquérir.
+
+---
+
+# 18.7 Informations publiques
+
+Les informations suivantes sont publiques :
+
+* propriétaire ;
+* couleurs requises ;
+* effet ;
+* état actif.
+
+Tous les joueurs peuvent les consulter à tout moment.
+
+---
+
+# 18.8 Résumé
+
+| Pouvoir                  | Conditions        | Effet                                  |
+| ------------------------ | ----------------- | -------------------------------------- |
+| Préscience des Cartes ID | 1 Rouge + 1 Bleu  | Voir les cartes ID adverses            |
+| Révélation Divine        | 2 Blanc + 1 Rouge | Défausser X cartes ID puis piocher X+1 |
+| Domination des Pyramides | 2 Bleu + 2 Blanc  | Points liés aux pyramides niveau 3+    |
+
+---
+
+## 18.9 Remarques
+
+Ces trois tuiles constituent actuellement l'ensemble des pouvoirs bicolores du jeu.
+
+Chaque tuile est unique.
+
+Elles sont généralement plus puissantes que les pouvoirs monocolores car elles nécessitent plusieurs pyramides développées simultanément.
+
+
+# 19. Ta-Seti
+
+## 19.1 Généralités
+
+Ta-Seti est un plateau secondaire représentant un graphe orienté.
+
+Il permet aux joueurs d'obtenir :
+
+* des pouvoirs permanents ;
+* des pouvoirs immédiats ;
+* des tuiles à usage unique ;
+* des Points de Victoire.
+
+Chaque joueur possède :
+
+```text
+3 prêtres
+```
+
+qui progressent indépendamment sur ce plateau.
+
+---
+
+# 19.2 Structure générale
+
+Le plateau est constitué des niveaux suivants :
+
+```text
+N0   : Départ
+N1x  : Premier niveau
+N2x  : Deuxième niveau
+N3x  : Troisième niveau
+N4x  : Quatrième niveau
+N5   : Nœud final
+```
+
+Les prêtres avancent uniquement dans le sens des flèches.
+
+---
+
+# 19.3 Départ
+
+Tous les prêtres commencent sur :
+
+```text
+N0
+```
+
+Les prêtres de plusieurs joueurs peuvent occuper le même nœud.
+
+---
+
+# 19.4 Déclenchement d'un déplacement
+
+Un déplacement Ta-Seti est déclenché :
+
+### Action Déplacement
+
+Lorsqu'un joueur place un jeton Action sur :
+
+```text
+Déplacement Niveau 1
+ou
+Déplacement Niveau 2
+```
+
+Le déplacement Ta-Seti est résolu :
+
+```text
+avant
+```
+
+le déplacement sur le plateau principal.
+
+---
+
+### Tuile Rouge Avancée
+
+Lors de son achat.
+
+---
+
+### Effet de Nuit de cette tuile
+
+À chaque Phase de Nuit.
+
+---
+
+# 19.5 Choix du prêtre
+
+À chaque déplacement Ta-Seti :
+
+Le joueur choisit :
+
+* le prêtre à déplacer ;
+* la liaison à emprunter.
+
+Le joueur n'est jamais obligé d'utiliser toujours le même prêtre.
+
+---
+
+# 19.6 Récompenses des nœuds
+
+Lorsqu'un prêtre atteint un nœud :
+
+Le joueur peut :
+
+```text
+Prendre la récompense
+ou
+Ne rien faire
+```
+
+---
+
+## Si la récompense est prise
+
+Selon son type :
+
+### Pouvoir immédiat
+
+Le joueur applique l'effet.
+
+Le prêtre retourne immédiatement :
+
+```text
+N0
+```
+
+---
+
+### Tuile à usage unique
+
+Le joueur conserve la tuile.
+
+Le prêtre retourne immédiatement :
+
+```text
+N0
+```
+
+---
+
+### Pouvoir permanent
+
+Le joueur retire le prêtre du plateau Ta-Seti.
+
+Le prêtre est placé :
+
+* dans une armée ;
+* ou dans la réserve.
+
+Une unité est remplacée si nécessaire.
+
+---
+
+# 19.7 Pouvoirs permanents
+
+Un prêtre portant un pouvoir permanent peut être placé :
+
+* dans une armée ;
+* dans la réserve.
+
+---
+
+## Effet
+
+Toutes les armées contenant au moins un prêtre bénéficient :
+
+```text
+de tous les pouvoirs permanents acquis
+```
+
+par ce joueur.
+
+---
+
+## Cumul
+
+Deux prêtres dans une même armée :
+
+```text
+n'apportent aucun bonus supplémentaire
+```
+
+---
+
+## Perte
+
+Si une armée perd son dernier prêtre :
+
+elle perd immédiatement tous les pouvoirs Ta-Seti.
+
+---
+
+# 19.8 Sacrifice volontaire
+
+Si un joueur ne possède plus de prêtre sur le plateau Ta-Seti :
+
+Il peut à tout moment de sa journée :
+
+```text
+Sacrifier un prêtre en jeu
+```
+
+Effets :
+
+```text
+Le prêtre retourne à N0.
+```
+
+L'armée concernée perd immédiatement les bénéfices Ta-Seti si elle ne possède plus de prêtre.
+
+---
+
+# 19.9 Nœud final
+
+Le nœud :
+
+```text
+N5
+```
+
+rapporte :
+
+```text
++1 Point de Victoire permanent
+```
+
+Lorsque le prêtre l'atteint.
+
+Après résolution :
+
+Le prêtre retourne automatiquement :
+
+```text
+N0
+```
+
+---
+
+# 19.10 Réinitialisation avancée
+
+Lorsqu'un prêtre atteint le niveau final intermédiaire :
+
+```text
+N4
+```
+
+et poursuit sa progression :
+
+il revient automatiquement :
+
+```text
+au premier niveau
+```
+
+selon les règles du graphe.
+
+---
+
+# 19.11 Graphe officiel
+
+## Niveau 0 → Niveau 1
+
+```text
+N0 → N11
+N0 → N12
+N0 → N13
+```
+
+---
+
+## Niveau 1 → Niveau 2
+
+```text
+N11 → N21
+N11 → N22
+
+N12 → N21
+N12 → N22
+N12 → N23
+N12 → N24
+
+N13 → N23
+N13 → N24
+```
+
+---
+
+## Niveau 2 → Niveau 3
+
+```text
+N21 → N31
+N21 → N32
+N21 → N33
+
+N22 → N32
+N22 → N33
+
+N23 → N32
+N23 → N33
+
+N24 → N32
+N24 → N33
+N24 → N34
+```
+
+---
+
+## Niveau 3 → Niveau 4
+
+```text
+N32 → N31
+N32 → N34
+
+N33 → N31
+N33 → N34
+```
+
+---
+
+## Niveau final
+
+```text
+N31 → N5
+N32 → N5
+N33 → N5
+N34 → N5
+```
+
+---
+
+# 19.12 Bonus de liaison
+
+## Départ
+
+### N0 → N11
+
+```text
++1 Ank
++1 Bouclier
+```
+
+Le bouclier :
+
+* ne fonctionne que pour le déplacement/combat en cours ;
+* n'est disponible qu'une fois par jour.
+
+---
+
+### N0 → N12
+
+```text
++1 Ank
+```
+
+---
+
+### N0 → N13
+
+```text
++1 Ank
++1 Goutte de sang
+```
+
+La goutte :
+
+* ne fonctionne que pour le déplacement/combat en cours ;
+* n'est disponible qu'une fois par jour.
+
+---
+
+## Niveau 1
+
+### N11 → N21
+
+```text
++1 capacité de déplacement
+```
+
+pour le déplacement en cours.
+
+---
+
+### N11 → N22
+
+```text
++1 capacité de déplacement
+```
+
+pour le déplacement en cours.
+
+---
+
+### N13 → N23
+
+```text
+Recruter 1 unité
+```
+
+optionnel.
+
+---
+
+### N13 → N24
+
+```text
+Recruter 1 unité
+```
+
+optionnel.
+
+---
+
+## Niveau 2
+
+### N21 → N31
+
+```text
++3 Ank
+```
+
+---
+
+### N24 → N34
+
+```text
+Recruter 3 unités
+```
+
+optionnel.
+
+---
+
+## Niveau 3
+
+### N32 → N31
+
+### N33 → N31
+
+```text
++2 Ank
++1 Force
+```
+
+Le :
+
+```text
++1 Force
+```
+
+n'est disponible qu'une fois par jour.
+
+Le :
+
+```text
++2 Ank
+```
+
+est permanent.
+
+---
+
+### N32 → N34
+
+### N33 → N34
+
+```text
++1 Ank
++1 Pluie de Feu
+```
+
+Bonus permanent de plateau.
+
+---
+
+# 19.13 Récompenses des nœuds
+
+## Premier niveau
+
+```text
+N11 : Pouvoir immédiat
+N12 : Aucun effet
+N13 : Pouvoir immédiat
+```
+
+---
+
+## Deuxième niveau
+
+```text
+N21 : Pouvoir immédiat
+N22 : Pouvoir permanent
+N23 : Pouvoir permanent
+N24 : Pouvoir immédiat
+```
+
+---
+
+## Troisième niveau
+
+```text
+N31 : Pouvoir immédiat + tuile usage unique
+N32 : Pouvoir permanent
+N33 : Pouvoir permanent
+N34 : Pouvoir immédiat + tuile usage unique
+```
+
+---
+
+# 19.14 Pouvoirs permanents disponibles
+
+Un seul exemplaire de chaque.
+
+Liste :
+
+```text
++1 Goutte de sang
++1 Déplacement
+Victoire Défensive
++1 Force en attaque
++1 Force en défense
+Passe-Muraille
+Légion (7 unités)
+Préscience
+```
+
+Nouveaux pouvoirs :
+
+```text
+Récupérer les cartes ID utilisées en combat
+```
+
+```text
+Gagner 1 carte ID
+pour chaque paire d'unités ennemies détruites
+en combat
+```
+
+---
+
+# 19.15 Pouvoirs immédiats
+
+Deux exemplaires de chaque.
+
+Liste :
+
+```text
+Piocher 1 carte ID
++1 déplacement pour le déplacement en cours
++1 Force
++1 Protection
+```
+
+---
+
+# 19.16 Tuiles à usage unique
+
+Trois exemplaires de chaque.
+
+---
+
+## Sceau Divin
+
+Désactiver une tuile Pouvoir adverse jusqu'au prochain tour du propriétaire.
+
+---
+
+## Double Point
+
+À jouer avant un combat.
+
+Si le joueur gagne :
+
+```text
++1 Point de Victoire permanent
+```
+
+Si le joueur perd :
+
+```text
+-1 Point de Victoire
+```
+
+Cet effet ne concerne que le joueur qui l'utilise.
+
+---
+
+## Vision Divine
+
+```text
+Piocher 2 cartes ID
+```
+
+---
+
+## Combat Brutal
+
+Pour le prochain combat :
+
+Seuls comptent :
+
+* les unités ;
+* les cartes Combat.
+
+Toutes les autres sources de bonus sont ignorées.
+
+---
+
+# 19.17 Réapprovisionnement
+
+Pendant chaque Phase de Nuit :
+
+Toutes les récompenses retirées sont remplacées aléatoirement.
+
+---
+
+# 19.18 Réactivation journalière
+
+Les bonus journaliers sont réactivés :
+
+```text
+à chaque Phase de Nuit
+```
+
+Bonus concernés :
+
+```text
+Bouclier initial
+Goutte de sang initiale
++1 Force du niveau supérieur
+```
+
+Tous les autres bonus restent permanents et disponibles à chaque passage.
+
+# 20. Points de Victoire
+
+## 20.1 Généralités
+
+Les Points de Victoire (PV) représentent la progression d'un joueur vers la victoire.
+
+Un joueur remporte la partie lorsqu'il possède :
+
+```text
+10 Points de Victoire ou plus
+```
+
+au moment de la vérification de victoire.
+
+La vérification est effectuée :
+
+```text
+au début du tour normal du joueur
+avant sa première action.
+```
+
+La partie ne s'arrête jamais immédiatement lorsqu'un point est gagné.
+
+---
+
+# 20.2 Types de Points de Victoire
+
+Il existe deux catégories :
+
+## Points permanents
+
+Les points permanents sont conservés jusqu'à la fin de la partie.
+
+Ils ne peuvent être perdus que par un effet explicite.
+
+---
+
+## Points temporaires
+
+Les points temporaires dépendent d'une condition.
+
+Ils sont retirés immédiatement lorsque la condition cesse d'être remplie.
+
+---
+
+# 20.3 Sources de Points Permanents
+
+## Tuiles Point
+
+Chaque tuile Point rapporte :
+
+```text
++1 Point de Victoire permanent
+```
+
+immédiatement lors de son achat.
+
+Cela concerne :
+
+* Point Rouge
+* Point Bleu
+* Point Blanc
+* Point Noir
+
+et leurs variantes de niveau supérieur.
+
+---
+
+## Temple Bleu
+
+Pendant la Nuit :
+
+Le contrôleur du Temple Bleu peut :
+
+```text
+Sacrifier 2 unités
+→ +1 Point de Victoire permanent
+```
+
+---
+
+## Contrôle de deux temples
+
+Pendant la Nuit :
+
+Si un joueur contrôle simultanément :
+
+```text
+2 temples non bleus
+```
+
+il gagne :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+### Pouvoir Noir : Temple Noir
+
+Le bonus précédent devient :
+
+```text
++2 Points de Victoire permanents
+```
+
+au lieu de +1.
+
+---
+
+## Ta-Seti : Nœud final
+
+Lorsqu'un prêtre atteint :
+
+```text
+N5
+```
+
+le joueur gagne :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Double Point
+
+Lorsqu'un joueur utilise la tuile :
+
+```text
+Double Point
+```
+
+avant un combat :
+
+### Victoire
+
+```text
++1 Point de Victoire permanent
+```
+
+### Défaite
+
+```text
+-1 Point de Victoire
+```
+
+Cet effet ne concerne que le joueur qui joue la tuile.
+
+---
+
+## Dévoreuse des Mondes
+
+Si :
+
+* la Dévoreuse participe au combat ;
+* son armée remporte le combat ;
+* au moins 2 unités ennemies sont détruites ;
+
+alors :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+## Victoire Défensive
+
+Pouvoir Bleu ou Ta-Seti.
+
+Lorsqu'un joueur remporte un combat en défense :
+
+```text
++1 Point de Victoire permanent
+```
+
+---
+
+# 20.4 Sources de Points Temporaires
+
+## Temples
+
+Chaque temple non bleu contrôlé rapporte :
+
+```text
++1 Point de Victoire temporaire
+```
+
+Tant que le contrôle est conservé.
+
+---
+
+## Pyramides Niveau 4
+
+Chaque pyramide de niveau 4 contrôlée rapporte :
+
+```text
++1 Point de Victoire temporaire
+```
+
+Le point est perdu dès que le contrôle de la pyramide est perdu.
+
+---
+
+## Domination des Pyramides
+
+Pouvoir bicolore :
+
+```text
+2 Bleu + 2 Blanc
+```
+
+Chaque pyramide de niveau 3 ou plus contrôlée rapporte :
+
+```text
++1 Point de Victoire
+```
+
+lié au contrôle.
+
+Si la pyramide n'est plus contrôlée :
+
+```text
+Le point est immédiatement perdu.
+```
+
+---
+
+# 20.5 Perte de Points
+
+Un joueur peut perdre des Points de Victoire dans les cas suivants :
+
+## Perte d'un temple
+
+```text
+-1 Point temporaire
+```
+
+par temple perdu.
+
+---
+
+## Perte d'une pyramide niveau 4
+
+```text
+-1 Point temporaire
+```
+
+par pyramide concernée.
+
+---
+
+## Perte du contrôle d'une pyramide liée à Domination des Pyramides
+
+Le point associé est retiré.
+
+---
+
+## Double Point
+
+En cas de défaite :
+
+```text
+-1 Point
+```
+
+---
+
+# 20.6 Calcul du total
+
+Le total affiché est :
+
+```text
+PV permanents
++
+PV temporaires
+```
+
+Le calcul est mis à jour immédiatement après chaque événement.
+
+---
+
+# 20.7 Informations publiques
+
+Les informations suivantes sont publiques :
+
+* total de PV ;
+* PV permanents ;
+* PV temporaires ;
+* origine des PV.
+
+Tous les joueurs peuvent consulter ces informations à tout moment.
+
+---
+
+# 20.8 Vérification de victoire
+
+La vérification de victoire intervient :
+
+```text
+Au début du tour du joueur
+avant toute action.
+```
+
+Si le joueur possède :
+
+```text
+10 Points de Victoire ou plus
+```
+
+il remporte immédiatement la partie.
+
+---
+
+# 20.9 Égalité
+
+Si plusieurs joueurs possèdent :
+
+```text
+10 Points de Victoire ou plus
+```
+
+au même moment,
+
+le vainqueur est celui dont le tour commence.
+
+Cette situation est normale puisque la vérification est réalisée individuellement.
+
+---
+
+# 20.10 Résumé des sources de Points
+
+| Source                   | Type       |
+| ------------------------ | ---------- |
+| Tuiles Point             | Permanent  |
+| Temple Bleu              | Permanent  |
+| Contrôle de 2 temples    | Permanent  |
+| Temple Noir              | Permanent  |
+| Nœud final Ta-Seti       | Permanent  |
+| Double Point             | Permanent  |
+| Dévoreuse des Mondes     | Permanent  |
+| Victoire Défensive       | Permanent  |
+| Temples non bleus        | Temporaire |
+| Pyramides niveau 4       | Temporaire |
+| Domination des Pyramides | Temporaire |
+
+---
+
+# 20.11 Référence officielle
+
+Le présent chapitre constitue la référence unique pour :
+
+* les gains de Points de Victoire ;
+* les pertes de Points de Victoire ;
+* les conditions de victoire.
+
+En cas de conflit avec une autre section du document, ce chapitre fait autorité.
+
+
+# 21. Cas Particuliers et Clarifications
+
+## 21.1 Principe général
+
+En cas de conflit entre plusieurs effets :
+
+1. Les règles de ce chapitre sont prioritaires.
+2. Les effets spécifiques priment sur les effets généraux.
+3. Si deux effets spécifiques se contredisent, l'effet le plus restrictif s'applique.
+
+---
+
+# 21.2 Combat
+
+## Égalité
+
+En cas d'égalité de Force :
+
+```text
+Le défenseur remporte le combat.
+```
+
+---
+
+## Combat Brutal
+
+Lorsque Combat Brutal est utilisé :
+
+Seuls sont pris en compte :
+
+* les unités ;
+* les cartes Combat.
+
+Sont ignorés :
+
+* créatures ;
+* pouvoirs ;
+* cartes ID ;
+* Ta-Seti ;
+* temples ;
+* pyramides ;
+* bonus de déplacement ;
+* bonus de Force externes.
+
+---
+
+## Changement de Stratégie
+
+L'échange :
+
+```text
+Carte jouée ↔ Carte défaussée
+```
+
+a lieu après révélation des cartes.
+
+Le calcul du combat utilise alors la nouvelle carte.
+
+---
+
+## Aucun Saignement
+
+Cette carte ne protège que son propriétaire.
+
+Elle n'annule pas :
+
+* les pertes de l'adversaire ;
+* les effets automatiques ;
+* les sacrifices.
+
+---
+
+# 21.3 Prêtres Ta-Seti
+
+## Dernière unité d'une armée
+
+Une Pluie de Feu ne peut pas cibler un prêtre.
+
+Exception :
+
+Si le prêtre constitue la dernière unité de l'armée.
+
+---
+
+## Destruction du dernier prêtre
+
+Lorsqu'une armée perd son dernier prêtre :
+
+Tous les pouvoirs Ta-Seti sont immédiatement perdus pour cette armée.
+
+---
+
+## Plusieurs prêtres
+
+Deux prêtres dans la même armée :
+
+```text
+n'apportent aucun bonus supplémentaire.
+```
+
+---
+
+## Sacrifice volontaire
+
+Un joueur peut sacrifier un prêtre :
+
+* à n'importe quel moment de sa journée ;
+* uniquement s'il n'a plus de prêtre sur le plateau Ta-Seti.
+
+Le prêtre retourne immédiatement :
+
+```text
+N0
+```
+
+---
+
+# 21.4 Créatures
+
+## Chiron
+
+Chiron est une créature.
+
+Une armée contenant Chiron peut accueillir :
+
+```text
+2 créatures au total
+```
+
+et non :
+
+```text
+Chiron + 2 autres créatures
+```
+
+---
+
+## Kraken
+
+Le Kraken :
+
+* n'occupe aucun emplacement ;
+* n'est jamais ciblé ;
+* accompagne simultanément toutes les armées du joueur.
+
+---
+
+## Bouquetin
+
+Pour engager un combat contre une armée contenant le Bouquetin :
+
+L'attaquant doit payer :
+
+```text
+2 Ank
+```
+
+avant le déclenchement du combat.
+
+Sans paiement :
+
+```text
+combat impossible
+```
+
+---
+
+## Dévoreuse des Mondes
+
+Le bonus :
+
+```text
++1 Point de Victoire
+```
+
+est accordé uniquement si :
+
+* le combat est remporté ;
+* au moins 2 unités ennemies sont détruites.
+
+---
+
+## Minotaure
+
+Le Minotaure protège contre toutes les sources de saignement sauf :
+
+```text
+les gouttes imprimées sur la carte Combat adverse.
+```
+
+---
+
+# 21.5 Téléportation
+
+## Téléportation pendant un déplacement
+
+Une téléportation peut être utilisée :
+
+* au début ;
+* pendant ;
+* à la fin d'un déplacement.
+
+Elle ne met jamais fin au déplacement en cours.
+
+---
+
+## Téléportation et capacité restante
+
+Après téléportation :
+
+Le joueur conserve toute sa capacité de déplacement restante.
+
+---
+
+## Sphinx Volant
+
+Le déplacement spécial du Sphinx Volant :
+
+```text
+Obélisque → Obélisque
+```
+
+est indépendant de la téléportation normale.
+
+---
+
+# 21.6 Contrôle des pyramides
+
+## Passage sur sa propre pyramide
+
+Le propriétaire initial récupère le contrôle :
+
+dès qu'une de ses armées traverse l'emplacement.
+
+Il n'est pas nécessaire d'y terminer son déplacement.
+
+---
+
+## Pouvoirs déjà acquis
+
+Perdre une pyramide :
+
+* ne retire jamais les pouvoirs achetés ;
+* empêche seulement les nouveaux achats.
+
+---
+
+# 21.7 Recrutement
+
+## Recrutement Local
+
+Avec Recrutement Local :
+
+Les unités peuvent être recrutées :
+
+* dans la cité ;
+* dans n'importe quelle armée du joueur.
+
+---
+
+## Bonus Ta-Seti de recrutement
+
+Les bonus :
+
+```text
++1 unité
++3 unités
+```
+
+peuvent être utilisés :
+
+* dans la cité ;
+* pour compléter une armée.
+
+Le bonus est optionnel.
+
+---
+
+## Taille maximale
+
+Une armée ne peut jamais dépasser sa limite :
+
+```text
+5 unités
+```
+
+ou :
+
+```text
+7 unités
+```
+
+si elle bénéficie de Légion ou du Bouliste.
+
+---
+
+# 21.8 Ta-Seti
+
+## Récompense refusée
+
+Lorsqu'un prêtre atteint un nœud :
+
+Le joueur peut choisir :
+
+```text
+Ne pas prendre la récompense.
+```
+
+Le prêtre reste alors sur le nœud.
+
+---
+
+## Bonus journaliers
+
+Seuls les bonus suivants sont limités à une utilisation par jour :
+
+```text
+Bouclier de N0→N11
+Goutte de sang de N0→N13
++1 Force de N32/N33→N31
+```
+
+Tous les autres bonus sont permanents.
+
+---
+
+## Réactivation
+
+Les bonus journaliers sont réactivés :
+
+```text
+à chaque Nuit.
+```
+
+---
+
+# 21.9 Cartes ID
+
+## Annulation d'ID
+
+Une Annulation d'ID :
+
+* annule une seule carte ;
+* annule totalement son effet ;
+* la carte annulée est défaussée.
+
+---
+
+## Annulation d'une Annulation
+
+Une Annulation d'ID peut elle-même être annulée.
+
+La résolution s'effectue dans l'ordre inverse des réactions.
+
+---
+
+## Récupération d'ID
+
+Si aucune carte n'est disponible dans la défausse :
+
+L'effet est perdu.
+
+---
+
+# 21.10 Ank
+
+## Limite maximale
+
+Un joueur ne peut jamais posséder plus de :
+
+```text
+11 Ank
+```
+
+Les gains excédentaires sont perdus.
+
+---
+
+## Réduction de coût
+
+Les réductions :
+
+* Prêtre de Râ ;
+* Architectes Sacrés ;
+* autres réductions ;
+
+sont cumulatives.
+
+Le coût final ne peut jamais devenir négatif.
+
+---
+
+# 21.11 Points de Victoire
+
+## Vérification
+
+La victoire est vérifiée :
+
+```text
+au début du tour du joueur.
+```
+
+Jamais immédiatement lors d'un gain de point.
+
+---
+
+## Double Point
+
+Le risque :
+
+```text
+-1 Point
+```
+
+ne concerne que le joueur ayant joué la tuile.
+
+---
+
+## Contrôle des temples
+
+Perdre un temple retire immédiatement le point temporaire associé.
+
+---
+
+## Contrôle des pyramides
+
+Perdre une pyramide retire immédiatement les points temporaires liés à son contrôle.
+
+---
+
+# 21.12 Informations publiques
+
+Sont toujours publiques :
+
+* armées ;
+* créatures ;
+* prêtres visibles ;
+* pyramides ;
+* Ank ;
+* Points de Victoire ;
+* pouvoirs achetés ;
+* cartes Combat déjà utilisées.
+
+---
+
+# 21.13 Informations privées
+
+Restent privées :
+
+* cartes ID en main ;
+* cartes Combat encore disponibles ;
+* cartes choisies avant leur révélation.
+
+Exception :
+
+Les effets de Préscience autorisent certaines consultations.
+
+---
+
+# 21.14 Cas non prévus
+
+Si une situation n'est pas explicitement couverte par les règles :
+
+1. appliquer la règle la plus proche ;
+2. privilégier la cohérence avec les mécanismes existants ;
+3. documenter la décision afin qu'elle puisse être intégrée dans une future version du cahier des charges.
+
+
+# 22. Architecture Technique du Jeu
+
+## 22.1 Objectif
+
+Cette section décrit le comportement attendu de l'application informatique.
+
+L'objectif est de permettre :
+
+* la création de parties en ligne ;
+* le déroulement intégral d'une partie ;
+* la validation automatique des règles ;
+* la synchronisation entre plusieurs joueurs.
+
+L'application cible est :
+
+```text
+Application PC multijoueur en ligne
+3 joueurs
+Tour par tour
+Sans limite de temps
+```
+
+---
+
+# 22.2 Fonctionnalités attendues
+
+## Création de partie
+
+Un joueur doit pouvoir :
+
+```text
+Créer une partie
+```
+
+Paramètres :
+
+* Nom de la partie
+* Nombre de joueurs (3)
+* Partie publique ou privée
+
+Résultat :
+
+```text
+Code unique de partie
+```
+
+---
+
+## Rejoindre une partie
+
+Un joueur doit pouvoir :
+
+```text
+Rejoindre une partie existante
+```
+
+via :
+
+* code de partie
+* liste des parties publiques
+
+---
+
+## Quitter une partie
+
+Un joueur peut quitter :
+
+* avant le début ;
+* pendant la partie.
+
+Le comportement exact (abandon, IA, suppression) sera paramétrable.
+
+---
+
+# 22.3 Architecture générale
+
+Le système doit être :
+
+```text
+Client / Serveur
+```
+
+Le serveur est l'autorité unique.
+
+Aucune règle n'est validée côté client.
+
+---
+
+## Serveur
+
+Responsable de :
+
+* l'état complet de la partie ;
+* la validation des règles ;
+* les calculs ;
+* les combats ;
+* les gains ;
+* les vérifications de victoire.
+
+---
+
+## Client
+
+Responsable de :
+
+* l'affichage ;
+* les animations ;
+* les interactions utilisateur.
+
+---
+
+# 22.4 Philosophie du moteur
+
+Le moteur doit être :
+
+```text
+State Driven
+```
+
+Toute la partie est représentée par :
+
+```text
+GameState
+```
+
+Chaque action produit :
+
+```text
+Nouvel Etat
+```
+
+Aucune modification directe.
+
+---
+
+# 22.5 Structure GameState
+
+```text
+GameState
+{
+    Players
+    Board
+    TaSeti
+    Powers
+    IDDeck
+    Turn
+    Phase
+    Combat
+}
+```
+
+---
+
+# 22.6 Joueur
+
+```text
+Player
+{
+    Id
+    Name
+
+    Ank
+    VictoryPoints
+
+    DawnTokens
+
+    UnitsReserve
+
+    CombatDeck
+    IDHand
+    IDDiscard
+
+    Powers
+
+    Priests
+
+    Armies
+
+    ControlledPyramids
+    ControlledTemples
+}
+```
+
+---
+
+# 22.7 Armée
+
+```text
+Army
+{
+    Id
+
+    Owner
+
+    Location
+
+    Units
+
+    Creatures
+
+    Priests
+
+    TemporaryEffects
+
+    PermanentEffects
+}
+```
+
+---
+
+# 22.8 Créature
+
+```text
+Creature
+{
+    Id
+
+    Type
+
+    Force
+
+    Movement
+
+    Abilities
+}
+```
+
+---
+
+# 22.9 Prêtre
+
+```text
+Priest
+{
+    Id
+
+    Owner
+
+    PositionTaSeti
+
+    AssignedArmy
+
+    PermanentPowers
+}
+```
+
+---
+
+# 22.10 Plateau
+
+Le plateau est représenté sous forme de graphe.
+
+```text
+BoardNode
+{
+    Id
+
+    Type
+
+    Neighbours
+}
+```
+
+---
+
+Exemple :
+
+```text
+T1
+{
+    Neighbours:
+    DJ1
+    DJ2
+    DJ3
+    D12
+    D23
+}
+```
+
+---
+
+# 22.11 Ta-Seti
+
+Le plateau Ta-Seti est également un graphe.
+
+```text
+TaSetiNode
+{
+    Id
+
+    Rewards
+
+    Connections
+}
+```
+
+---
+
+# 22.12 Cartes Combat
+
+```text
+CombatCard
+{
+    Force
+
+    Blood
+
+    Shields
+
+    SpecialEffect
+}
+```
+
+---
+
+# 22.13 Cartes ID
+
+```text
+IDCard
+{
+    Name
+
+    Cost
+
+    Timing
+
+    Effect
+}
+```
+
+---
+
+# 22.14 Pouvoirs
+
+```text
+Power
+{
+    Id
+
+    Name
+
+    Color
+
+    Level
+
+    Cost
+
+    Effect
+}
+```
+
+---
+
+# 22.15 Combat
+
+Le combat doit être représenté par un état indépendant.
+
+```text
+CombatState
+{
+    Attacker
+
+    Defender
+
+    CombatCardAttacker
+    CombatCardDefender
+
+    IDCardsAttacker
+    IDCardsDefender
+
+    FinalForceAttacker
+    FinalForceDefender
+
+    Winner
+}
+```
+
+---
+
+# 22.16 Journal d'événements
+
+Toutes les actions doivent générer des événements.
+
+Exemple :
+
+```text
+PlayerMoved
+CombatStarted
+CombatEnded
+PowerPurchased
+PriestMoved
+VictoryPointGained
+```
+
+---
+
+# 22.17 Synchronisation réseau
+
+Le serveur diffuse :
+
+```text
+GameState Delta
+```
+
+et non l'état complet.
+
+Exemples :
+
+```text
+ArmyMoved
+
+AnkChanged
+
+PowerPurchased
+```
+
+---
+
+# 22.18 Gestion des règles
+
+Chaque règle doit être implémentée sous forme de service spécialisé.
+
+Exemple :
+
+```text
+MovementService
+
+CombatService
+
+TaSetiService
+
+VictoryService
+
+NightService
+```
+
+---
+
+# 22.19 Sauvegarde
+
+Une partie doit pouvoir être sauvegardée à tout instant.
+
+Format recommandé :
+
+```text
+JSON
+```
+
+Contenu :
+
+```text
+Etat complet de la partie
+```
+
+---
+
+# 22.20 Reconnexion
+
+Un joueur déconnecté doit pouvoir :
+
+```text
+Se reconnecter
+```
+
+et récupérer :
+
+* son état ;
+* sa main ;
+* la partie en cours.
+
+---
+
+# 22.21 Historique
+
+Le moteur doit conserver :
+
+```text
+Historique complet des actions
+```
+
+afin de permettre :
+
+* débogage ;
+* replay ;
+* annulation administrative.
+
+---
+
+# 22.22 Intelligence Artificielle (option)
+
+Prévoir dès la conception :
+
+```text
+BotPlayer
+```
+
+compatible avec :
+
+```text
+IPlayer
+```
+
+afin de remplacer un joueur absent.
+
+---
+
+# 22.23 Conditions de victoire
+
+Le moteur doit vérifier :
+
+```text
+Début du tour du joueur
+```
+
+Si :
+
+```text
+VictoryPoints >= 10
+```
+
+Alors :
+
+```text
+GameEnded
+Winner = Player
+```
+
+---
+
+# 22.24 Écrans minimums
+
+## Écran principal
+
+* Liste des parties
+* Créer une partie
+* Rejoindre une partie
+
+---
+
+## Écran de jeu
+
+Affichage :
+
+* plateau principal
+* Ta-Seti
+* armées
+* créatures
+* prêtres
+* temples
+* pyramides
+
+---
+
+## Zone joueur
+
+Affichage :
+
+* Ank
+* PV
+* Jetons Aube
+* Pouvoirs
+* Cartes ID
+
+---
+
+## Fenêtre de combat
+
+Affichage :
+
+* armées
+* cartes combat
+* cartes ID
+* résultat
+
+---
+
+# 22.25 Cahier des charges de développement
+
+L'application finale devra permettre :
+
+✅ Création de partie
+
+✅ Rejoindre une partie
+
+✅ Quitter une partie
+
+✅ Sauvegarde
+
+✅ Reconnexion
+
+✅ Partie complète à 3 joueurs
+
+✅ Application stricte des règles
+
+✅ Interface graphique PC
+
+✅ Multijoueur en ligne
+
+✅ Historique complet
+
+✅ Architecture extensible pour futures extensions
+
+---
+
+## Résultat attendu
+
+À l'issue du développement, l'application doit permettre à trois joueurs de jouer l'intégralité du jeu sans intervention humaine sur les règles.
+
+Toutes les validations, calculs, combats, gains de ressources, déplacements, effets de pouvoirs et conditions de victoire doivent être gérés automatiquement par le moteur de jeu serveur.

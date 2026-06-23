@@ -1,0 +1,93 @@
+REMERCIEMENTS
+Un grand merci à l’équipe Matagot dans son ensemble (Sabrina, Fabien, Yann, Mathias…) et plus spécifiquement à 
+Arnaud et Hicham eu égard aux milliers de mails échangés au cours du développement de Ta-Seti.
+Nous tenons ensuite à remercier chaleureusement tous les testeurs de Ta-Seti qu’ils soient occasionnels ou multiréci-
+divistes. Nous remercions particulièrement le noyau dur de nos testeurs alsaciens à savoir Claire Montiage, Olivier 
+Basaran, Ian Clévy, Pierre Frey et Etienne Schaeffer. Sans vos remarques, vos retours et vos analyses, Ta-Seti ne serait 
+pas ce qu’il est.
+Nous ne remercions pas la personne qui a prononcé la phrase suivante : « Vous verrez, faire une extension, c’est beau-
+coup moins de travail que créer le jeu de base ».
+Jacques et Guillaume
+À la fin de chaque phase de nuit (après la phase A.3 Résolution des pouvoirs et avant la phase 
+Aube si les joueurs ont choisi le module 2), le chemin vers Ta-Seti est complété. 
+Si des jetons Objet, Compétence ou Point de victoire ont été pris lors du tour précédent, ils 
+sont remplacés par de nouveaux jetons de la réserve tant qu’il y en a à disposition. S’il n’y a 
+plus de jetons disponibles, le chemin est complété en commençant par l’espace le plus éloi-
+gné du départ et du haut vers le bas du chemin.
+module 4 : Une nouvelle façon de déterminer le vainqueur
+Bien que ce module fonctionne parfaitement de manière individuelle, nous vous conseillons 
+de le combiner avec le module 2, la nouvelle phase de l’Aube. Le principe de ce module est 
+qu’un joueur emporte la partie s’il réunit les conditions de victoire avant de jouer un de ses 
+Jetons d’Action et non plus à la fin d’un tour comme dans le jeu de base.
+fonctionnement
+Si en phase de jour, avant de jouer un de ses Jetons d’Action, le joueur actif possède au 
+moins 8 PV (ou 10 selon le choix fait en début de partie), deux cas de figure se présentent :
+ 
+•	 si aucun de ses adversaires ne possède plus de PV que lui, il est immédiatement déclaré 
+vainqueur. (Il est donc possible de gagner la partie en ayant autant de PV qu’un adver-
+saire.) 
+•	 si un ou plusieurs adversaires possèdent plus de PV que lui, aucun joueur ne gagne pour 
+le moment. La phase de jour en cours est la dernière de la partie. 
+ 
+Si à la fin de cette phase de jour aucun joueur n’a été déterminé vainqueur, celui-ci est dési-
+gné comme dans le jeu de base, c’est-à-dire en tenant compte des critères suivants (dans 
+l’ordre) :
+•	 Le joueur ayant le plus de PV
+•	 En cas d’égalité, le joueur ayant le plus de PV de combat
+•	 En cas d’égalité encore, le joueur ayant joué précédemment le plus tôt dans l’ordre de la 
+dernière phase d’action.
+module 5 : les nouvelles cartes combat et intervention divine
+cartes combat
+Chaque joueur reçoit au début de la partie 2 nouvelles cartes Combat qu’il ajoute aux 6 
+cartes Combat du jeu de base. Chaque joueur dispose maintenant de 8 cartes au choix pour 
+la résolution des combats.
+cartes intervention divine
+Les nouvelles cartes Intervention Divine sont rajoutées à celles du jeu de base lors de la mise 
+en place de la partie. Les joueurs reçoivent toujours une carte Intervention Divine en début 
+de partie avec maintenant la possibilité d’obtenir une de ces nouvelles cartes. Les cartes 
+non distribuées en début de partie sont toujours disposées, sous forme de pioche, à côté du 
+plateau.
+Depuis le début de 
+la partie, Guillaume 
+a récupéré deux 
+compétences : 
+« Carnage »
+ et « Chargez ! ».
+Ses 2 prêtres sur le 
+plateau octroieront 
+aux troupes qu’ils 
+accompagnent les deux 
+bonus, « + 1 Force en 
+attaque » ET « +1 
+Dégâts ». 
+Au début d’un nouveau 
+tour, les scores sont les 
+suivants :  
+Jacques a 8 PV, Claire 
+9 PV et Guillaume et 
+Étienne 7 PV chacun. 
+Jacques est le premier 
+à jouer. Au moment 
+où il joue son premier 
+jeton d’Action, Claire 
+est devant lui avec 9 PV. 
+Jacques ne gagne donc 
+pas immédiatement la 
+partie. 
+Claire est positionnée 
+en troisième dans 
+l’ordre du tour. Si 
+au moment de jouer 
+son premier jeton 
+d’Action la situation 
+n’a pas changée (elle est 
+toujours seule en tête 
+avec 9 PV), elle gagnera 
+la partie. 
+Dans tout les cas, cette 
+phase de jour sera la 
+dernière de la partie 
+et le vainqueur sera 
+déterminé à l’issue de 
+celle-là.
+4

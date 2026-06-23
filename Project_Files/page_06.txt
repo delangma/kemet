@@ -1,0 +1,96 @@
+Les effets des Pouvoirs sont immédiats. Toutefois, 
+certains Pouvoirs ne prendront effet qu’à certains 
+moments du jeu  (ex : Pouvoirs de combat, prêtre ou 
+Pouvoirs se résolvant en phase Nuit).
+Important !
+Un joueur ne peut en aucun cas acquérir 2 Pou­
+voirs strictement identiques.
+Cela inclut tous les Pouvoirs ayant les mêmes effets 
+et illustrations, même s’ils sont de couleurs diffé­
+rentes comme «Action divine» et «Point de Vic­
+toire».
+4 •  Recruter
+Dépenser X  pour recruter immédiatement X unités.
+Les unités sont prises de la réserve et placées sur un, 
+deux ou trois quartiers de la cité du joueur. 
+Si un joueur occupe un quartier adverse :
+• Le joueur occupant ne peut pas y recruter d’unités. 
+  (On ne recrute que dans sa propre cité).
+• Le joueur occupé peut y recruter. De fait, un combat s’engage immédiatement
+  (il s’agira d’une attaque).
+Important !
+Une troupe ne peut être composée que de 5 unités au maximum.
+5 •  Se déplacer / Combattre
+L’action «Se déplacer» permet de déplacer 1 troupe.
+Il n’est pas obligatoire de déplacer toutes les unités de la troupe, il est possible d’en laisser en 
+chemin. De plus, le joueur peut récupérer des Unités qui se trouveraient sur les cases traver­
+sées par la troupe sans toutefois dépasser la capacité de déplacement initiale.
+Par défaut, la capacité de déplacement d’une troupe est d’1 case.
+Cette capacité peut être augmentée :
+• Grâce à des Pouvoirs pour toutes les troupes d’un joueur.
+• Grâce à une créature pour la troupe accompagnant la créature.
+• Grâce à une carte ID pour un mouvement donné.
+Une troupe peut se déplacer de trois manières : 
+A) Déplacement terrestre
+Le joueur déplace une ou plusieurs unités d’une même troupe vers une case adjacente.
+B) Ports
+Il est possible de traverser le Nil entre deux ports reliés par une flèche.
+Cela compte comme une action de mouvement d’une case, sans aucun surcoût.
+C) Utilisation de la téléportation par une pyramide
+Un joueur peut téléporter une troupe à partir d’une pyramide (de son territoire ou d’un ter­
+ritoire adverse) vers une case où se trouve un obélisque.
+• Le joueur doit dépenser 2  .
+• Se téléporter ne consomme pas de capacité de déplacement.
+Dans la limite de sa capacité de déplacement et de ses ressources en  , la troupe peut alter­
+ner téléportation par une pyramide, déplacement terrestre et utilisation d’un port dans un 
+même déplacement, sans aucune restriction.
+⌂ Rappel : Le contrôle 
+d’une pyramide adverse 
+autorise l’achat de 
+tuiles Pouvoirs de la 
+couleur et du niveau 
+de la pyramide 
+contrôlée. 
+Exemple :
+Claire souhaite déplacer 
+sa troupe de sa cité vers 
+le temple de la rive est 
+du Nil.
+Elle a deux solutions :
+A- Utiliser la télépor­
+tation : Claire paie 2 
+ 
+et téléporte directement 
+sa troupe sur le temple 
+concerné.
+B- Ne pas utiliser la 
+téléportation : La troupe 
+de Claire doit alors 
+disposer d’une capacité 
+de mouvement de 3 (c.f. 
+schéma). Cette capa­
+cité de mouvement est 
+par exemple atteinte si 
+Claire possède le pouvoir 
+Célérité et la Guivre du 
+Désert associée à cette 
+troupe.
+Claire économiserait 
+alors 2 
+ pour arriver 
+au même endroit.
+Composition d’un pouvoir
+Niveau : indique le niveau de la 
+carte, sa couleur (bleu, rouge ou 
+blanc) et son coût (1 à 4  )
+Rappel de la couleur
+Effet de la carte (se référer à la 
+fiche récapitulative)
+Phase où le pouvoir est actif :
+En phase de jour
+En phase de nuit
+Lors d’un combat
+1
+2
+3
+5

@@ -1,0 +1,85 @@
+module 2 : La phase de l’aube
+Cette phase remplace la phase « Détermination de l’ordre du tour » (A.4. de la règle du jeu 
+de base). Cette phase est ignorée au tout premier tour. Ainsi, l’ordre du tour des joueurs 
+reste déterminé aléatoirement lors du premier tour de jeu.
+Comment récupérer un jeton Aube ? 
+C’est lors des combats que les joueurs récupèrent des jetons Aube. Un joueur qui perd un 
+combat durant la partie ou qui perd toutes ses unités lors d’un combat récupère à la fin 
+du combat un jeton Aube d’une valeur de +1 Force. Un joueur peut cumuler plusieurs jetons 
+Aube sans limitation.
+La valeur d’Aube
+Lors de la phase de l’Aube, les joueurs doivent résoudre un combat obligatoire afin de déter-
+miner l’ordre du tour pour la prochaine phase de Jour.
+Pour cela et à tour de rôle dans l’ordre inverse de la piste d’ordre du tour, chaque joueur :
+• DOIT poser une carte Combat face visible
+• DOIT défausser une carte Combat face cachée
+• PEUT dépenser un ou plusieurs de ses jetons Aube.
+La valeur Aube du joueur est égale à la valeur de force de la carte révélée face visible aug-
+mentée des bonus de force apportés par les jetons Aube joués. 
+Important !  Seule est prise en compte la force de la carte Combat révélée face visible. Les 
+autres valeurs sont donc ignorées. 
+Tous les joueurs font de même, dans l’ordre inverse de la piste d’ordre du tour, jusqu’au 
+joueur placé en premier sur celle-ci.
+Le joueur possédant le plus haut total sur sa valeur Aube choisit sa place sur la piste d’ordre 
+du tour. Puis, dans l’ordre décroissant des valeurs Aube, chaque joueur fait de même. En 
+cas d’égalité c’est l’ordre du tour précédent qui tranche. Le joueur qui était placé en premier 
+gagnera donc toutes les égalités pour cette phase.
+TOUS les jetons Aube dépensés par les joueurs sont ensuite défaussés.
+module 3 : le chemin vers ta-seti
+mise en place 
+Le chemin est composé de 4 plateaux qui se placent dans un ordre précis, de sorte que tous 
+les chemins se raccordent bien ensemble (voir modèle ci-dessous).
+Chaque plateau est recto-verso. Au début de la partie, déterminez aléatoirement la face de 
+chaque plateau et placez le chemin, constitué des 4 plateaux, à côté du plateau principal.
+Sur les emplacements indiqués sur le chemin, placez :
+•	 Les jetons Pouvoir temporaire u
+•	 Un jeton Objet niveau 1, face visible, sur chaque espace correspondant v.
+•	 Un jeton Objet niveau 2, face visible, sur chaque espace correspondant w.
+•	 Un jeton Compétence, face visible, sur chaque espace correspondant x. 
+•	 Un jeton Point de victoire permanent noir sur la case correspondante au bout du chemin 
+vers Ta-Seti y.
+Les jetons non utilisés sont mis de côté, en réserve.
+Les 3 figurines Prêtre de chaque joueur sont placées à côté du plateau correspondant au 
+début du chemin z.
+ Les jetons Aube 
+ont au verso une 
+valeur de +2 Force 
+qui est utilisée si les 
+joueurs n’ont plus 
+de jeton +1 Force 
+à disposition en 
+réserve. À n’importe 
+quel moment durant 
+la partie, un jeton 
+de valeur +2 Force 
+peut-être échangé 
+contre 2 jetons 
++1 Force. 
+ Astuce : pour ne 
+pas perdre l’ordre 
+du tour précédent, 
+baissez chaque jeton 
+d’ordre de tour sous 
+sa case avant de 
+déterminer le nouvel 
+ordre. Vous pourrez 
+ainsi mieux gérer 
+les égalités entre les 
+valeur d’aube
+u
+u
+u
+y
+w
+w
+w
+w
+z
+x
+v
+v
+v
+v
+v
+v
+2

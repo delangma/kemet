@@ -1,0 +1,87 @@
+B - PHASE DE JOUR (PHASE D’ACTION) 
+Chaque joueur dispose de 5 Jetons d’Action.
+Dans l’ordre du tour, chaque joueur pose 1 Jeton d’Action 
+sur l’une des cases Action de son plateau individuel, et en 
+applique IMMEDIATEMENT l’effet.
+Puis, la procédure est répétée jusqu’à utilisation de tous les 
+Jetons d’Action, soit pendant 5 tours de jeu. 
+Important !
+La case Action doit être libre, il n’est donc pas possible 
+de placer deux Jetons d’Action sur la même case.
+A la fin des  5 tours de jeu, chaque joueur doit avoir posé 
+au moins 1 marqueur SUR CHACUN des 3 premiers 
+niveaux de la pyramide.
+Note :
+La case dorée en haut de la pyramide ne sert que pour le 
+Pouvoir «Volonté divine» (jeton doré).
+DESCRIPTION DES DIFFÉRENTES ACTIONS POSSIBLES 
+1 •  Prier
+Gagner deux   immédiatement.
+2 •  Faire évoluer une pyramide
+Cette action permet d’augmenter la valeur d’une pyramide.
+Le joueur ne peut augmenter qu’une seule pyramide à la fois. Il est cependant possible d’aug­
+menter une même pyramide de plusieurs niveaux.
+Le coût en  est égal au niveau supérieur que l’on souhaite obtenir.
+Si l’on augmente la pyramide de plusieurs niveaux, il faut cumuler les coûts. 
+Effet des pyramides :
+• Elles permettent de se téléporter vers un obélisque moyennant 2   (voir plus loin).
+• Elles permettent d’acheter les tuiles Pouvoirs de la même couleur et du niveau correspondant.
+• Une pyramide de niveau 4 octroie 1 PV temporaire.
+Un joueur qui contrôle avec une troupe une pyramide adverse s’en octroie tous les avantages 
+(y compris le PV temporaire si c’est une pyramide de niveau 4). Tant qu’il n’a pas récupéré 
+sa pyramide, le propriétaire original ne bénéficie plus d’aucun de ses avantages.
+3 •  Acheter un Pouvoir 
+Cette action permet d’acheter une tuile Pouvoir de la couleur indiquée. Pour acheter un 
+autre Pouvoir de la même couleur, il faut donc attendre le prochain tour.
+Les Pouvoirs permettent d’acquérir des avantages dans le jeu et d’orienter sa stratégie en 
+développant sa puissance.
+Condition d’achat : Pour acheter une tuile Pouvoir, le joueur doit posséder une pyramide 
+de la même couleur et d’un niveau supérieur ou égal au Pouvoir.
+Coût d’achat : Le coût d’achat d’un Pouvoir est égal à son niveau. Un Pouvoir est acheté 
+par le joueur de manière permanente pour toute la partie et ne peut être perdu. Il doit être 
+disposé devant le joueur, bien visible.
+Par exemple, pour acheter «Boucliers de Neith», qui est un Pouvoir bleu de niveau 3, il faut 
+disposer d’une pyramide bleue de niveau 3 ou 4. Le coût d’achat est de 3  .
+Exemple  : Pour faire 
+évoluer une pyramide 
+du niveau 2 au niveau 
+3, cela coûte 3 .
+Exemple  : Pour faire 
+évoluer une pyramide 
+du niveau 1 au niveau 
+3, le coût sera de 5 
+ 
+(2 pour passer au niveau 
+2 et 3 pour le niveau 3). 
+⌂ Rappel : une pyra­
+mide de niveau 0 n’est 
+pas placée sur le pla­
+teau. Dès qu’elle passe 
+de niveau, elle doit 
+immédiatement être 
+placée sur le quartier 
+encore libre de sa cité.
+4
+8
+5
+9
+6
+10
+10
+3
+7
+11
+11
+Se déplacer
+Faire évoluer 
+une pyramide
+Volonté divine
+Recruter
+Prier
+Acheter un 
+pouvoir rouge
+Acheter un 
+pouvoir bleu
+Acheter un 
+pouvoir blanc
+4

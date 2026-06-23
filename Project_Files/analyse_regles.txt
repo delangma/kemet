@@ -1,0 +1,88 @@
+ANALYSE : IMPLÉMENTATION vs RÈGLES OFFICIELLES — KEMET
+========================================================
+Date : 2026-06-17
+Source : kemet_rg.pdf — Règles officielles Kemet (édition Matagot 2012)
+         + extension Ta-Seti (pages 10–13 du PDF)
+
+⚠ AVERTISSEMENT PRÉALABLE
+══════════════════════════
+Le PDF fourni correspond au Kemet ORIGINAL (2012) et à son extension Ta-Seti.
+L'implémentation développée utilise les créatures et certaines mécaniques de
+Kemet: Blood and Sand (2021 — édition révisée). Ces deux éditions ont des règles
+sensiblement différentes (créatures, noms, mécaniques).
+
+Les écarts ci-dessous comparent le PDF disponible à l'implémentation.
+Certains écarts sont donc des choix intentionnels de la 2e édition, d'autres
+sont des bugs ou oublis réels.
+
+
+═══════════════════════════════════════════════════════════════
+PARTIE 1 — FONCTIONNALITÉS DÉVELOPPÉES QUI NE CORRESPONDENT PAS AUX RÈGLES DU PDF
+═══════════════════════════════════════════════════════════════
+
+2. FORCE DE COMBAT — UNITÉS
+   PDF (p.7) : « La valeur de combat est déterminée en cumulant : le nombre
+               d'unités dans la troupe + la valeur de force de la carte Combat +
+               les éventuels bonus d'attaque ou de défense des Pouvoirs +
+               les éventuels bonus des créatures + les éventuels bonus des cartes ID. + les bonus ta-seti »
+   Impl.   : Le nombre d'unités ne contribue PAS à la force de combat dans
+             CombatModal. Seuls la carte et les créatures sont pris en compte.
+             C'est un écart majeur qui change radicalement l'équilibre du jeu.
+
+3. POINT DE VICTOIRE DE COMBAT — CONDITIONS
+   PDF (p.7) : L'attaquant gagne 1 PV permanent « si et seulement s'il a au moins
+               une unité survivante au combat. » Le défenseur ne gagne jamais de
+               PV, même victorieux (sauf victoire défensive).
+   Impl.   : La vérification "au moins 1 unité survivante" n'est pas explicitement
+             gérée dans la résolution du combat.
+
+
+5. RETRAITE APRÈS COMBAT
+   PDF (p.8) : Le vaincu peut battre en retraite. Dans ce cas, c'est LE VAINQUEUR
+               qui choisit la case adjacente libre vers laquelle le vaincu est repoussé.
+               Si aucune case n'est disponible, la retraite est impossible.
+   Impl.   : La retraite n'est pas implémentée.
+
+
+8. MURAILLE — RESTRICTION D'ENTRÉE EN CITÉ
+   PDF (p.7) : « Il n'est possible de pénétrer dans la cité d'un autre joueur que
+               si la troupe COMMENCE SON DÉPLACEMENT à partir d'une case
+               ADJACENTE à la muraille. »
+               Autrement dit : on ne peut pas traverser 2 cases et finir dans la cité.
+               La troupe doit partir d'une case immédiatement adjacente à la muraille.
+   Impl.   : Les murailles ne sont pas du tout implémentées. Une troupe peut
+             entrer dans n'importe quelle cité depuis n'importe où.
+
+
+16. OBÉLISQUES — EMPLACEMENT RÉEL
+    PDF (p.2) : « Tous les temples, le Sanctuaire de tous les Dieux et CERTAINES
+                CASES DE DÉSERT contiennent un obélisque. »
+    Impl.   : TELEPORT_TARGETS = {D12, D23, T1, T2, T3}. Le Sanctuaire (TB)
+              est absent. 
+
+17. PYRAMIDE ADVERSE — CONTRÔLE ET AVANTAGES
+    PDF (p.5) : « Un joueur qui contrôle avec une troupe une pyramide adverse
+                s'en octroie TOUS les avantages (y compris le PV temporaire si
+                c'est une pyramide de niveau 4). Tant qu'il n'a pas récupéré sa
+                pyramide, le propriétaire original ne bénéficie plus d'aucun de ses
+                avantages. »
+                → Le propriétaire original PERD ses droits d'achat de pouvoirs.
+    Impl.   : Les pyramides ne semblent pas capturable ni transférer leurs
+              avantages à l'occupant.
+
+
+═══════════════════════════════════════════════════════════════
+PARTIE 2 — POINTS DE RÈGLES DU PDF NON IMPLÉMENTÉS
+═══════════════════════════════════════════════════════════════
+
+A. MÉCANISMES FONDAMENTAUX
+──────────────────────────
+
+A1. Retraite du vaincu
+    → Le vainqueur choisit la case adjacente libre vers laquelle le vaincu est repoussé.
+    → Si aucune case libre, retraite impossible (le vaincu envoie ses troupes en réserve).
+
+A2. Après un combat, Renvoyer sa troupe — les deux camps en commençant par le vaincu.
+    → Les deux joueurs (vainqueur et vaincu) peuvent choisir de rappeler leur troupe.
+    → Gain de 1 Ank par unité rappelée.
+    → On ne peut pas rappeler seulement une partie des unités.

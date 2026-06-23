@@ -1,0 +1,100 @@
+TOUR DE JEU
+Le jeu verra une succession de phases nuit et jour jusqu’à la victoire d’un des joueurs.
+	
+	
+A - Nuit (phase de préparation) :
+	
+	
+• Distribution de 2 Points de Prière
+	
+	
+• Distribution des cartes Intervention Divine
+	
+	
+• Effets des Pouvoirs de Nuit
+	
+	
+• Détermination de l’ordre du tour
+	
+	
+B - Jour (phase d’action) :
+	
+	
+• Utilisation des Jetons d’Action
+	
+	
+• Attribution des Points de Prière et des Points 
+	
+	
+  de Victoire permanents du plateau.
+	
+A – PHASE DE NUIT
+1 • Distribution des Points de Prière
+Chaque joueur reçoit 2   (en plus de ses éventuelles tuiles Pouvoir).
+2 • Distribution des cartes ID
+Chaque joueur reçoit une carte ID au hasard, distribuée 
+dans l’ordre du tour. Le nombre de cartes que chaque 
+joueur peut avoir en main n’est pas limité. 
+Jouer une carte ID ne compte pas comme une action.
+Il est possible de jouer plusieurs cartes ID lors de la 
+même phase, y compris avec le même effet (les cartes se 
+cumulent alors).
+La carte ID jouée est défaussée face cachée. Quand la 
+pioche de cartes ID est épuisée, il convient de mélanger 
+la défausse pour créer une nouvelle pioche.
+Pour jouer une carte ID, il faut bien veiller à :
+• Payer le coût éventuel (1  ) 
+• Respecter le moment où la carte ID peut être jouée.
+3 • Résolution des Pouvoirs 
+Dans l’ordre du tour actuel, chaque joueur applique les 
+effets des tuiles Pouvoirs contenant le symbole Nuit.
+Exemple : le Pouvoir «Main de Dieu» permettant d’éle­
+ver d’un niveau une de ses pyramides sans en payer le 
+coût.
+4 • Détermination de l’ordre du tour
+L’ordre du tour sera déterminé de la manière suivante : 
+•  Le joueur ayant le moins de PV détermine la totalité de l’ordre du tour
+•  En cas d’égalité, le joueur ayant joué précédemment le plus tôt dans l’ordre du tour déter­
+mine la totalité de l’ordre du tour.
+Au premier tour, l’ordre des joueurs est déterminé aléatoirement.
+Mode Débutant :
+En phase de mise en 
+place, seules les tuiles 
+Pouvoirs de niveau 1 
+sont mises en place, 
+les Pouvoirs de niveau 
+2 seront mis en place 
+au début de la seconde 
+phase Jour.
+Les 
+pyramides 
+ne 
+peuvent évoluer que 
+jusqu’au niveau 2 et 
+pas au-delà.
+Le vainqueur est celui 
+obtenant 4 PV au lieu 
+de 8 en fin de phase 
+Jour.
+Composition d’une carte 
+Intervention Divine
+Coût éventuel à payer au moment 
+de l’utilisation 
+(certaines cartes sont gratuites, 
+d’autres coûtent 1   lors de leur 
+utilisation)
+Effet de la carte 
+(se référer à la fiche récapitulative)
+Phase où la carte peut être jouée :
+En phase de jour, 
+à son tour de jeu, 
+sauf lors d’un 
+combat
+Lors du tour d’un 
+adversaire, sauf 
+lors d’un combat
+Dans un combat 
+où l’on est 
+impliqué
+s :
+3

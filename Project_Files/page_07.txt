@@ -1,0 +1,106 @@
+Les murailles :
+Les cités des joueurs sont entourées de murailles. Il n’est possible de pénétrer dans la cité 
+d’un autre joueur que si la troupe commence son déplacement à partir d’une case adjacente 
+à la muraille (il n’est donc pas possible de se déplacer puis d’entrer dans une cité adverse).
+Les murailles de la cité de départ d’un joueur sont sans effet pour ce joueur.
+Attaque !
+A tout moment du déplacement, si la case d’arrivée ou de passage est occupée par une 
+troupe ennemie,  un combat est nécessairement résolu et le mouvement s’arrête.
+DÉROULEMENT D’UN COMBAT  
+Au début du combat, l’attaquant et le défenseur choisissent 
+chacun 2 cartes Combat :
+• La première carte est immédiatement défaussée face cachée.
+• La deuxième carte est jouée lors du combat. 
+Chacun peut également ajouter à cette carte Combat une 
+ou plusieurs cartes ID. Elles sont cachées derrière la carte 
+Combat.
+Puis, les joueurs révèlent leur carte Combat. S’il y a des cartes 
+ID, elles sont révélées aussi. Pour qu’elles soient prises en 
+compte,  le joueur doit pouvoir dépenser le nombre de 
+ 
+éventuellement requis.
+Après le combat, la carte jouée est défaussée, face cachée ou 
+face visible, au choix des joueurs en début de partie. Lorsque 
+les 6 cartes Combat ont été défaussées, le joueur les reprend toutes en main immédiatement. 
+Détermination du vainqueur
+La valeur de combat de chaque joueur est déterminée en cumulant :
+• Le nombre d’unités dans la troupe
+• La valeur de force de la carte Combat choisie
+• Les éventuels bonus d’attaque ou de défense des Pouvoirs des joueurs
+• Les éventuels bonus des créatures engagées dans ce combat
+• Les éventuels bonus de combat des cartes ID 
+Le joueur avec la valeur de combat la plus élevée remporte le combat.
+⌂ Précision : en cas d’égalité, c’est le défenseur qui remporte le combat. 
+Calcul des pertes
+Chaque carte Combat a une Valeur de Dégât et une Valeur de Protection.
+Ces valeurs peuvent être augmentées par des cartes ID, des Pouvoirs et des créatures.
+Le gagnant du combat tout comme le perdant perdent autant d’unités que la valeur totale de 
+Dégât de leur adversaire, minorée de leur valeur totale de Protection.
+Il est possible que le gagnant du combat perde toutes ses unités. Il est toujours considéré 
+comme vainqueur, même s’il reste des survivants au défenseur.
+Point de victoire
+L’attaquant, s’il ressort vainqueur du combat remporte un PV permanent de combat si et 
+seulement s’il a au moins une unité survivante au combat.
+L’attaquant qui perd le combat ne gagne pas de PV.
+Le défenseur ne gagne pas de PV, même s’il gagne le combat.
+⌂  Exception aux 
+murailles : la capacité 
+Passe Muraille annule 
+cette restriction.
+⌂  Précision : si avant 
+un combat, le défen­
+seur utilise la carte ID 
+«Fuite», le combat n’a 
+pas lieu et l’attaquant 
+peut donc poursuivre 
+son mouvement.
+Exemple :
+Jacques déplace sa troupe 
+jusqu’au temple occupé par 
+la troupe de Guillaume.
+• Jacques est l’attaquant.
+Troupe : 5 unités.
+Pouvoirs : 
+• Chargez ! (+1 Force en 
+attaque)
+• Lames de Neith (+1 Force 
+dans tous ses combats).
+Sa Force de base est donc de 
+7 (5+1+1).
+• Guillaume est le défenseur.
+Troupe : 4 unités.
+Créature : Eléphant Ances­
+tral (+1 Force à la troupe).
+Sa Force de base est donc de 
+5 (4+1).
+Les deux joueurs choisissent 
+secrètement deux cartes 
+Combat, face cachée : la 
+première est défaussée et la 
+seconde est jouée.
+• Jacques joue sa carte Combat : 
+3 Force et 2 Dégât.
+Il ne joue pas de carte ID.
+• Guillaume joue sa carte 
+Combat  :
+2 Force et 2 Protection
+et deux cartes ID qu’il cache 
+derrière sa carte combat : 
+Mur de bronze et Furie 
+guerrière.
+Les deux joueurs dévoilent 
+simultanément leurs cartes et 
+annoncent leurs valeurs de 
+combat : 
+2
+2
+1
+1
+2
+2
+Valeur de Force
+Valeur de Protection
+Valeur de Dégât
+Composition d’une 
+carte combat
+6

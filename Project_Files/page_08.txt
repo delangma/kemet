@@ -1,0 +1,94 @@
+Retraite
+Le joueur vaincu peut décider de Renvoyer sa Troupe (voir ci-dessous) soit de battre en 
+retraite. S’il décide de battre en retraite, le vainqueur choisit le territoire adjacent libre de 
+toute unité adverse sur lequel sa troupe est repoussée. Si aucun territoire n’est disponible, il 
+n’est pas possible de battre en retraite.
+Renvoyer sa Troupe
+Le vainqueur tout comme le vaincu ont la possibilité de renvoyer auprès de leur Dieu leur 
+troupe survivante après une bataille.
+Le joueur qui utilise cette possibilité gagne alors 1   par unité. Ces unités sont remises dans 
+sa réserve. Elles pourront être normalement enrôlées par la suite.
+Il n’est pas possible de renvoyer une partie des unités d’une troupe et de laisser les autres.
+LES CRÉATURES 
+Les créatures sont au nombre de sept. Elles octroient des avantages aux troupes qu’elles 
+accompagnent. Une créature est acquise en achetant la tuile Pouvoir correspondante.
+Le joueur peut immédiatement poser cette créature sur l’un des trois quartiers de sa cité de 
+départ, à condition d’avoir au moins une unité présente sur ce quartier.
+Sinon, la créature est posée devant le joueur, sur la tuile Pouvoir qui lui correspond.
+ 
+Important !
+Il ne peut jamais y avoir plusieurs créatures d’un même joueur sur la même case, y com­
+pris sur l’un des quartiers de sa cité.
+Une créature ne comptant pas comme une unité :
+• Elle n’est pas concernée par la limite de 5 unités par case. 
+• En combat, seuls ses bonus sont ajoutés à la force 
+de la troupe.
+Une créature n’est jamais détruite. Si la dernière unité 
+accompagnant une créature est détruite, la créature 
+revient immédiatement sur un territoire de départ 
+contenant une troupe. Sinon, elle est mise en réserve 
+sur sa tuile Pouvoir. 
+Créature en réserve
+Une créature en réserve apparaîtra obligatoirement 
+sur un quartier de la cité du joueur lors de sa pro­
+chaine action Recrutement. Si plusieurs créatures 
+sont en réserve, le joueur choisit celle qui rentre en 
+jeu en premier.
+CONTRÔLES DES TEMPLES  
+Le joueur qui, à l’issue d’un combat, ou d’un déplacement, contrôle un temple reçoit un PV 
+temporaire correspondant au temple concerné. Pour contrôler un temple, il doit avoir au 
+minimum une unité dessus. Dès l’instant où il n’a plus d’unité sur un temple, il doit rendre 
+le PV correspondant.
+⌂ Rappel : Le Sanc­
+tuaire de tous les 
+Dieux n’est pas un 
+temple.
+• Force de Jacques : 10
+(7+3 de sa carte)
+• Force de Guillaume : 9
+(5+2 de sa carte+2 de 
+la carte ID. Il doit par 
+ailleurs payer un 
+ pour 
+cette carte ID).
+Jacques est le vainqueur 
+du combat.
+Les dégâts :
+• Jacques inflige 2 Dégât 
+à Guillaume mais celui-
+ci possède une protection 
+de 3 (sa carte + l’élé­
+phant). Guillaume ne 
+perd donc aucune unité 
+mais n’infligera aucun 
+dégât.
+Jacques est vainqueur, 
+il était attaquant et 
+a encore des unités 
+présentes sur le terrain. 
+Il gagne donc un PV 
+permanent.
+Guillaume choisit de 
+renvoyer sa troupe : il 
+récupère 4 
+ et pose sa 
+créature en réserve.
+Jacques pourrait égale­
+ment renvoyer sa troupe 
+mais il préfère rester sur 
+place.
+Toutes les cartes jouées 
+sont défaussées.
+2
+Composition d’une
+carte creature
+Niveau : indique le niveau de la 
+carte, sa couleur (bleu, rouge ou 
+blanc) et son coût (1 à 4  )
+Capacités de la créature
+Phase où le pouvoir est actif 
+Effet de la carte (pour certaines cartes créatures il n’y a pas 
+d’effet spécifique)
+Augmente la capacité de 
+   mouvement (pour la troupe liée)
+7

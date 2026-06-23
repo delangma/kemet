@@ -1,0 +1,85 @@
+Etienne décide de 
+déplacer son prêtre sur 
+la route la plus basse, 
+il bénéficie d’un  (et 
+avance donc son mar-
+queur  d’une case sur 
+son plateau individuel) 
+et récupère le jeton 
+temporaire + 1 Dégâts 
+dont il bénéficiera uni-
+quement s’il engage un 
+combat sur le plateau 
+de jeu. Utilisé ou pas, il 
+rendra ce jeton à la fin 
+de son action.
+fonctionnement
+Au moment où un joueur sélectionne sur son plateau individuel une action Se déplacer/
+Combattre, il peut, de plus, activer immédiatement l’un de ses prêtres sur le chemin vers 
+Ta-Seti. Le déplacement de sa troupe sur le plateau de jeu principal ne se fera qu’après avoir 
+totalement résolu l’activation du chemin vers Ta-Seti.
+Important ! 
+L’action Se déplacer/Combattre déclenchée par l’utilisation d’un Jeton d’Action doré ne 
+permet pas d’activer un prêtre. 
+Activation d’un prêtre
+Le joueur peut activer soit un prêtre déjà présent sur le plateau de Ta-Seti, soit un prêtre 
+de sa réserve, auquel cas il peut le faire rentrer depuis le chemin de son choix à gauche du 
+plateau.
+Le prêtre activé va voyager sur le chemin vers Ta-Seti, puis, faire étape dans un lieu et 
+décider s’il poursuit son voyage, ou s’il profite des avantages du lieu et se retire du plateau.
+1) Voyager sur le chemin vers Ta-Seti
+Un prêtre voyage en empruntant les routes.
+Il se déplace TOUJOURS vers la droite, en direction du Point de victoire, disposé au bout, 
+sur la ville de Ta-Seti.
+Il peut avancer autant qu’il le souhaite tant qu’il ne rencontre pas d’étape. Dès qu’il arrive à 
+une étape (village, ville ou temple), il doit s’arrêter. 
+Récompense : Le prêtre bénéficie immédiatement des effets se trouvant sur la route entre 
+deux étapes. Il récupère donc, s’il y a lieu, les jetons de « Pouvoir temporaire » pour en béné-
+ficier. Ces jetons sont utilisables uniquement jusqu’à la fin de la résolution de l’action en 
+cours (voir p.4 de l’aide de jeu), puis sont remis sur le chemin. 
+2) Faire étape
+Arrivé à une étape, le prêtre doit s’arrêter et choisir l’une des deux options suivantes : 
+•	 Ne rien prendre. Dans ce cas, le prêtre reste sur le chemin vers Ta-Seti et pourra être 
+activé ultérieurement.
+•	 Prendre le ou les jetons Objet et/ou Compétence disponibles sur l’étape et les placer 
+devant soi. Dans ce cas il est retiré du chemin. S’il a pris un jeton Compétence (voir 
+encadré ci-dessous), le prêtre est placé sur le plateau de jeu principal à la place d’une des 
+unités du joueur au choix (qui retourne dans sa réserve). S’il n’a pris que des Objets (voir 
+p. 3 de l’aide de jeu), il est placé en réserve au début du chemin vers Ta-Seti.
+Les jetons Objet récupérés par les 
+joueurs sont toujours défaussés 
+après utilisation.
+Les jetons Compétences récupérés 
+par les joueurs sont permanents.
+Les effets des Objets et des Compé-
+tences sont détaillées dans l’aide 
+de jeu.
+Important ! 
+•	 Un seul prêtre peut être 
+activé pour chaque action 
+Se déplacer/Combattre.
+•	 Un joueur peut avoir plu-
+sieurs prêtres sur le chemin 
+vers Ta-Seti.
+•	 Il peut y avoir plusieurs 
+prêtres (d’un seul ou de plu-
+sieurs joueurs) sur une case 
+d’étape.
+Précisions sur l’acquisition d’une Compétence par un prêtre
+Quand un joueur récupère une Compétence sur le chemin vers Ta-Seti, il retire le 
+prêtre activé du chemin et le place sur le plateau principal.
+Ce prêtre remplace immédiatement une unité du joueur déjà sur le plateau prin-
+cipal. L’unité retirée est placée dans la réserve du joueur (elle pourra être recrutée 
+ultérieurement).
+Si le joueur n’a pas d’unité en jeu, le prêtre sera placé en réserve avec les autres 
+unités. 
+Une fois en jeu, le prêtre devient une unité à part entière et se comporte comme 
+telle. S’il est éliminé, il retourne à la réserve des unités du joueur et peut être recruté 
+comme une unité normale.
+Effet des compétences : Les compétences acquises sont permanentes, ne sont pas 
+rattachées à un prêtre en particulier et sont cumulatives. Une troupe accompagnée 
+d’un prêtre bénéficie de l’effet de TOUTES les compétences acquises par le joueur.
+Attention : si deux prêtres accompagnent une troupe, ces bonus ne sont pas doublés.
+Note : si un joueur a ses trois prêtres sur le plateau principal, il peut renvoyer quand 
+il le souhaite l’un de ses prêtres dans la réserve à gauche du chemin de Ta-Seti.
+3

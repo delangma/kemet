@@ -1,0 +1,175 @@
+Attaquer !
+Dans une partie de Kemet, l’attentisme n’est généralement pas une 
+stratégie payante. L’un des moyens les plus fréquents de gagner un 
+point de victoire est de gagner un combat en tant qu’attaquant. Cela 
+veut donc dire qu’il est parfois opportun d’abandonner une posi­
+tion qui vous semble pérenne pour tenter votre chance et aller atta­
+quer votre adversaire. Cela veut également dire que chacune de vos 
+troupes est une cible potentielle.
+Une partie de Kemet peut être très rapide (généralement de 4 à 7 
+tours), et vous aurez beau avoir accumulé les pouvoirs devant vous, si 
+ce sont vos adversaires qui contrôlent des temples et récupèrent des 
+Points de Prière et de Victoire à chaque fin de tour, vous risquez fort 
+de ne pas accéder à la victoire.
+Renvoyer sa troupe
+Après un combat, il est souvent tentant de vouloir conserver sa posi­
+tion et ainsi occuper un temple rudement gagné. Il convient toute­
+fois de se demander si sa troupe ne devient pas une cible trop facile 
+pour un adversaire. En effet, une unité isolée sur un temple équivaut 
+quasi-systématiquement à offrir sur un plateau un point de victoire 
+au prochain joueur qui viendra vous attaquer.
+Une troupe renvoyée auprès d’un Dieu équivaut à récupérer des 
+Points de Prière pour mieux enrôler et réattaquer ensuite. 
+Protéger sa cité ?
+Un adversaire a assez peu d’intérêt à venir envahir votre cité en début 
+de partie. Cela ne lui rapporte pas de Points de Victoire, ni de Points 
+de Prière. Au mieux, il pourra bénéficier du niveau de vos pyramides, 
+s’il ne les possède pas lui-même. Il n’est donc pas forcément intéres­
+sant de conserver des unités dans votre cité en début de partie dans 
+le but de la protéger. Elle est de toute façon naturellement protégée 
+par les murailles et par le fait que le recrutement se déroule à cet 
+endroit (ce qui vous facilitera la tâche si vous souhaitez déloger un 
+adversaire).
+Par contre, à partir du moment où vous possédez une pyramide de 
+niveau 4, vous risquez d’attirer la convoitise de vos adversaires et ce, 
+surtout en fin de partie. Mais là encore, si votre adversaire ne possède 
+pas le Pouvoir Passe Muraille, vous devriez pouvoir anticiper son action.
+Le Delta du Nil
+C’est la zone la plus puissante du jeu. Selon la configuration de vos 
+parties, vous y trouverez un temple rapportant 5 Points de Prière et 
+peut être le Sanctuaire de tous les Dieux.
+C’est aussi une zone sans retour puisque ne possédant pas de pyra­
+mide de téléportation, et le Nil étant infranchissable.
+Si cette zone parait dangereuse, ne la négligez pas pour autant. De 
+nombreux combats décisifs peuvent y avoir lieu et elle reste extrême­
+ment bénéfique au cours d’une partie.
+CONSEILS TACTIQUES
+Remerciements :
+    Nous tenons à adresser un grand 
+merci à tous ceux qui se sont impli­
+qués pour que ce projet aboutisse.
+   Tout d’abord, ceux qui ont pris 
+de leur temps pour tester le jeu, le 
+critiquer, le faire évoluer et donc 
+l’améliorer. Parmi ces personnes 
+trop nombreuses pour être toutes 
+citées ici, nous remercions tout 
+particulièrement Claire Montiage 
+et Fred «izdead» Pfister. Mais aussi 
+Mathieu et Yann, ainsi que Richard 
+Steinecker, Fred Zindy, Steeve Sitt­
+ler, les Philiboys, les loliteux...
+   Ensuite, un grand merci à toute 
+l’équipe des éditions du Matagot, 
+pour son énergie et son implica­
+tion (nous n’avons jamais échangé 
+autant de mails de notre vie) : à 
+Doria et Barbara notamment, mais 
+plus spécifiquement à Arnaud pour 
+son hyper réactivité et à Hicham 
+pour son travail de l’ombre.
+    C’était un véritable plaisir de voir 
+« Horus et ses potes se mettent sur 
+la gueule » devenir « Kemet ».
+Le résultat est enchanteur.
+  En espérant n’avoir oublié per­
+sonne, ce qui serait étonnant, tant 
+ce travail fut de longue haleine...
+Jacques et Guillaume
+Déplacement 
+Q : Puis-je téléporter une créature seule ?
+R : Non, car dès que la créature n’est plus 
+accompagnée d’une ou plusieurs unités, 
+elle retourne en réserve sur sa carte Pouvoir 
+jusqu’au prochain recrutement.
+Pouvoirs Rouges
+Q : Blessure divine : Puis-je défausser une des 
+cartes ID que j’ai jouée en même temps que ma 
+carte Combat pour gagner  +1 Force ?
+R : Non
+Pouvoirs Bleus
+Q : Guivre du désert : La guivre du désert 
+annule-t-elle toutes les capacités d’une créa­
+ture adverse engagée dans le combat ?
+R : Oui. Si votre troupe accompagnée de la 
+guivre affronte une troupe accompagnée d’une 
+autre créature, on agit comme si cette autre 
+créature ne participait pas au combat.
+Q : Prescience : Mon adversaire doit-il me 
+montrer également les éventuelles cartes ID 
+qu’il compte jouer en combat ?
+R : Non. La prescience vous permet de connaitre 
+uniquement la carte Combat de votre adversaire.
+Q : Volonté divine et Action divine : Si un 
+joueur possède ces deux Pouvoirs, peut-il jouer 
+ses 2 jetons supplémentaires en plus de son 
+jeton de base dans le même tour ?
+R : Oui, il jouera alors 3 actions l’une après 
+l’autre. Pour rappel, tout comme les jetons de 
+base, les jetons supplémentaires sont posés sur 
+des cases libres.
+Pouvoirs Blancs
+Q : Vision : Son effet se cumule-t-il avec le don 
+divin ou le Pouvoir de la momie ?
+R : Non. Seule la première carte ID est choisie 
+parmi 5. Les cartes supplémentaires piochées 
+grâce à un autre pouvoir ne sont pas choisies 
+parmi 5.
+Q : Vision : Que doit on faire des 4 cartes non 
+conservées par le joueur ?
+R : Elles sont reposées sur la pile de pioche, puis 
+cette dernière est mélangée.
+Q : Prêtre de Râ : Permet-il d’obtenir un Pou­
+voir gratuitement ?
+R : Oui. La solution est la même concernant la 
+prêtresse. 
+Q : Prêtre de Râ : Si j’augmente plusieurs 
+niveaux d’une de mes pyramides, me permet-il 
+d’économiser 1 Point de Prière par niveau atteint ?
+R : Non,  l’économie de 1 Point de Prière s’entend 
+par action. Donc pour l’action « augmenter 
+le niveau d’une pyramide » quel que soit le 
+nombre de niveaux d’élévation, le joueur n’éco­
+nomisera qu’un seul Point de Prière.
+Intervention divine
+Q : Puis-je jouer un Veto contre une carte ID 
+utilisée en combat ?
+R : Non
+Q : L’effet de Fuite me permet-il de me dépla­
+cer sur le territoire d’où vient la troupe qui 
+m’attaque ?
+R : Oui
+Divers 
+Q : A quoi sert la case au sommet de la pyra­
+mide de mon plateau individuel ?
+R : Il s’agit de la case où sera placé le jeton lié
+au pouvoir Volonté Divine. Ce jeton sera joué 
+à chaque tour en même temps qu’un jeton 
+normal. Il s’agira alors de choisir l’action que 
+vous souhaitez effectuer (se déplacer ou recruter 
+pour cette volonté Divine).
+	
+FAQ
+Des questions, des précisions, des suggestions ? 
+Retrouvez la FAQ mise à jour sur matagot.com !
+Pour toute autre requête, n’hésitez pas à nous 
+contacter par mail sur contact@matagot.com 
+ATTRIBUTION
+Dès que les joueurs ont terminé leur tour de jeu, on procède à la distribution des Points de 
+Victoire et de Prière.
+• Le joueur contrôlant le Temple du Delta peut retirer une unité et la remettre dans sa 
+réserve : il reçoit alors 5 . Il conserve le jeton PV temporaire correspondant.
+• Les joueurs contrôlant les autres temples reçoivent 2 ou 3 . 
+• Le joueur contrôlant le Sanctuaire de tous les Dieux peut retirer deux unités et les remettre 
+dans sa réserve : il reçoit alors 1 PV définitif.
+• Tout joueur contrôlant au moins 2 temples (le Sanctuaire de tous les Dieux n’est pas un 
+temple) reçoit 1 PV définitif.
+FIN DU JEU
+Dès qu’un joueur possède au moins 8 PV (ou 10 selon le choix fait au départ) en fin de Phase 
+Jour,  il est déclaré vainqueur. En cas d’égalité, le vainqueur est (dans l’ordre) :
+• Le joueur ayant le plus de PV.
+• Le joueur ayant le plus de PV de combat.
+• Le joueur ayant joué précédemment le plus tôt dans l’ordre de la dernière phase d’action.
+DES POINTS DE PRIERE ET DE VICTOIRE PERMANENTS
+Relecture : Sabrina Ferlisi
+8

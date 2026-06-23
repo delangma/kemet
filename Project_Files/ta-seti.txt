@@ -1,0 +1,211 @@
+Réserve
+
+1 emplacement.
+
+Relié à I_1_1
+Relié à I_1_2
+Relié à I_1_3
+Relié à I_1_4 (si Face B : Ta-seti_1_B)
+
+
+Ta-seti_1_A : 
+
+3 entrées : I_1_1, I_1_2, I_1_3
+3 sorties : S_1_1, S_1_2, S_1_3
+3 emplacement E_1_1, E_1_2, E_1_3
+
+I_1_1 est relié à E_1_1
+I_1_2 est relié à E_1_2
+I_1_3 est relié à E_1_3
+
+E_1_1 est relié à S_1_1
+E_1_2 est relié à S_1_1
+E_1_2 est relié à S_1_2
+E_1_2 est relié à S_1_3
+E_1_3 est relié à S_1_3
+
+Bonus : 
+I_1_1 -> 1 ank. 
+I_1_1 -> +1 défense pour le déplacement en cours (disponible 1x pour tout une journée, rafraichie la nuit).
+I_1_2 -> 1 ank.
+I_1_3 -> 1 ank. 
+I_1_3 -> +1 goutte de sang pour le déplacement en cours (disponible 1x pour tout une journée, rafraichie la nuit).
+E_1_1 -> Jeton bonus instantané JI_1_1
+E_1_2 -> Jeton bonus instantané JI_1_2
+E_1_3 -> Jeton bonus instantané JI_1_3
+
+
+Ta-seti_1_B : 
+
+4 entrées : I_1_1, I_1_2, I_1_3
+3 sorties : S_1_1, S_1_2, S_1_3
+4 emplacement E_1_1, E_1_2, E_1_3, E_1_4
+
+I_1_1 est relié à E_1_1
+I_1_2 est relié à E_1_2
+I_1_3 est relié à E_1_3
+I_1_4 est relié à E_1_4
+
+E_1_1 est relié à S_1_1
+E_1_2 est relié à S_1_2
+E_1_3 est relié à S_1_2
+E_1_4 est relié à S_1_3
+
+
+Bonus : 
+I_1_1 -> 1 ank. 
+I_1_1 -> +1 défense pour le déplacement en cours (disponible 1x pour tout une journée, rafraichie la nuit).
+I_1_4 -> 1 ank. 
+I_1_4 -> +1 goutte de sang pour le déplacement en cours (disponible 1x pour tout une journée, rafraichie la nuit).
+E_1_1 -> Jeton bonus instantané JI_1_1
+E_1_2 -> Jeton bonus instantané JI_1_2
+E_1_3 -> Jeton bonus instantané JI_1_3
+E_1_4 -> Jeton bonus instantané JI_1_4
+
+
+
+Ta-seti_2_A : 
+
+3 entrées : I_2_1, I_2_2, I_2_3
+3 sorties : S_2_1, S_2_2, S_2_3
+2 emplacement E_2_1, E_2_2
+
+I_2_1 est relié à E_2_1
+I_2_3 est relié à E_2_2
+
+I_2_2 est relié à S_2_2
+
+E_2_1 est relié à S_2_1
+E_2_1 est relié à S_2_2
+E_2_2 est relié à S_2_2
+E_2_2 est relié à S_2_3
+
+Bonus : 
+I_2_1 -> 1 recrutement. 
+I_2_3 -> 1 carte ID. 
+E_2_1 -> Jeton bonus utilisable JU_2_1
+E_2_2 -> Jeton bonus utilisable JU_2_2
+
+
+
+
+
+Ta-seti_2_B : 
+
+3 entrées : I_2_1, I_2_2, I_2_3
+3 sorties : S_2_1, S_2_2, S_2_3
+4 emplacement E_2_1, E_2_2, E_2_3, E_2_4
+
+I_2_1 est relié à E_2_1
+I_2_1 est relié à E_2_2
+I_2_3 est relié à E_2_3
+I_2_3 est relié à E_2_4
+
+I_2_2 est relié à S_2_2
+
+E_2_1 est relié à S_2_1
+E_2_1 est relié à S_2_2
+E_2_2 est relié à S_2_2
+E_2_3 est relié à S_2_2
+E_2_4 est relié à S_2_2
+E_2_4 est relié à S_2_3
+
+
+Bonus : 
+I_2_1 -> 1 capacité déplacement. 
+I_2_3 -> 1 unités recrutement. 
+E_2_1 -> Jeton bonus utilisable JU_2_1
+E_2_2 -> Jeton pouvoir JP_2_1
+E_2_3 -> Jeton pouvoir JP_2_2
+E_2_4 -> Jeton bonus utilisable JU_2_2
+
+
+
+
+Ta-seti_3_A : 
+
+
+3 entrées : I_3_1, I_3_2, I_3_3
+3 sorties : S_3_1, S_3_2, S_3_3
+4 emplacement E_3_1, E_3_2, E_3_3, E_3_4
+
+I_3_1 est relié à E_3_1
+I_3_2 est relié à E_3_2
+I_3_2 est relié à E_3_3
+I_3_3 est relié à E_3_4
+
+E_3_1 est relié à S_3_1
+E_3_1 est relié à S_3_2
+E_3_2 est relié à S_3_2
+E_3_3 est relié à S_3_2
+E_3_3 est relié à S_3_3
+
+Bonus : 
+I_3_1 -> 1 force. 
+I_3_3 -> 2 unités recrutement. 
+E_3_1 -> jeton bonus instantanné  JI_3_1 + Jeton bonus utilisable JU_3_1
+E_3_2 -> Jeton pouvoir JP_3_1
+E_3_3 -> Jeton pouvoir JP_3_2
+E_2_4 -> jeton bonus instantanné JI_3_2 + Jeton bonus utilisable JU_3_2
+
+
+Ta-seti_3_B :
+
+
+3 entrées : I_3_1, I_3_2, I_3_3
+3 sorties : S_3_1, S_3_2, S_3_3
+4 emplacement E_3_1, E_3_2, E_3_3, E_3_4
+2 chemin intermédiaire C_3_1 et C_3_2
+
+I_3_1 est relié à E_3_1
+I_3_2 est relié à E_3_2
+I_3_2 est relié à E_3_3
+I_3_3 est relié à E_3_4
+
+E_3_1 est relié à S_3_1
+E_3_1 est relié à S_3_2
+E_3_2 est relié à S_3_1
+E_3_2 est relié à S_3_2
+E_3_2 est relié à S_3_3
+E_3_3 est relié à S_3_2
+E_3_3 est relié à S_3_3
+
+Bonus : 
+I_3_1 -> 3 ank. 
+I_3_3 -> 3 unités recrutement. 
+C_3_1 -> 1 ank. 1 de force (disponible 1 fois par jour et rafraichie la nuit).
+C_3_2 -> 1 pluie de feu.
+E_3_1 -> Jeton bonus utilisable JU_3_1
+E_3_2 -> Jeton pouvoir JP_3_1
+E_3_3 -> Jeton pouvoir JP_3_2
+E_2_4 -> Jeton bonus utilisable JU_3_2
+
+Ta-seti_4_A : 
+
+3 entrées I_4_1, I_4_2 et I_4_3
+1 emplacement E_4_2
+
+I_4_1 est relié à E_4_2
+I_4_2 est relié à E_4_2
+I_4_3 est relié à E_4_2
+
+Bonus : 
+E_4_1 -> 1 PV (disponible 1 fois par jour et rafraichie la nuit).
+
+Ta-seti_4_B : 
+
+3 entrées I_4_1, I_4_2 et I_4_3
+3 emplacement E_4_1, E_4_2 et E_4_3
+
+I_4_1 est relié à E_4_1
+I_4_2 est relié à E_4_2
+I_4_3 est relié à E_4_3
+E_4_1 est relié à E_4_2
+E_4_3 est relié à E_4_2
+
+
+Bonus : 
+I_4_1 -> pluie de feu.
+E_4_1 -> Jeton pouvoir JP_4_1 + jeton instantanné JI_4_1
+E_4_2 -> 1 PV (disponible 1 fois par jour et rafraichie la nuit).
+E_4_3 -> Jeton pouvoir JP_4_2 + jeton utilisable JU_4_1

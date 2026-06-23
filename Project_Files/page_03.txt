@@ -1,0 +1,143 @@
+Les pyramides : Chaque joueur dispose de trois pyramides : une blanche, une rouge et 
+une bleue. Les pyramides permettent d’acheter des tuiles Pouvoir (voir page 4).
+La valeur d’une pyramide est indiquée sur le chiffre du haut.
+Chaque pyramide doit être placée sur un quartier différent appartenant à la cité du joueur.
+Les troupes : Chaque figurine représente une unité.
+L’ensemble des unités d’un joueur présent sur une case constitue une troupe. 
+Important ! 
+Une troupe ne peut jamais contenir plus de 5 unités. 
+Autrement dit, un joueur ne peut jamais avoir plus de 5 unités sur la même case.
+Les Points de Prière : Les Points de Prière sont la ressource principale du jeu et per­
+mettent de réaliser les différentes actions. Le symbole des Points de Prière est un ânkh  .
+Un joueur ne peut JAMAIS posséder plus de 11  , même avec des Pouvoirs.
+Les Points de Victoire : Différents objectifs et événements permettent d’en obtenir.
+• Les Points de Victoire de forme carrée sont permanents et ne peuvent jamais être perdus.
+• Les Points de Victoire de forme ronde sont temporaires et peuvent être perdus 
+  (généralement suite à une invasion).
+• Les Points de Victoire sont nommés PV et ont pour symbole un oeil.
+Les cartes Intervention Divine : Elles sont au nombre de 35. Dans les règles, elles 
+sont indiquées cartes ID.
+Les tuiles Pouvoirs : Les Pouvoirs modifient considérablement les aptitudes de chaque 
+joueur et peuvent modifier certaines règles du jeu. 
+Il y a trois couleurs de Pouvoirs, correspondant aux couleurs des trois pyramides.
+Les familles de Pouvoirs sont composées de pouvoirs de niveaux 1 à 4. Il y a 4 cartes par 
+niveau, soit 16 Pouvoirs pour chaque couleur. Les tuiles Pouvoirs doivent être toujours visibles.
+PRÉPARATION DU JEU
+• Le plateau est placé au centre de la table u. La face choisie dépend du nombre 
+de joueurs (voir page 1). Rappel : A 2 et 3 joueurs, la rive droite est inaccessible.
+• L’ensemble des tuiles Pouvoirs sont placées face visible sur le côté du plateau.v 
+• Les PV temporaires des temples sont placés sur ces derniers. w
+• Le PV permanent du Sanctuaire de tous les Dieux est placé sur ce dernier. x
+• Les autres PV sont placés à côté du plateau de jeu.y
+Chaque joueur choisit une cité et reçoit : 
+• Un plateau de jeu individuel. z
+• 5 Jetons d’Action. {
+• 1 marqueur de  placé sur la case 5 de l’échelle des Points de Prière. |
+• 12 unités (10 unités à répartir sur sa cité, sur les quartiers comportant une 
+pyramide et dans le respect de la règle du maximum de 5 unités par case. 
+2 unités restent dans sa réserve). }
+• 6 cartes Combat. ~
+• 3 pyramides (celles de niveau 0 restent dans la réserve du joueur).
+Chaque joueur reçoit une carte ID au hasard. Les cartes ID restantes sont placées 
+à côté du plateau, en une pile face cachée, appelée Pioche. 
+Lors du premier tour, les joueurs déterminent l’ordre aléatoirement. 
+Puis, chaque joueur dans l’ordre du tour répartit 3 points au choix entre ses trois 
+pyramides parmi les combinaisons suivantes : 1 / 1 / 1 ou 2 / 1 / 0. 
+⌂	Types de Pouvoirs :
+Blanc : dominante 
+prière et ressources
+Rouge : dominante 
+attaque et mouvement
+Bleu : dominante 
+défense et contrôle
+⌂	Une pyramide de 
+niveau 0 n’est pas 
+placée sur le pla­
+teau. Elle reste dans 
+la réserve du joueur 
+jusqu’à ce qu’elle 
+évolue au niveau 1 ou 
+supérieur.
+Comment remporter des PV permanents :
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+En attaquant 
+et gagnant des 
+combats
+Par l’acqui­
+sition d’une 
+tuile Pouvoir 
+« Victoire » 
+En contrôlant 
+le Sphinx 
+En contrôlant 
+2 temples en 
+fin de phase 
+jour
+En sacrifiant 2 
+unités dans le 
+Sanctuaire de 
+tous les Dieux
+Comment remporter des PV temporaires :
+1
+1
+1
+1
+En contrôlant 
+des temples
+En élevant ses pyramides au 
+niveau 4 ou en contrôlant 
+celle d’un opposant.
+2
+ 2
+ 2
+3
+3
+3
+3
+ 2
+ 2
+ 2
+3
+3
+3
+3
+2
+ 2
+ 2
+0
+4
+8
+1
+5
+9
+2
+6
+10
+10
+3
+7
+11
+11
+u
+y
+w
+w
+w
+w
+w
+{
+z
+x
+|
+~
+v
+}
