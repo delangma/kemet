@@ -16,7 +16,7 @@ import { getValidPriestDestinations, getTraversedINode } from "../../constants/t
 import { TASETI_I_BONUSES, TASETI_E_BONUSES } from "../../constants/taSetiBonuses";
 import DawnModal from "../Combat/DawnModal";
 import NightModal from "./NightModal";
-import Board from "../Board/Board";
+import Board from "../Board/board";
 import SetupPhaseModal from "./SetupPhaseModal";
 import DraftPhaseModal from "./DraftPhaseModal";
 import PlacementPhaseModal from "./PlacementPhaseModal";
