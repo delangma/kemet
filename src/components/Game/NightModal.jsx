@@ -27,7 +27,7 @@ function TempleRow({ icon, label, controller, bonus, isBlue }) {
   );
 }
 
-export default function NightModal({ onClose, session, gameState, onOpenDawn }) {
+export default function NightModal({ onClose, session, gameState }) {
   const { roomCode, allPlayers } = session;
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -72,6 +72,10 @@ export default function NightModal({ onClose, session, gameState, onOpenDawn }) 
     const snapshot = await get(ref(db, `rooms/${roomCode}/gameState`));
     if (!snapshot.exists()) { setLoading(false); return; }
     const state = snapshot.val();
+
+    // Guard : si un joueur a déjà des tokens > 0, la nuit a déjà été résolue
+    const alreadyResolved = Object.values(state.players || {}).some(ps => (ps.tokens ?? 0) > 0);
+    if (alreadyResolved) { setDone(true); setLoading(false); return; }
 
     const updates = {};
     const deck = [...(state.idDeck || [])];
@@ -265,6 +269,16 @@ export default function NightModal({ onClose, session, gameState, onOpenDawn }) 
     updates[`rooms/${roomCode}/gameState/idDeck`] = deck;
 
     await update(ref(db, "/"), updates);
+
+    // Lance l'Aube automatiquement pour tous les clients via Firebase
+    const dawnChoices = {};
+    allPlayers.forEach(p => {
+      dawnChoices[p.id] = { combatCard: null, discardCard: null, dawnTokens: 0, ready: false, tokensConfirmed: false };
+    });
+    await update(ref(db, "/"), {
+      [`rooms/${roomCode}/dawn`]: { status: "selecting", currentTurn: null, choices: dawnChoices },
+    });
+
     setDone(true);
     setLoading(false);
   }
@@ -386,12 +400,7 @@ export default function NightModal({ onClose, session, gameState, onOpenDawn }) 
                 )}
               </div>
 
-              <button
-                onClick={() => { onClose(); onOpenDawn(); }}
-                className="w-full py-3 rounded-lg font-bold bg-orange-800 hover:bg-orange-700 text-orange-100 transition-colors"
-              >
-                🌅 Lancer l'Aube
-              </button>
+              <p className="text-orange-300 text-sm text-center">🌅 Phase de l'Aube lancée automatiquement…</p>
               <button onClick={onClose} className="w-full text-center text-gray-500 hover:text-gray-300 text-sm transition-colors py-1">
                 Fermer sans lancer l'Aube
               </button>

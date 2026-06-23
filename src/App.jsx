@@ -19,11 +19,47 @@ function CreatureSpriteDebug() {
   );
 }
 
+function SplashScreen({ onEnter }) {
+  function handleClick() {
+    // Débloque le contexte audio du navigateur
+    try { new AudioContext().resume(); } catch (_) {}
+    onEnter();
+  }
+  return (
+    <div
+      onClick={handleClick}
+      style={{
+        position: "fixed", inset: 0,
+        background: "radial-gradient(ellipse at center, #1a0a00 0%, #000 100%)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        cursor: "pointer", userSelect: "none", zIndex: 9999,
+      }}
+    >
+      <div style={{ fontSize: 72, marginBottom: 16 }}>𓂀</div>
+      <h1 style={{
+        color: "#c9a84c", fontFamily: "serif", fontSize: 48,
+        letterSpacing: 8, margin: 0, textTransform: "uppercase",
+      }}>
+        KEMET
+      </h1>
+      <p style={{ color: "#a07840", fontSize: 14, marginTop: 24, letterSpacing: 3 }}>
+        CLIQUEZ POUR ENTRER
+      </p>
+    </div>
+  );
+}
+
 function App() {
+  const [ready, setReady] = useState(false);
   const [gameSession, setGameSession] = useState(null);
 
   if (new URLSearchParams(window.location.search).has("creatures")) {
     return <CreatureSpriteDebug />;
+  }
+
+  if (!ready) {
+    return <SplashScreen onEnter={() => setReady(true)} />;
   }
 
   if (!gameSession) {

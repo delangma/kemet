@@ -18,6 +18,9 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
 
   const playerColor = session.playerColor;
   const boardUnits = gameState?.boardUnits || {};
+  const boardPriests = gameState?.boardPriests || {};
+  const taSetiPriestPositions = gameState?.taSetiPriestPositions?.[playerId] || {};
+  const reservePriestCount = Object.values(taSetiPriestPositions).filter(v => v === '').length;
   const creatureAssignments  = gameState?.creatureAssignments  || {};
   const creatureAssignments2 = gameState?.creatureAssignments2 || {};
 
@@ -157,6 +160,23 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
     }
   }
 
+  async function handleAddPriest(zoneId) {
+    if (!isMyTurn) return;
+    const snapshot = await get(ref(db, `rooms/${roomCode}/gameState`));
+    if (!snapshot.exists()) return;
+    const state = snapshot.val();
+    const positions = state.taSetiPriestPositions?.[playerId] || {};
+    const entry = Object.entries(positions).find(([, v]) => v === '');
+    if (!entry) return;
+    const [priestIndex] = entry;
+    if (state.boardPriests?.[zoneId]?.[playerColor]) return;
+    if ((state.boardUnits?.[zoneId]?.[playerColor] || 0) <= 0) return;
+    await update(ref(db, '/'), {
+      [`rooms/${roomCode}/gameState/boardPriests/${zoneId}/${playerColor}`]: { priestIndex: Number(priestIndex), jpTokenIds: [] },
+      [`rooms/${roomCode}/gameState/taSetiPriestPositions/${playerId}/${priestIndex}`]: 'BOARD',
+    });
+  }
+
   async function handleRemove(zoneId) {
     if (actionMode !== "recruit" || !isMyTurn) return;
     const cityZoneIds = BOARD_ZONES.filter(z => z.id.startsWith(`J${myJoinOrder}C`)).map(z => z.id);
@@ -294,44 +314,57 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
             <div className={`flex gap-0.5 ${ringClass}`}>
               {entries.length > 0 ? (
                 entries.map(([color, count]) => {
+                  const hasPriest = !!boardPriests[zone.id]?.[color];
+                  const displayCount = count + (hasPriest ? 1 : 0);
                   const creatureName  = getCreatureNameAt(zone.id, color);
                   const creatureName2 = getCreatureNameAt2(zone.id, color);
                   const creatureStyle  = creatureName  ? getCreatureSpriteStyle(creatureName,  28) : null;
                   const creatureStyle2 = creatureName2 ? getCreatureSpriteStyle(creatureName2, 28) : null;
                   return (
-                    <div key={color} className="flex items-center gap-0.5">
-                      <div
-                        className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold shadow-lg ${
-                          isMoveCurrentZone && color === playerColor ? "ring-2 ring-amber-300 ring-offset-1" : ""
-                        }`}
-                        style={{
-                          backgroundColor: (COLOR_MAP[color] || "#666") + "cc",
-                          borderColor: COLOR_MAP[color] || "#666",
-                          color: color === "Blanc" ? "#111" : "#fff",
-                        }}
-                      >
-                        {count}
-                      </div>
-                      {creatureStyle && (
+                    <div key={color} className="flex flex-col items-center gap-0.5">
+                      <div className="flex items-center gap-0.5">
                         <div
+                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold shadow-lg ${
+                            isMoveCurrentZone && color === playerColor ? "ring-2 ring-amber-300 ring-offset-1" : ""
+                          }`}
                           style={{
-                            borderRadius: 4,
-                            boxShadow: `0 0 0 2px ${COLOR_MAP[color] || "#888"}, 0 0 8px 2px ${(COLOR_MAP[color] || "#888") + "99"}`,
+                            backgroundColor: (COLOR_MAP[color] || "#666") + "cc",
+                            borderColor: COLOR_MAP[color] || "#666",
+                            color: color === "Blanc" ? "#111" : "#fff",
                           }}
-                          title={creatureName}
                         >
-                          <div className="drop-shadow" style={creatureStyle} />
+                          {displayCount}
                         </div>
-                      )}
-                      {creatureStyle2 && (
+                        {creatureStyle && (
+                          <div
+                            style={{
+                              borderRadius: 4,
+                              boxShadow: `0 0 0 2px ${COLOR_MAP[color] || "#888"}, 0 0 8px 2px ${(COLOR_MAP[color] || "#888") + "99"}`,
+                            }}
+                            title={creatureName}
+                          >
+                            <div className="drop-shadow" style={creatureStyle} />
+                          </div>
+                        )}
+                        {creatureStyle2 && (
+                          <div
+                            style={{
+                              borderRadius: 4,
+                              boxShadow: `0 0 0 2px ${COLOR_MAP[color] || "#888"}, 0 0 8px 2px ${(COLOR_MAP[color] || "#888") + "99"}`,
+                            }}
+                            title={creatureName2}
+                          >
+                            <div className="drop-shadow" style={creatureStyle2} />
+                          </div>
+                        )}
+                      </div>
+                      {hasPriest && (
                         <div
-                          style={{
-                            borderRadius: 4,
-                            boxShadow: `0 0 0 2px ${COLOR_MAP[color] || "#888"}, 0 0 8px 2px ${(COLOR_MAP[color] || "#888") + "99"}`,
-                          }}
-                          title={creatureName2}
+                          className="text-xs leading-none select-none"
+                          style={{ color: COLOR_MAP[color] || "#fff", textShadow: "0 0 4px #000" }}
+                          title="Prêtre"
                         >
-                          <div className="drop-shadow" style={creatureStyle2} />
+                          𓁛
                         </div>
                       )}
                     </div>
@@ -400,6 +433,9 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
           onAdd={() => handleAdd(selectedZone.id)}
           onRemove={() => handleRemove(selectedZone.id)}
           onClose={() => setSelectedZone(null)}
+          hasPriest={!!boardPriests[selectedZone.id]?.[playerColor]}
+          reservePriestCount={reservePriestCount}
+          onAddPriest={() => { handleAddPriest(selectedZone.id); setSelectedZone(null); }}
         />
       )}
 

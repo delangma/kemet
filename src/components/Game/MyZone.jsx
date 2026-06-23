@@ -440,8 +440,7 @@ export default function MyZone({
           {onViewMyTiles && (
             <button onClick={onViewMyTiles} className="kmt-btn-ghost">📜 Mes tuiles</button>
           )}
-          <button onClick={onOpenNight}  className="kmt-btn-ghost">🌙 Nuit</button>
-          <button onClick={onOpenTaSeti} className="kmt-btn-ghost">🏺 Ta-Seti</button>
+
           <button onClick={() => setShowIdModal(true)} className="kmt-btn-ghost">
             🃏 Cartes ID {myIdCards.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{myIdCards.length}</span>}
           </button>

@@ -1,6 +1,6 @@
 import { COLOR_MAP } from "../../constants/board";
 
-export default function UnitModal({ zone, units, playerColor, onAdd, onRemove, onClose }) {
+export default function UnitModal({ zone, units, playerColor, onAdd, onRemove, onClose, hasPriest = false, reservePriestCount = 0, onAddPriest }) {
   const myUnits = units?.[playerColor] || 0;
   const others = Object.entries(units || {}).filter(([color]) => color !== playerColor);
 
@@ -42,6 +42,27 @@ export default function UnitModal({ zone, units, playerColor, onAdd, onRemove, o
             </button>
           </div>
         </div>
+
+        {/* Prêtre */}
+        {(hasPriest || (reservePriestCount > 0 && myUnits > 0 && onAddPriest)) && (
+          <div className="bg-gray-800 rounded-lg p-4 mb-4">
+            <p className="text-sm text-gray-400 mb-3">Prêtre :</p>
+            {hasPriest ? (
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">𓁛</span>
+                <span className="text-yellow-300 text-sm">Prêtre présent dans la troupe</span>
+              </div>
+            ) : (
+              <button
+                onClick={onAddPriest}
+                className="w-full py-2 bg-amber-800 hover:bg-amber-700 border border-amber-500 rounded-lg text-amber-200 text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                <span className="text-lg">𓁛</span>
+                Envoyer un prêtre ({reservePriestCount} en réserve)
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Autres joueurs */}
         {others.length > 0 && (

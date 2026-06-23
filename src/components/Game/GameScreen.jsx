@@ -413,6 +413,37 @@ export default function GameScreen({ session }) {
     else if (!pending && actionMode === "destroyUnit") setActionMode(null);
   }, [gameState?.players?.[effectivePlayerId]?.pendingDestroyUnit]);
 
+  // Retourne le prêtre en réserve quand sa troupe est complètement éliminée
+  useEffect(() => {
+    if (!gameState?.boardPriests) return;
+    const bu = gameState.boardUnits || {};
+    const bp = gameState.boardPriests || {};
+    const updates = {};
+    Object.entries(bp).forEach(([zoneId, colorMap]) => {
+      Object.entries(colorMap || {}).forEach(([color, priestData]) => {
+        if (!priestData) return;
+        if ((bu[zoneId]?.[color] || 0) > 0) return;
+        const player = currentPlayers.find(p => p.color === color);
+        if (!player) return;
+        const { priestIndex } = priestData;
+        if (gameState?.taSetiPriestPositions?.[player.id]?.[priestIndex] !== 'BOARD') return;
+        updates[`rooms/${roomCode}/gameState/boardPriests/${zoneId}/${color}`] = null;
+        updates[`rooms/${roomCode}/gameState/taSetiPriestPositions/${player.id}/${priestIndex}`] = '';
+      });
+    });
+    if (Object.keys(updates).length > 0) update(ref(db, "/"), updates);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(gameState?.boardUnits), JSON.stringify(gameState?.boardPriests)]);
+
+  // Auto-déclenche la phase de nuit quand tous les joueurs ont épuisé leurs tokens
+  useEffect(() => {
+    if (!gameState || gameState.phase !== "playing") return;
+    if (!currentPlayers.length) return;
+    const allDone = currentPlayers.every(p => (gameState.players?.[p.id]?.tokens ?? 5) === 0);
+    if (allDone) setShowNight(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(currentPlayers.map(p => gameState?.players?.[p.id]?.tokens)), gameState?.phase]);
+
 	// Ouvre/ferme automatiquement la modale Aube
 	useEffect(() => {
 	  const unsubscribe = onValue(ref(db, `rooms/${roomCode}/dawn`), snapshot => {
@@ -849,6 +880,15 @@ export default function GameScreen({ session }) {
     };
     if (hasFreeAnyTeleport) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingFreeAnyTeleport`] = null;
 
+    // Prêtre suit la troupe via téléportation quand toutes les unités bougent
+    if (fromCount === 0) {
+      const priestAtFromT = gameState?.boardPriests?.[currentZoneId]?.[col];
+      if (priestAtFromT) {
+        updates[`rooms/${roomCode}/gameState/boardPriests/${currentZoneId}/${col}`] = null;
+        updates[`rooms/${roomCode}/gameState/boardPriests/${toZoneId}/${col}`] = priestAtFromT;
+      }
+    }
+
     if (creatureId) {
       if (creatureGoes) {
         updates[`rooms/${roomCode}/gameState/creatureAssignments/${currentZoneId}/${col}`] = null;
@@ -1121,6 +1161,15 @@ export default function GameScreen({ session }) {
     };
     if (bouquetinCost > 0) {
       updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - bouquetinCost;
+    }
+
+    // Prêtre suit la troupe quand toutes les unités bougent
+    if (fromCount === 0) {
+      const priestAtFrom = gameState?.boardPriests?.[currentZoneId]?.[col];
+      if (priestAtFrom) {
+        updates[`rooms/${roomCode}/gameState/boardPriests/${currentZoneId}/${col}`] = null;
+        updates[`rooms/${roomCode}/gameState/boardPriests/${toZoneId}/${col}`] = priestAtFrom;
+      }
     }
 
     if (creatureId) {
@@ -1601,6 +1650,13 @@ export default function GameScreen({ session }) {
         if (count > sourceUnits) return;
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${sourceZoneId}/${aiColor}`] = sourceUnits - count;
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${targetZoneId}/${aiColor}`] = targetUnits + count;
+        if (sourceUnits - count === 0) {
+          const aiPriestData = gameState?.boardPriests?.[sourceZoneId]?.[aiColor];
+          if (aiPriestData) {
+            baseUpdates[`rooms/${roomCode}/gameState/boardPriests/${sourceZoneId}/${aiColor}`] = null;
+            baseUpdates[`rooms/${roomCode}/gameState/boardPriests/${targetZoneId}/${aiColor}`] = aiPriestData;
+          }
+        }
         const zoneName = BOARD_ZONES.find(z => z.id === targetZoneId)?.label || targetZoneId;
         logText = `déplace ${count} unité${count > 1 ? "s" : ""} vers ${zoneName}`;
         logMeta = { type: "move" };
@@ -1928,10 +1984,7 @@ export default function GameScreen({ session }) {
       updates[`rooms/${roomCode}/gameState/jpAssignment/${jpToken.nodeId}`] = null;
 
       if (zoneId && (gameState?.boardUnits?.[zoneId]?.[col] || 0) > 0) {
-        // Prêtre rejoint la troupe : retire 1 unité, place le prêtre dans la troupe
-        const currentUnits = gameState.boardUnits[zoneId][col];
-        updates[`rooms/${roomCode}/gameState/boardUnits/${zoneId}/${col}`] = currentUnits - 1;
-        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`] = (myState.unitsReserve ?? 0) + 1;
+        // Prêtre rejoint la troupe (s'ajoute aux unités existantes sans en retirer)
         const existingPriest = gameState?.boardPriests?.[zoneId]?.[col] || {};
         const jpTokenIds = [...(existingPriest.jpTokenIds || []), jpToken.cardId];
         updates[`rooms/${roomCode}/gameState/boardPriests/${zoneId}/${col}`] = { priestIndex, jpTokenIds };
@@ -2774,7 +2827,6 @@ export default function GameScreen({ session }) {
 		onClose={() => setShowNight(false)}
 		session={effectiveSession}
 		gameState={gameState}
-		onOpenDawn={() => setShowDawn(true)}
 	  />
 	)}
 
