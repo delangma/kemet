@@ -435,14 +435,6 @@ export default function GameScreen({ session }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(gameState?.boardUnits), JSON.stringify(gameState?.boardPriests)]);
 
-  // Auto-déclenche la phase de nuit quand tous les joueurs ont épuisé leurs tokens
-  useEffect(() => {
-    if (!gameState || gameState.phase !== "playing") return;
-    if (!currentPlayers.length) return;
-    const allDone = currentPlayers.every(p => (gameState.players?.[p.id]?.tokens ?? 5) === 0);
-    if (allDone) setShowNight(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(currentPlayers.map(p => gameState?.players?.[p.id]?.tokens)), gameState?.phase]);
 
 	// Ouvre/ferme automatiquement la modale Aube
 	useEffect(() => {
@@ -1460,6 +1452,13 @@ export default function GameScreen({ session }) {
       [`players/${next.id}/actionsThisTurn`]: 0,
     });
     await logAction(aiId, `termine son tour → ${next.name} joue`);
+
+    const snap = await get(ref(db, `rooms/${roomCode}/gameState/players`));
+    if (snap.exists()) {
+      const players = snap.val();
+      const allDone = currentPlayers.every(p => (players[p.id]?.tokens ?? 5) === 0);
+      if (allDone) setShowNight(true);
+    }
   }
 
   async function executeAITurn(aiId) {
@@ -1709,6 +1708,20 @@ export default function GameScreen({ session }) {
         const targetLabel = BOARD_ZONES.find(z => z.id === toZoneId)?.label || toZoneId;
         logText = `attaque ${enemyName} en ${targetLabel} avec ${attackCount} unité${attackCount > 1 ? "s" : ""}`;
         logMeta = { type: "attack" };
+        break;
+      }
+      case "upgradePyramid": {
+        const { slotId, targetLevel } = decision;
+        const pyr = gameState.pyramids?.[slotId];
+        if (!pyr || pyr.controllerId !== aiId) return;
+        const fromLevel = pyr.level ?? 0;
+        const pyramidCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+        const cost = pyramidCost(fromLevel, targetLevel);
+        if (ank < cost) return;
+        baseUpdates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = targetLevel;
+        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ank - cost;
+        logText = `améliore sa pyramide ${pyr.color} au niveau ${targetLevel} pour ${cost} Ank`;
+        logMeta = { type: "pyramid" };
         break;
       }
       default:
@@ -2066,6 +2079,9 @@ export default function GameScreen({ session }) {
       [`players/${next.id}/actionsThisTurn`]: 0,
     });
     await logAction(effectivePlayerId, `a terminé son tour → ${next.name} joue`);
+
+    const allDone = currentPlayers.every(p => (gameState.players?.[p.id]?.tokens ?? 5) === 0);
+    if (allDone) setShowNight(true);
   }
 
   const effectiveSession = {

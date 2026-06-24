@@ -1,0 +1,61 @@
+Objectif : Guider les choix de l'IA en fonction de règles et laisser une part aléatoire.
+
+Description technique : Implémente cet algorithme et créé une ficher Rules_IA.txt dans lequel on peux
+écrire les règles et qui sera repris par Claude code lors de la modification de l'IA pour servir de base et coder ces règles.
+
+Algorithme de prise de décision :
+
+À chaque fois que l'IA doit effectuer un choix :
+
+1. Détermination des choix possibles
+
+Lister tous les choix actuellement réalisables.
+
+2. Évaluation des règles
+
+Chaque règle possède :
+
+Une condition d'application.
+Un choix associé.
+Un poids compris entre 0 et 100 représentant l'importance de ce choix lorsque la règle est valide.
+
+Pour chaque règle :
+
+Vérifier si sa condition est satisfaite.
+Si la condition est satisfaite, la règle est considérée comme valide.
+3. Calcul des poids des choix
+
+Pour chaque choix :
+
+Initialiser son poids à une valeur minimale de base 1 afin qu'aucun choix ne soit totalement impossible par défaut.
+Ajouter les poids de toutes les règles valides associées à ce choix.
+
+Ainsi, plusieurs règles favorisant le même choix se cumulent naturellement.
+
+4. Transformation des poids en probabilités
+
+Calculer la somme des poids de tous les choix.
+
+Pour chaque choix :
+
+Probabilité = Poids du choix / Somme des poids
+
+Les probabilités obtenues totalisent toujours 100 %.
+
+5. Sélection de l'action
+
+Effectuer un tirage aléatoire en utilisant les probabilités calculées.
+
+L'action sélectionnée est exécutée.
+
+Cas particuliers
+Aucune règle valide
+
+Si aucune règle n'est valide :
+
+Tous les choix reçoivent le même poids.
+Tous les choix ont donc la même probabilité d'être sélectionnés.
+Règle avec un poids de 0
+
+Une règle avec un poids de 0 n'influence pas le choix associé.
+Plusieurs règles sur le même choix, les poids s'additionnent.

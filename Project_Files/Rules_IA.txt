@@ -1,0 +1,120 @@
+# Règles de l'IA — Kemet
+
+## Format
+Chaque règle possède :
+  - une condition d'application
+  - un choix associé
+  - un poids entre 0 et 100
+
+Poids de base de chaque choix : 1 (aucun choix n'est jamais impossible).
+Les règles valides s'additionnent sur le même choix.
+Sélection finale : tirage aléatoire proportionnel aux poids.
+
+---
+
+## 1. Phase de Jeu — aiDecideAction
+
+Les candidats sont générés pour chaque action légale.
+Si aucune règle ne s'applique, tous les choix ont le même poids (1).
+
+### ACTION : Attaque
+Génère un candidat par paire (zone source → zone cible avec ennemis).
+Seules les attaques où mes unités >= unités ennemies sont éligibles.
+
+| Condition                                        | Poids |
+|--------------------------------------------------|-------|
+| Attaque possible (ratio >= 1:1)                  |  +20  |
+| Ratio >= 2:1 (mes unités / ennemies)             |  +70  |
+| Ratio >= 1.5:1                                   |  +30  |
+| Cible est un temple (T1, T2, T3, TB)             |  +50  |
+| Cible est une cité ennemie (JxCy adverse)        |  +30  |
+| Ennemi a seulement 1 unité                       |  +40  |
+| J'ai >= 4 unités dans la zone attaquante         |  +20  |
+
+### ACTION : Achat de tuile
+Génère un candidat par tuile achetable (couleur contrôlée, niveau >= pyramide, ank suffisant).
+Seulement si ank >= 5.
+
+| Condition                                        | Poids |
+|--------------------------------------------------|-------|
+| Ank >= 7                                         |  +20  |
+| Je possède < 2 tuiles                            |  +30  |
+| Type créature                                    |  +40  |
+| Type combat                                      |  +20  |
+| Niveau >= 3                                      |  +30  |
+
+### ACTION : Recrutement
+Un seul candidat si réserve > 0, ank >= 1 et place disponible en cité.
+
+| Condition                                        | Poids |
+|--------------------------------------------------|-------|
+| Réserve >= 3 unités                              |  +30  |
+| Total unités sur plateau < 5                     |  +40  |
+| Ank >= 3                                         |  +20  |
+
+### ACTION : Déplacement
+Génère un candidat par (zone source → zone cible sans ennemi).
+Seuls les candidats avec au moins une règle valide (poids > 1) sont inclus.
+
+| Condition                                        | Poids |
+|--------------------------------------------------|-------|
+| Zone cible est un temple vide                    |  +60  |
+| Un prêtre peut avancer sur Ta-Seti               |  +30  |
+| Zone cible déjà occupée par mes unités           |  +10  |
+| Zone cible adjacente à un temple vide            |  +20  |
+
+### ACTION : Amélioration de pyramide
+Génère un candidat par pyramide contrôlée améliorable (niveau < 4, ank >= coût).
+Coût d'un niveau : égal au niveau cible (niveau 1 = 1 ank, niveau 2 = 2 ank, etc.).
+
+| Condition                                        | Poids |
+|--------------------------------------------------|-------|
+| Niveau cible == 2                                |  +40  |
+| Niveau cible == 3                                |  +30  |
+| Niveau cible == 4                                |  +20  |
+| Aucune tuile achetée de cette couleur            |  +30  |
+| Ank >= 8                                         |  +20  |
+
+### ACTION : Prière
+Toujours disponible en dernier recours. Type prayer2 si ank <= 7, sinon prayer3.
+
+| Condition                                        | Poids |
+|--------------------------------------------------|-------|
+| Ank <= 4                                         |  +70  |
+| Ank <= 6                                         |  +40  |
+| Ank <= 8                                         |  +20  |
+
+---
+
+## 2. Cartes Combat — aiChooseCombatCards
+
+Utilisé pour l'Aube et les combats (même fonction).
+Deux sélections indépendantes : carte jouée, puis carte défaussée.
+
+### Carte de combat (jouée)
+
+| Condition sur la carte                           | Poids |
+|--------------------------------------------------|-------|
+| Force >= 4                                       |  +30  |
+| Force >= 3                                       |  +15  |
+| Boucliers >= 2                                   |  +20  |
+| Gouttes de sang >= 2                             |  +15  |
+
+### Carte à défausser
+
+| Condition sur la carte                           | Poids |
+|--------------------------------------------------|-------|
+| Force <= 2                                       |  +50  |
+| Force == 1                                       |  +30  |
+| Boucliers >= 3 (Mur de Boucliers)                |  +20  |
+
+---
+
+## Notes d'implémentation
+
+- La fonction `weightedSelect(candidates)` tire aléatoirement parmi les candidats
+  proportionnellement à leurs poids.
+- Poids de base : 1 par candidat (avant application des règles).
+- Les poids de règles s'additionnent si plusieurs règles s'appliquent au même candidat.
+- Seuls les déplacements avec poids > 1 sont inclus (filtre les mouvements sans intérêt).
+- L'IA ne fait qu'une seule action par tour (actionsThisTurn >= 1 → endTurn).
