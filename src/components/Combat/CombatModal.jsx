@@ -1015,8 +1015,9 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                   const damage     = damageMap[pid] ?? 0;
                   const survivors  = survivorMap[pid] ?? 0;
 
+                  const tasetiBloodPid = gameState?.players?.[pid]?.tasetiBlood ?? 0;
                   const totalShields = bonus?.shieldsNullifiedByEnemy ? 0 : (card?.shields ?? 0) + (bonus?.shields ?? 0);
-                  const totalBlood   = (card?.blood ?? 0) + (bonus?.blood ?? 0);
+                  const totalBlood   = (card?.blood ?? 0) + (bonus?.blood ?? 0) + tasetiBloodPid;
 
                   return (
                     <div key={pid} className={`bg-gray-800 border rounded-xl p-4 text-center w-48 ${pid === winnerId ? "border-green-500" : "border-gray-600"}`}>
@@ -1047,7 +1048,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                             {(bonus?.force ?? 0) > 0 && !bonus?.nullified && ` + ${bonus.force} crea`}
                           </p>
                           <div className="mt-2 text-sm">
-                            <p className="text-red-400">sang {totalBlood}</p>
+                            <p className="text-red-400">sang {totalBlood}{tasetiBloodPid > 0 && <span className="text-xs text-amber-300 ml-1">(+{tasetiBloodPid} Ta-Seti)</span>}</p>
                             <p className={bonus?.shieldsNullifiedByEnemy ? "text-red-400 line-through" : "text-blue-400"}>
                               boucliers {totalShields}
                               {bonus?.shieldsNullifiedByEnemy && <span className="text-xs ml-1">(Meduse)</span>}

@@ -575,6 +575,9 @@ export default function GameScreen({ session }) {
         const base = gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] ?? (currentAnk - effectiveCost);
         gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, base + ankOnPurchaseG);
       }
+      if (tile.name.toLowerCase().includes('doré') || tile.id === 'R_4_1') {
+        gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
+      }
       await update(ref(db, "/"), gbUpdates);
       await logTileBuy(effectivePlayerId, tile);
       return;
@@ -637,8 +640,11 @@ export default function GameScreen({ session }) {
       const hasAnkReducPyr = (myState.ownedTileIds || []).some(
         id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank"
       );
+      const currentTokens = myState.tokens ?? 5;
       if (!pyr.color) {
         if (!newColor || !params.level) return;
+        const levelsUp = params.level; // depuis 0
+        if (currentTokens < levelsUp) return;
         const rawCost = pyramidCost(0, params.level);
         const cost = Math.max(0, rawCost - (hasReductionPyramide ? params.level : 0) - (hasAnkReducPyr ? 1 : 0));
         if (currentAnk < cost) return;
@@ -647,17 +653,21 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/ownerId`] = effectivePlayerId;
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/controllerId`] = effectivePlayerId;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = currentTokens - levelsUp;
         if (params.level === 4) {
           updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = (myState.vpPermanent ?? 0) + 1;
         }
       } else {
         const newLevel = params.level ?? (pyr.level ?? 0) + 1;
         if (newLevel > 4 || newLevel <= (pyr.level ?? 0)) return;
+        const levelsUp = newLevel - (pyr.level ?? 0);
+        if (currentTokens < levelsUp) return;
         const rawCost = pyramidCost(pyr.level ?? 0, newLevel);
         const cost = Math.max(0, rawCost - (hasReductionPyramide ? 1 : 0) - (hasAnkReducPyr ? 1 : 0));
         if (currentAnk < cost) return;
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = newLevel;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = currentTokens - levelsUp;
         if (newLevel === 4) {
           updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = (myState.vpPermanent ?? 0) + 1;
         }
@@ -770,6 +780,11 @@ export default function GameScreen({ session }) {
       // Draft ID : à l'achat, peut défausser des cartes et piocher le même nombre +1
       if (tile.name === "Draft ID") {
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/idRefreshPending`] = true;
+      }
+
+      // Jeton doré : interdit de l'utiliser le tour même de l'achat
+      if (tile.name.toLowerCase().includes('doré') || tile.id === 'R_4_1') {
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
       }
 
       // Cerbère : placement immédiat sur n'importe quelle troupe en jeu
@@ -1711,6 +1726,8 @@ export default function GameScreen({ session }) {
         break;
       }
       case "upgradePyramid": {
+        if (usedActions.includes('upgradePyramid') || usedActions.includes('pyramid')) return;
+        if (tokens <= 0) return;
         const { slotId, targetLevel } = decision;
         const pyr = gameState.pyramids?.[slotId];
         if (!pyr || pyr.controllerId !== aiId) return;
@@ -1799,12 +1816,13 @@ export default function GameScreen({ session }) {
   // Playing phase IA
   useEffect(() => {
     if (!gameState || gameState.phase !== "playing") return;
+    if (combatData) return;
     const currentTurnPlayer = currentPlayers.find(p => p.id === gameState.currentTurnPlayerId);
     if (!currentTurnPlayer?.isAI) return;
     const t = setTimeout(() => executeAITurn(currentTurnPlayer.id), 3000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.currentTurnPlayerId, gameState?.phase]);
+  }, [gameState?.currentTurnPlayerId, gameState?.phase, combatData]);
 
   async function handleActionToggle(pid, actionId) {
     // Conservé pour PlayerSummary (lecture seule côté adversaires)

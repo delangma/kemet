@@ -92,7 +92,19 @@ export function getTraversedINode(fromPos, toPos, layout) {
   for (const sNode of sNodes) {
     const num = sNode.split('_').pop();
     const iNode = `I_${nextSection}_${num}`;
-    if ((iToE[iNode] || []).includes(toPos)) return iNode;
+
+    if (iNode in iToE) {
+      if ((iToE[iNode] || []).includes(toPos)) return iNode;
+    } else {
+      // Bypass : I_(n+1)_num absent → chercher dans la section d'après
+      const bypassSection = nextSection + 1;
+      if (bypassSection <= 4) {
+        const bypassFaceKey = `${bypassSection}${faces[bypassSection - 1]}`;
+        const bypassIToE = I_TO_E[bypassFaceKey] || {};
+        const bypassINode = `I_${bypassSection}_${num}`;
+        if ((bypassIToE[bypassINode] || []).includes(toPos)) return bypassINode;
+      }
+    }
   }
   return null;
 }
@@ -138,9 +150,22 @@ export function getValidPriestDestinations(currentPos, layout) {
 
   const dests = new Set();
   sNodes.forEach(sNode => {
-    const num = sNode.split('_').pop();           // S_n_x → x
-    const iNode = `I_${nextSection}_${num}`;      // → I_(n+1)_x
-    (iToE[iNode] || []).forEach(e => dests.add(e));
+    const num = sNode.split('_').pop();
+    const iNode = `I_${nextSection}_${num}`;
+
+    if (iNode in iToE) {
+      // Chemin normal : I_(n+1)_x → E_(n+1)_y
+      (iToE[iNode] || []).forEach(e => dests.add(e));
+    } else {
+      // Bypass : I_(n+1)_x absent → sauter à la section suivante
+      const bypassSection = nextSection + 1;
+      if (bypassSection <= 4) {
+        const bypassFaceKey = `${bypassSection}${faces[bypassSection - 1]}`;
+        const bypassIToE = I_TO_E[bypassFaceKey] || {};
+        const bypassINode = `I_${bypassSection}_${num}`;
+        (bypassIToE[bypassINode] || []).forEach(e => dests.add(e));
+      }
+    }
   });
   return [...dests];
 }

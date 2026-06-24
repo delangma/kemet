@@ -203,6 +203,10 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
   }
 
   // ── Amélioration de pyramide ─────────────────────────────────────────────────
+  const pyramidAlreadyUsed = usedActions.includes('upgradePyramid') || usedActions.includes('pyramid');
+  const tokensRemaining = myState.tokens ?? 5;
+
+  if (!pyramidAlreadyUsed && tokensRemaining >= 1) {
   const myPyramids = Object.entries(pyramids)
     .filter(([, p]) => p.controllerId === aiPlayerId)
     .map(([slotId, p]) => ({ slotId, ...p }));
@@ -225,6 +229,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
 
     candidates.push({ type: "upgradePyramid", slotId: pyr.slotId, targetLevel, color: pyr.color, weight });
   }
+  } // fin !pyramidAlreadyUsed
 
   // ── Prière (toujours disponible) ─────────────────────────────────────────────
   let prayWeight = 1;

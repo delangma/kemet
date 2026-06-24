@@ -1,10 +1,10 @@
 # Règles de l'IA — Kemet
 
 ## Format
-Chaque règle possède :
-  - une condition d'application
-  - un choix associé
-  - un poids entre 0 et 100
+Chaque règle possède 3 colonnes :
+  - **Règle** : condition d'application
+  - **Décision** : action ou choix favorisé si la règle est valide
+  - **Poids** : valeur ajoutée au poids de base (1) du candidat correspondant
 
 Poids de base de chaque choix : 1 (aucun choix n'est jamais impossible).
 Les règles valides s'additionnent sur le même choix.
@@ -21,92 +21,102 @@ Si aucune règle ne s'applique, tous les choix ont le même poids (1).
 Génère un candidat par paire (zone source → zone cible avec ennemis).
 Seules les attaques où mes unités >= unités ennemies sont éligibles.
 
-| Condition                                        | Poids |
-|--------------------------------------------------|-------|
-| Attaque possible (ratio >= 1:1)                  |  +20  |
-| Ratio >= 2:1 (mes unités / ennemies)             |  +70  |
-| Ratio >= 1.5:1                                   |  +30  |
-| Cible est un temple (T1, T2, T3, TB)             |  +50  |
-| Cible est une cité ennemie (JxCy adverse)        |  +30  |
-| Ennemi a seulement 1 unité                       |  +40  |
-| J'ai >= 4 unités dans la zone attaquante         |  +20  |
+| Règle                                             | Décision  | Poids |
+|---------------------------------------------------|-----------|-------|
+| Attaque possible (ratio >= 1:1)                   | Attaquer  |  +20  |
+| Ratio >= 2:1 (mes unités / ennemies)              | Attaquer  |  +70  |
+| Ratio >= 1.5:1                                    | Attaquer  |  +30  |
+| Cible est un temple (T1, T2, T3, TB)              | Attaquer  |  +50  |
+| Cible est une cité ennemie (JxCy adverse)         | Attaquer  |  +30  |
+| Ennemi a seulement 1 unité                        | Attaquer  |  +40  |
+| J'ai >= 4 unités dans la zone attaquante          | Attaquer  |  +20  |
 
 ### ACTION : Achat de tuile
 Génère un candidat par tuile achetable (couleur contrôlée, niveau >= pyramide, ank suffisant).
-Seulement si ank >= 5.
+Seulement si ank >= 3.
 
-| Condition                                        | Poids |
-|--------------------------------------------------|-------|
-| Ank >= 7                                         |  +20  |
-| Je possède < 2 tuiles                            |  +30  |
-| Type créature                                    |  +40  |
-| Type combat                                      |  +20  |
-| Niveau >= 3                                      |  +30  |
+| Règle                                             | Décision  | Poids |
+|---------------------------------------------------|-----------|-------|
+| Ank >= 7                                          | Acheter   |  +20  |
+| Je possède < 2 tuiles                             | Acheter   |  +30  |
+| Type créature                                     | Acheter   |  +40  |
+| Type combat                                       | Acheter   |  +20  |
+| Niveau >= 3                                       | Acheter   |  +30  |
 
 ### ACTION : Recrutement
 Un seul candidat si réserve > 0, ank >= 1 et place disponible en cité.
 
-| Condition                                        | Poids |
-|--------------------------------------------------|-------|
-| Réserve >= 3 unités                              |  +30  |
-| Total unités sur plateau < 5                     |  +40  |
-| Ank >= 3                                         |  +20  |
+| Règle                                             | Décision  | Poids |
+|---------------------------------------------------|-----------|-------|
+| Réserve >= 3 unités                               | Recruter  |  +30  |
+| Total unités sur plateau < 5                      | Recruter  |  +40  |
+| Ank >= 3                                          | Recruter  |  +20  |
 
 ### ACTION : Déplacement
 Génère un candidat par (zone source → zone cible sans ennemi).
 Seuls les candidats avec au moins une règle valide (poids > 1) sont inclus.
 
-| Condition                                        | Poids |
-|--------------------------------------------------|-------|
-| Zone cible est un temple vide                    |  +60  |
-| Un prêtre peut avancer sur Ta-Seti               |  +30  |
-| Zone cible déjà occupée par mes unités           |  +10  |
-| Zone cible adjacente à un temple vide            |  +20  |
+| Règle                                             | Décision      | Poids |
+|---------------------------------------------------|---------------|-------|
+| Zone cible est un temple vide                     | Se déplacer   |  +60  |
+| Un prêtre peut avancer sur Ta-Seti                | Se déplacer   |  +30  |
+| Zone cible déjà occupée par mes unités            | Se déplacer   |  +10  |
+| Zone cible adjacente à un temple vide             | Se déplacer   |  +20  |
 
 ### ACTION : Amélioration de pyramide
 Génère un candidat par pyramide contrôlée améliorable (niveau < 4, ank >= coût).
 Coût d'un niveau : égal au niveau cible (niveau 1 = 1 ank, niveau 2 = 2 ank, etc.).
 
-| Condition                                        | Poids |
-|--------------------------------------------------|-------|
-| Niveau cible == 2                                |  +40  |
-| Niveau cible == 3                                |  +30  |
-| Niveau cible == 4                                |  +20  |
-| Aucune tuile achetée de cette couleur            |  +30  |
-| Ank >= 8                                         |  +20  |
+| Règle                                             | Décision           | Poids |
+|---------------------------------------------------|--------------------|-------|
+| Niveau cible == 2                                 | Améliorer pyramide |  +40  |
+| Niveau cible == 3                                 | Améliorer pyramide |  +30  |
+| Niveau cible == 4                                 | Améliorer pyramide |  +20  |
+| Aucune tuile achetée de cette couleur             | Améliorer pyramide |  +30  |
+| Ank >= 8                                          | Améliorer pyramide |  +20  |
 
 ### ACTION : Prière
 Toujours disponible en dernier recours. Type prayer2 si ank <= 7, sinon prayer3.
 
-| Condition                                        | Poids |
-|--------------------------------------------------|-------|
-| Ank <= 4                                         |  +70  |
-| Ank <= 6                                         |  +40  |
-| Ank <= 8                                         |  +20  |
+| Règle                                             | Décision  | Poids |
+|---------------------------------------------------|-----------|-------|
+| Ank < 2                                          | Prier     |  +70  |
+| Ank <= 6                                          | Prier     |  +40  |
+| Ank <= 8                                          | Prier     |  +20  |
 
 ---
 
 ## 2. Cartes Combat — aiChooseCombatCards
 
-Utilisé pour l'Aube et les combats (même fonction).
+Utilisé les combats.
 Deux sélections indépendantes : carte jouée, puis carte défaussée.
 
 ### Carte de combat (jouée)
 
-| Condition sur la carte                           | Poids |
-|--------------------------------------------------|-------|
-| Force >= 4                                       |  +30  |
-| Force >= 3                                       |  +15  |
-| Boucliers >= 2                                   |  +20  |
-| Gouttes de sang >= 2                             |  +15  |
+| Règle                                             | Décision           | Poids |
+|---------------------------------------------------|--------------------|-------|
+| J'ai moins de 4 unités sur ma troupe              | Jouer une carte avec des boucliers  |  +30  |
+| J'ai beaucoup plus de force de base que mon adversaire | Jouer une carte avec des boucliers  |  +20  |
+| J'ai beaucoup plus de force de base que mon adversaire | Jouer une carte avec peu de force   |  +15  |
+| Mon adversaire a des gouttes de sang                   | Jouer une carte avec des boucliers   |  +15  |
+| J'ai une force équivalente à mon adversaire            | Joueur la carte la plus forte |  +15  |
+
 
 ### Carte à défausser
 
-| Condition sur la carte                           | Poids |
-|--------------------------------------------------|-------|
-| Force <= 2                                       |  +50  |
-| Force == 1                                       |  +30  |
-| Boucliers >= 3 (Mur de Boucliers)                |  +20  |
+| Règle                                             | Décision              | Poids |
+|---------------------------------------------------|-----------------------|-------|
+| 2 force , 2 bouclier                              | Défausser cette carte |  +20  |
+
+---
+
+## 3. Déplacement — Nombre d'unités à déplacer
+Génère un candidat par nombre d'unités possible à déplacer.
+Par défaut déplace toutes les unités.
+
+| Règle                                                              | Décision           | Poids |
+|--------------------------------------------------------------------|--------------------|-------|
+| Dernier à jouer de la journée et possibilité de prendre 2 temples  | Laisser une unité  |  +60  |
 
 ---
 
