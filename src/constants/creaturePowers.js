@@ -25,6 +25,42 @@ export const POWER_TILE_COMBAT_BONUSES = {
   "Carte Bouclier 3*3":  { shields: 3 },
 };
 
+// Bonus de combat des jetons JP (prêtres Ta-Seti dans une troupe).
+// Même structure que POWER_TILE_COMBAT_BONUSES.
+const JP_TOKEN_COMBAT_BONUSES = {
+  'JP_force_attaque':        { attackForce: 1 },
+  'JP_force_defense':        { defenseForce: 1 },
+  'JP_saignement':           { blood: 1 },
+  'JP_ID_saignement':        { blood: 1 },
+  'JP_capacite_deplacement': { attackForce: 1 }, // mobilité → avantage en attaque
+};
+
+export function getJpTokenCombatBonus(boardPriests, zoneId, color, isAttacker) {
+  const jpIds = boardPriests?.[zoneId]?.[color]?.jpTokenIds || [];
+  let force = 0, blood = 0, shields = 0;
+  for (const jpId of jpIds) {
+    const b = JP_TOKEN_COMBAT_BONUSES[jpId];
+    if (!b) continue;
+    if (b.attackForce  && isAttacker)  force   += b.attackForce;
+    if (b.defenseForce && !isAttacker) force   += b.defenseForce;
+    if (b.blood)   blood   += b.blood;
+    if (b.shields) shields += b.shields;
+  }
+  return { force, blood, shields };
+}
+
+export function getJpTokenFlags(boardPriests, zoneId, color) {
+  const jpIds = boardPriests?.[zoneId]?.[color]?.jpTokenIds || [];
+  return {
+    prescience:       jpIds.some(id => id === 'JP_prescience' || id === 'JP_ID_combat'),
+    defenseVictoryVp: jpIds.includes('JP_victoire_defensive'),
+    replacementUnit:  jpIds.includes('JP_replacement_unite'),
+    legion:           jpIds.includes('JP_legion'),
+    wallPass:         jpIds.includes('JP_passe_muraille'),
+    movementBonus:    jpIds.filter(id => id === 'JP_capacite_deplacement').length,
+  };
+}
+
 export function getPowerTileCombatBonus(ownedTileIds, isAttacker, powerTiles) {
   let force = 0, shields = 0, blood = 0, unblockableBlood = 0;
   for (const id of (ownedTileIds || [])) {
@@ -296,9 +332,16 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
   const tasetiShieldsA = players[attacker]?.tasetiShields ?? 0;
   const tasetiShieldsD = players[defender]?.tasetiShields ?? 0;
 
-  // Force totale = unités + carte + créatures + cartes ID + tuiles permanentes + blessure divine + Ta-Seti
-  const forceA = unitsA + (cardA?.force ?? 0) + bonusA.force + idA.force + tilesBonusA.force + blessureA + tasetiForceA;
-  const forceD = unitsD + (cardD?.force ?? 0) + bonusD.force + idD.force + tilesBonusD.force + blessureD + tasetiForceD;
+  // Bonus jetons JP (prêtres embarqués dans la troupe)
+  const boardPriests = gameState?.boardPriests || {};
+  const jpA = getJpTokenCombatBonus(boardPriests, zoneId, colorA, true);
+  const jpD = getJpTokenCombatBonus(boardPriests, zoneId, colorD, false);
+  const jpFlagsA = getJpTokenFlags(boardPriests, zoneId, colorA);
+  const jpFlagsD = getJpTokenFlags(boardPriests, zoneId, colorD);
+
+  // Force totale = unités + carte + créatures + cartes ID + tuiles permanentes + blessure divine + Ta-Seti + JP
+  const forceA = unitsA + (cardA?.force ?? 0) + bonusA.force + idA.force + tilesBonusA.force + blessureA + tasetiForceA + jpA.force;
+  const forceD = unitsD + (cardD?.force ?? 0) + bonusD.force + idD.force + tilesBonusD.force + blessureD + tasetiForceD + jpD.force;
 
   // Égalité → défenseur gagne
   const winnerId = forceA > forceD ? attacker : defender;
@@ -308,10 +351,10 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
   // Calcul des dégâts
   // bonusA.blood est déjà 0 si creatureBloodNullifiedByEnemy (Minotaure côté D)
   // allBloodNullifiedByEnemy nullifie en plus le sang des tuiles permanentes
-  const bloodA = (cardA?.blood ?? 0) + bonusA.blood + idA.blood + (bonusD.allBloodNullifiedByEnemy ? 0 : tilesBonusA.blood) + tasetiBloodA;
-  const bloodD = (cardD?.blood ?? 0) + bonusD.blood + idD.blood + (bonusA.allBloodNullifiedByEnemy ? 0 : tilesBonusD.blood) + tasetiBloodD;
-  const shieldsA = bonusA.shieldsNullifiedByEnemy ? 0 : (cardA?.shields ?? 0) + bonusA.shields + idA.shields + tilesBonusA.shields + tasetiShieldsA;
-  const shieldsD = bonusD.shieldsNullifiedByEnemy ? 0 : (cardD?.shields ?? 0) + bonusD.shields + idD.shields + tilesBonusD.shields + tasetiShieldsD;
+  const bloodA = (cardA?.blood ?? 0) + bonusA.blood + idA.blood + (bonusD.allBloodNullifiedByEnemy ? 0 : tilesBonusA.blood) + tasetiBloodA + jpA.blood;
+  const bloodD = (cardD?.blood ?? 0) + bonusD.blood + idD.blood + (bonusA.allBloodNullifiedByEnemy ? 0 : tilesBonusD.blood) + tasetiBloodD + jpD.blood;
+  const shieldsA = bonusA.shieldsNullifiedByEnemy ? 0 : (cardA?.shields ?? 0) + bonusA.shields + idA.shields + tilesBonusA.shields + tasetiShieldsA + jpA.shields;
+  const shieldsD = bonusD.shieldsNullifiedByEnemy ? 0 : (cardD?.shields ?? 0) + bonusD.shields + idD.shields + tilesBonusD.shields + tasetiShieldsD + jpD.shields;
 
   // "Aucun Saignement" : aucune perte si le joueur QUI joue la carte gagne
   const noBloodA = winnerId === attacker && (choices?.[attacker]?.idCards || []).some(c => c?.effect?.type === 'no_damage_if_win');
@@ -341,5 +384,6 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
     attackerUnitsAfter, defenderUnitsAfter,
     winnerBonus, loserBonus: winnerId === attacker ? bonusD : bonusA,
     colorA, colorD,
+    jpFlagsA, jpFlagsD,
   };
 }

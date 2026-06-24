@@ -140,9 +140,19 @@ export default function GameScreen({ session }) {
   const prevTurnPlayerIdRef = useRef(null);
   const latestActionKeyRef = useRef(null);
   const aiTurnInProgressRef = useRef(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [showMobileLog, setShowMobileLog] = useState(false);
 
   const effectivePlayerId = isTestMode ? testViewPlayerId : playerId;
   const me = currentPlayers.find(p => p.id === effectivePlayerId) ?? allPlayers.find(p => p.id === effectivePlayerId);
+
+  // Media query mobile/desktop
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const h = e => setIsMobile(e.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
 
   // Auto-efface la notification d'action
   useEffect(() => {
@@ -578,6 +588,12 @@ export default function GameScreen({ session }) {
       if (tile.name.toLowerCase().includes('doré') || tile.id === 'R_4_1') {
         gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
       }
+      const taSetiAdvOnPurchaseG = tile.taSetiAdvanceOnPurchase ?? 0;
+      if (taSetiAdvOnPurchaseG > 0) {
+        const myStateG = gameState.players?.[effectivePlayerId] || {};
+        const baseG = gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/taSetiNightAdvancePending`] ?? (myStateG.taSetiNightAdvancePending ?? 0);
+        gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/taSetiNightAdvancePending`] = baseG + taSetiAdvOnPurchaseG;
+      }
       await update(ref(db, "/"), gbUpdates);
       await logTileBuy(effectivePlayerId, tile);
       return;
@@ -787,6 +803,13 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
       }
 
+      // Avancée Ta-Seti à l'achat
+      const taSetiAdvOnPurchase = tile.taSetiAdvanceOnPurchase ?? 0;
+      if (taSetiAdvOnPurchase > 0) {
+        const base = updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/taSetiNightAdvancePending`] ?? (myState.taSetiNightAdvancePending ?? 0);
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/taSetiNightAdvancePending`] = base + taSetiAdvOnPurchase;
+      }
+
       // Cerbère : placement immédiat sur n'importe quelle troupe en jeu
       if (creaturePower?.placeOnAnyZone) {
         await update(ref(db, "/"), updates);
@@ -803,12 +826,18 @@ export default function GameScreen({ session }) {
     }
   }
 
-  function computeMovePoints(pid) {
+  function computeMovePoints(pid, fromZoneId = null) {
     const ownedTileIds = gameState?.players?.[pid]?.ownedTileIds || [];
-    return 1 + ownedTileIds.filter(id => {
+    let pts = 1 + ownedTileIds.filter(id => {
       const name = POWER_TILES.find(t => t.id === id)?.name;
       return name === "Déplacement" || name === "Furie Bestiale";
     }).length;
+    if (fromZoneId) {
+      const myColor = gameState?.players?.[pid]?.color;
+      const jpIds = gameState?.boardPriests?.[fromZoneId]?.[myColor]?.jpTokenIds || [];
+      pts += jpIds.filter(id => id === 'JP_capacite_deplacement').length;
+    }
+    return pts;
   }
 
   function computeTeleportCost(pid, currentZoneId = null) {
@@ -997,7 +1026,7 @@ export default function GameScreen({ session }) {
 
     const col = me?.color;
     const usedActions = myState.usedActions || [];
-    const basePts = computeMovePoints(effectivePlayerId);
+    const basePts = computeMovePoints(effectivePlayerId, sourceZoneId);
     const creatureName  = creatureGoes  && creatureId  ? POWER_TILES.find(t => t.id === creatureId)?.name  : null;
     const creatureName2 = creatureGoes2 && creatureId2 ? POWER_TILES.find(t => t.id === creatureId2)?.name : null;
     const pts = basePts + getMovementCreatureBonus(creatureName) + getMovementCreatureBonus(creatureName2);
@@ -1058,7 +1087,15 @@ export default function GameScreen({ session }) {
   function hasParseMuraille() {
     if (moveState?.forcePaseMuraille) return true;
     const ownedTileIds = gameState?.players?.[effectivePlayerId]?.ownedTileIds || [];
-    return ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Passe muraille");
+    if (ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Passe muraille")) return true;
+    // Jeton JP_passe_muraille porté par le prêtre de la troupe source
+    const sourceZoneId = moveState?.sourceZoneId;
+    if (sourceZoneId) {
+      const myColor = gameState?.players?.[effectivePlayerId]?.color;
+      const jpIds = gameState?.boardPriests?.[sourceZoneId]?.[myColor]?.jpTokenIds || [];
+      if (jpIds.includes('JP_passe_muraille')) return true;
+    }
+    return false;
   }
 
   // Active le jeton doré "Déplacement Passe/Muraille" (R_4_1)
@@ -1116,6 +1153,41 @@ export default function GameScreen({ session }) {
   function handleRenforcementActivate() {
     if (actionMode) return;
     setActionMode("renforcement");
+  }
+
+  function handleNightTaSetiAdvance() {
+    if (actionMode) return;
+    setPendingMoveAction('night_taseti_advance');
+    setShowTaSeti(true);
+  }
+
+  async function handleUseJuToken(nodeId, cardId) {
+    const myState = gameState?.players?.[effectivePlayerId] || {};
+    const hand = myState.juTokenHand || [];
+    const idx = hand.findIndex(t => t.nodeId === nodeId && t.cardId === cardId);
+    if (idx === -1) return;
+    const newHand = hand.filter((_, i) => i !== idx);
+    const updates = { [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/juTokenHand`]: newHand.length > 0 ? newHand : null };
+
+    if (cardId === 'PU_ID') {
+      const deck = [...(gameState.idDeck || [])];
+      if (deck.length > 0) {
+        const { hand: drawn, remaining } = dealCards(deck, 1);
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/idCards`] = [...(myState.idCards || []), ...drawn];
+        updates[`rooms/${roomCode}/gameState/idDeck`] = remaining;
+      }
+    } else if (cardId === 'PU_points') {
+      const base = myState.vpPermanent ?? 0;
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = base + 1;
+    } else if (cardId === 'PU_combat_simple') {
+      const base = myState.tasetiForce ?? 0;
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tasetiForce`] = base + 1;
+    } else if (cardId === 'PU_sceau_divin') {
+      const base = myState.tasetiShields ?? 0;
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tasetiShields`] = base + 1;
+    }
+
+    await update(ref(db, "/"), updates);
   }
 
   async function handleMoveHop(toZoneId) {
@@ -1868,7 +1940,11 @@ export default function GameScreen({ session }) {
   function getPriestAllDests() {
     const positions = getPriestPositions(effectivePlayerId);
     const layout = gameState?.taSetiLayout;
-    return positions.map(pos => getValidPriestDestinations(pos, layout));
+    const isNightAdv = pendingMoveAction === 'night_taseti_advance';
+    return positions.map(pos => {
+      const dests = getValidPriestDestinations(pos, layout);
+      return isNightAdv ? dests.filter(d => d !== 'E_4_2') : dests;
+    });
   }
 
   function getPriestValidDestinations() {
@@ -1899,10 +1975,12 @@ export default function GameScreen({ session }) {
     const positions = getPriestPositions(effectivePlayerId);
     let priestIndex = selectedPriestIndex;
     const layout = gameState?.taSetiLayout;
+    const isNightAdv = pendingMoveAction === 'night_taseti_advance';
     if (priestIndex === null) {
-      priestIndex = positions.findIndex(pos =>
-        getValidPriestDestinations(pos, layout).includes(nodeId)
-      );
+      const validFilter = isNightAdv
+        ? pos => getValidPriestDestinations(pos, layout).filter(d => d !== 'E_4_2').includes(nodeId)
+        : pos => getValidPriestDestinations(pos, layout).includes(nodeId);
+      priestIndex = positions.findIndex(validFilter);
       if (priestIndex < 0) priestIndex = 0;
     }
     const oldPos = positions[priestIndex];
@@ -1917,6 +1995,11 @@ export default function GameScreen({ session }) {
       [`rooms/${roomCode}/gameState/taSetiPriestPositions/${effectivePlayerId}/2`]: newPositions[2],
     };
 
+    if (isNightAdv) {
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/taSetiNightAdvancePending`] =
+        Math.max(0, (myState.taSetiNightAdvancePending ?? 0) - 1);
+    }
+
     // Nœud I traversé → appliquer ses bonus
     const iNode = getTraversedINode(oldPos, nodeId, layout);
     if (iNode) {
@@ -1930,7 +2013,8 @@ export default function GameScreen({ session }) {
     }
 
     // E_4_2 : bout de piste → 1er prêtre du jour +1 PV, prêtre retourne en réserve
-    if (nodeId === 'E_4_2') {
+    // (non accessible en mode avancée de nuit — filtré dans getPriestAllDests)
+    if (nodeId === 'E_4_2' && !isNightAdv) {
       if (!gameState?.taSetiE4_2DailyVp) {
         const base = updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] ?? (myState.vpPermanent ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = base + 1;
@@ -1952,6 +2036,16 @@ export default function GameScreen({ session }) {
       const eFaceKey = `${eSection}${faces[eSection - 1]}`;
       const eBonuses = TASETI_E_BONUSES[eFaceKey]?.[nodeId] ?? [];
       eBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
+
+      if (isNightAdv) {
+        // Mode nuit : pas de ramassage de jetons
+        await update(ref(db, "/"), updates);
+        setActionMode(null);
+        setPendingMoveAction(null);
+        setSelectedPriestIndex(null);
+        setShowTaSeti(false);
+        return;
+      }
 
       // Vérifier les jetons disponibles à cet emplacement
       const tokenNodeIds = E_TO_TOKENS[eFaceKey]?.[nodeId] ?? [];
@@ -1980,7 +2074,7 @@ export default function GameScreen({ session }) {
     }
 
     await update(ref(db, "/"), updates);
-    setActionMode(pendingMoveAction);
+    setActionMode(isNightAdv ? null : pendingMoveAction);
     setPendingMoveAction(null);
     setSelectedPriestIndex(null);
     setShowTaSeti(false);
@@ -2423,15 +2517,15 @@ export default function GameScreen({ session }) {
     )}
 
     {/* Header principal — KEMET + ordre + décorations */}
-    <div className="flex items-center shrink-0 select-none" style={{ height: 62, background: '#080604', borderBottom: '1px solid #4a3410' }}>
+    <div className="flex items-center shrink-0 select-none h-10 md:h-[62px]" style={{ background: '#080604', borderBottom: '1px solid #4a3410' }}>
 
-      {/* Logo KEMET avec ailes */}
-      <div className="flex items-center h-full px-4 shrink-0" style={{ borderRight: '1px solid #3a2a0c' }}>
+      {/* Logo KEMET avec ailes — masqué sur mobile */}
+      <div className="hidden md:flex items-center h-full px-4 shrink-0" style={{ borderRight: '1px solid #3a2a0c' }}>
         <img src="/ui/logo_wings.png" alt="KEMET" className="h-9 object-contain" style={{ filter: 'brightness(1.1) drop-shadow(0 0 6px rgba(180,120,20,0.4))' }} />
       </div>
 
       {/* ORDRE + badges joueurs */}
-      <div className="flex items-center gap-2 px-5 flex-1">
+      <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-5 flex-1">
         <span className="text-[10px] font-bold uppercase tracking-[0.3em] shrink-0" style={{ color: '#6B4C1E' }}>ORDRE</span>
         <span className="shrink-0" style={{ color: '#3a2a0c', fontSize: 14 }}>|</span>
         {currentPlayers.map(p => {
@@ -2470,8 +2564,8 @@ export default function GameScreen({ session }) {
         })}
       </div>
 
-      {/* Volume */}
-      <div className="flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c', minWidth: 150 }}>
+      {/* Volume — masqué sur mobile */}
+      <div className="hidden md:flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c', minWidth: 150 }}>
         <VolumeControl volume={volume} onChange={setVolume} />
       </div>
 
@@ -2522,7 +2616,7 @@ export default function GameScreen({ session }) {
 	  </div>
 
       {/* Cadres adversaires à gauche — superposés */}
-      <div className="absolute top-0 left-0 flex flex-col gap-3 z-10 p-4">
+      <div className="absolute top-0 left-0 flex flex-col gap-1 md:gap-3 z-10 p-2 md:p-4">
         {opponents.map(p => (
           <div key={p.id} onClick={() => setViewTilesPlayer(p)} className="cursor-pointer">
             <PlayerSummary
@@ -2531,17 +2625,38 @@ export default function GameScreen({ session }) {
               onActionToggle={handleActionToggle}
               currentTurnPlayerId={gameState?.currentTurnPlayerId}
               allPlayers={session.allPlayers}
+              compact={isMobile}
             />
           </div>
         ))}
       </div>
 
-	  {/* Panneau latéral droit — combat + journal — superposé */}
-	  <div className="absolute top-0 right-0 w-72 h-full overflow-hidden flex flex-col z-10" style={{ background: 'rgba(8,6,4,0.93)', borderLeft: '1px solid #4a3410' }}>
+	  {/* Panneau latéral droit — combat + journal */}
+	  {/* Desktop: sidebar fixe | Mobile: overlay plein écran */}
+	  <div
+	    className={`overflow-hidden flex flex-col z-40 ${
+	      isMobile
+	        ? `fixed inset-0 ${(showCombat || showMobileLog) ? 'flex' : 'hidden'}`
+	        : 'absolute top-0 right-0 w-72 h-full'
+	    }`}
+	    style={{ background: 'rgba(8,6,4,0.97)', borderLeft: isMobile ? 'none' : '1px solid #4a3410' }}
+	  >
 	    {/* Header JOURNAL */}
-	    <div className="flex items-center gap-3 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid #4a3410', background: '#0a0806' }}>
-	      <span style={{ color: '#C9973A', fontSize: 18, lineHeight: 1 }}>𓂀</span>
-	      <span style={{ color: '#C9973A', fontWeight: 700, fontSize: 13, letterSpacing: '0.25em', textTransform: 'uppercase' }}>Journal</span>
+	    <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid #4a3410', background: '#0a0806' }}>
+	      <div className="flex items-center gap-3">
+	        <span style={{ color: '#C9973A', fontSize: 18, lineHeight: 1 }}>𓂀</span>
+	        <span style={{ color: '#C9973A', fontWeight: 700, fontSize: 13, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
+	          {showCombat ? 'Combat' : 'Journal'}
+	        </span>
+	      </div>
+	      {isMobile && (
+	        <button
+	          onClick={() => { setShowMobileLog(false); if (!combatData) setShowCombat(false); }}
+	          style={{ color: '#6B4C1E', fontSize: 22, lineHeight: 1, padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer' }}
+	        >
+	          ✕
+	        </button>
+	      )}
 	    </div>
 	    {showCombat && (
 		  <CombatModal
@@ -2557,6 +2672,17 @@ export default function GameScreen({ session }) {
 	    )}
 	    <ActionLogPanel roomCode={roomCode} />
 	  </div>
+
+	  {/* Mobile: bouton flottant Journal (visible quand overlay fermé) */}
+	  {isMobile && !showCombat && !showMobileLog && (
+	    <button
+	      onClick={() => setShowMobileLog(true)}
+	      className="absolute bottom-3 right-3 z-20 text-xs font-bold px-3 py-2 rounded-lg"
+	      style={{ background: '#1a1200', border: '1px solid #4a3410', color: '#C9973A', boxShadow: '0 2px 12px rgba(0,0,0,0.7)' }}
+	    >
+	      📋 Journal
+	    </button>
+	  )}
 
     </div>
 
@@ -2581,6 +2707,8 @@ export default function GameScreen({ session }) {
           onGoldenTokenPrayerActivate={handleGoldenTokenPrayerActivate}
           onGoldenTokenBuyActivate={handleGoldenTokenBuyActivate}
           onRenforcementActivate={handleRenforcementActivate}
+          onNightTaSetiAdvance={handleNightTaSetiAdvance}
+          onUseJuToken={handleUseJuToken}
           onPlayDayIdCard={handlePlayDayIdCard}
           onViewMyTiles={() => setViewTilesPlayer(me)}
           onCancelTurn={handleCancelTurn}
@@ -2635,7 +2763,7 @@ export default function GameScreen({ session }) {
         zoneId={moveConfig.zoneId}
         playerColor={me?.color}
         gameState={gameState}
-        movePoints={computeMovePoints(effectivePlayerId)}
+        movePoints={computeMovePoints(effectivePlayerId, moveConfig.zoneId)}
         onConfirm={(count, creatureGoes, creatureId, creatureGoes2, creatureId2) => handleMoveStart(moveConfig.zoneId, count, creatureGoes, creatureId, creatureGoes2, creatureId2)}
         onClose={handleMoveCancel}
       />
@@ -2696,11 +2824,17 @@ export default function GameScreen({ session }) {
           >
             {pendingMoveAction && (
               <div style={{ color: '#C9973A', fontSize: 13, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                {selectMode
-                  ? 'Cliquez sur le prêtre à avancer'
-                  : selectedPriestIndex !== null
-                    ? `Prêtre ${selectedPriestIndex + 1} — Cliquez sur un emplacement doré`
-                    : 'Cliquez sur un emplacement doré pour avancer'}
+                {pendingMoveAction === 'night_taseti_advance'
+                  ? (selectMode
+                      ? 'Avancée de nuit — Cliquez sur le prêtre à avancer'
+                      : selectedPriestIndex !== null
+                        ? `Prêtre ${selectedPriestIndex + 1} — Avancée de nuit (sans jeton, sans dernier emplacement)`
+                        : 'Avancée de nuit — Cliquez sur un emplacement (pas E_4_2, pas de jeton)')
+                  : (selectMode
+                      ? 'Cliquez sur le prêtre à avancer'
+                      : selectedPriestIndex !== null
+                        ? `Prêtre ${selectedPriestIndex + 1} — Cliquez sur un emplacement doré`
+                        : 'Cliquez sur un emplacement doré pour avancer')}
               </div>
             )}
 

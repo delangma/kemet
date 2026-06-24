@@ -7,7 +7,7 @@ export const POWER_TILES = [
   // Rouge Niveau 2
   { id: "R_2_2", name: "Passe muraille",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
   { id: "R_2_3", name: "Goutte de sang",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
-  { id: "R_2_4", name: "Avancée sur taseti",    color: "Rouge", level: 2, cost: 2, type: "permanent" },
+  { id: "R_2_4", name: "Avancée sur taseti",    color: "Rouge", level: 2, cost: 2, type: "permanent", taSetiAdvanceOnPurchase: 1, taSetiAdvancePerNight: 1 },
   { id: "R_2_5", name: "Carte Sang 3*3",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
   { id: "R_2_6", name: "Téléportation facile",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
   { id: "R_2_7", name: "Cerbère",        color: "Rouge", level: 2, cost: 2, type: "creature" },

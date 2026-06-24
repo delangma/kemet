@@ -3,7 +3,7 @@ import { db } from "../../firebase";
 import { ref, onValue, update, remove, set } from "firebase/database";
 import { COMBAT_CARDS } from "../../constants/cards";
 import { POWER_TILES } from "../../constants/powerTiles";
-import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS } from "../../constants/creaturePowers";
+import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags } from "../../constants/creaturePowers";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { ZONE_ADJACENCY } from "../../constants/board";
 import { aiChooseCombatCards } from "../../ai/aiPlayer";
@@ -273,6 +273,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       unitsA, unitsD,
       colorA, colorD,
       winnerCreatureName, winnerNullified, winnerCardId,
+      jpFlagsA, jpFlagsD,
     } = result;
 
     // Coût carte 1 (lose2units) : appliqué APRÈS le résultat, ne compte pas comme kills adverses
@@ -350,13 +351,13 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] = base + 1;
     }
 
-    // Victoire Défensive : +1 PV si le défenseur gagne
+    // Victoire Défensive : +1 PV si le défenseur gagne (tuile pouvoir ou jeton JP)
     if (winnerId === combat.defender) {
       const defState = gameState?.players?.[winnerId] || {};
       const hasVictoireDefensive = (defState.ownedTileIds || []).some(
         id => POWER_TILES.find(t => t.id === id)?.name === "Victoire Défensive"
-      );
-      if (hasVictoireDefensive) {
+      ) || jpFlagsD?.defenseVictoryVp;
+      if (hasVictoireDefensive && defenderUnitsAfter > 0) {
         const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] ?? (defState.vpPermanent ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] = base + 1;
       }
@@ -438,6 +439,19 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     }
     if (unitsIfWin > 0) {
       updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] = unitsIfWin;
+    }
+
+    // JP_replacement_unite : le gagnant récupère 1 unité perdue s'il en a encore
+    {
+      const winnerIsAttacker = winnerId === combat.attacker;
+      const winnerLosses = winnerIsAttacker ? attackerDamage : defenderDamage;
+      const winnerUnitsLeft = winnerIsAttacker ? attackerUnitsAfter : defenderUnitsAfter;
+      const winnerJpFlags = winnerIsAttacker ? jpFlagsA : jpFlagsD;
+      if (winnerJpFlags?.replacementUnit && winnerLosses > 0 && winnerUnitsLeft > 0) {
+        const ws = gameState?.players?.[winnerId] || {};
+        const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] ?? (ws.victoryRecruitPending ?? 0);
+        updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] = base + 1;
+      }
     }
 
     // Bonus VP Dévoreuse des Mondes

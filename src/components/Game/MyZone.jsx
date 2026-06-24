@@ -15,6 +15,7 @@ import { ref, update, get } from "firebase/database";
 import { dealCards } from "../../utils/deck";
 import { computeTempVP } from "../../utils/vp";
 import { CREATURE_POWERS } from "../../constants/creaturePowers";
+import { PU_CARDS } from "../../constants/puCards";
 
 const PLAYER_BADGE = {
   Rouge: { bg: '#7f1d1d', text: '#fca5a5', border: '#dc2626' },
@@ -43,6 +44,7 @@ export default function MyZone({
   onEndTurn, onOpenTaSeti, onOpenCombat, onOpenDawn, onOpenNight, session,
   onMoveCancel, onGoldenTokenMoveActivate, onGoldenTokenRecruitActivate,
   onGoldenTokenPrayerActivate, onGoldenTokenBuyActivate, onRenforcementActivate,
+  onNightTaSetiAdvance, onUseJuToken,
   onPlayDayIdCard, onCancelTurn, canCancelTurn, onInfoEvent, onViewMyTiles,
 }) {
   const [showCombat, setShowCombat] = useState(false);
@@ -137,11 +139,17 @@ export default function MyZone({
   // Augmentation pyramide
   const pyramidUpgradePending = state.pyramidUpgradePending ?? 0;
   const canUpgradeFree = isMyTurn && pyramidUpgradePending > 0 && !actionMode;
+  // Avancée de nuit Ta-Seti
+  const taSetiNightAdvancePending = state.taSetiNightAdvancePending ?? 0;
+  const canNightTaSetiAdvance = isMyTurn && taSetiNightAdvancePending > 0 && !actionMode;
   // Draft ID (Choix supplémentaire)
   const idDraftPending = state.idDraftPending || null;
   const hasIdDraft = Array.isArray(idDraftPending) && idDraftPending.length > 0;
   // Draft ID BI_2 (refresh)
   const idRefreshPending = state.idRefreshPending ?? false;
+  // Jetons JU (PU cards) en main
+  const juTokenHand = state.juTokenHand || [];
+  const canUseJuToken = isMyTurn && !actionMode;
   const currentTurnPlayer = session.allPlayers?.find(p => p.id === currentTurnPlayerId);
 
   function handleActionClick(action) {
@@ -230,9 +238,115 @@ export default function MyZone({
   return (
     <div className="text-white select-none" style={{ background: '#08060400', borderTop: '1px solid #4a3410' }}>
 
-      {/* ── Bande 1 : infos joueur + ressources + contrôles ── */}
+      {/* ── Bande 1 Mobile : version compacte ── */}
       <div
-        className="flex items-center gap-3 px-4 py-2 flex-wrap"
+        className="md:hidden"
+        style={{ background: isMyTurn ? 'rgba(30,18,4,0.97)' : 'rgba(12,10,6,0.99)', borderBottom: '1px solid #3a2a0c' }}
+      >
+        {/* Ligne 1 : badge + stats + fin de tour */}
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          {(() => {
+            const b = PLAYER_BADGE[player.color] || PLAYER_BADGE.Noir;
+            return (
+              <span className="shrink-0 font-bold" style={{ background: b.bg, color: b.text, border: `1px solid ${b.border}`, padding: '2px 7px', borderRadius: 3, fontSize: 10, letterSpacing: '0.04em' }}>
+                {player.name}
+              </span>
+            );
+          })()}
+          <span className="flex items-center gap-0.5 text-xs shrink-0">
+            <span style={{ color: '#C9973A' }}>🪙</span>
+            <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{state.ank ?? 7}</span>
+          </span>
+          <span className="flex items-center gap-0.5 text-xs shrink-0" title={`${vpPermanent}p+${vpTemp}t`}>
+            <span style={{ color: '#fbbf24' }}>☀</span>
+            <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{vpTotal}</span>
+          </span>
+          <div className="flex gap-0.5 shrink-0">
+            {Array.from({ length: Math.max(5, tokens) }).map((_, i) => (
+              <div key={i} className="w-2.5 h-2.5 rounded-full border" style={{ background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-1.5 shrink-0">
+            {canCancelTurn && (
+              <button
+                onClick={() => {
+                  if (confirmCancel) { onCancelTurn?.(); setConfirmCancel(false); }
+                  else { setConfirmCancel(true); setTimeout(() => setConfirmCancel(false), 3000); }
+                }}
+                style={{ padding: '4px 8px', borderRadius: 3, fontWeight: 700, fontSize: 10, border: confirmCancel ? '1px solid #dc2626' : '1px solid #4a3410', background: confirmCancel ? '#7f1d1d' : '#1a1508', color: confirmCancel ? '#fca5a5' : '#a88a40' }}
+              >
+                {confirmCancel ? 'OK?' : '↩'}
+              </button>
+            )}
+            <button
+              onClick={onEndTurn}
+              disabled={!canEndTurn}
+              style={{ padding: '5px 12px', borderRadius: 3, fontWeight: 700, fontSize: 11, letterSpacing: '0.06em', border: canEndTurn ? '1px solid #3b82f6' : '1px solid #1e3a8a', background: canEndTurn ? '#1d4ed8' : '#172554', color: canEndTurn ? '#fff' : '#4b5563', boxShadow: canEndTurn ? '0 0 8px rgba(59,130,246,0.35)' : 'none', cursor: canEndTurn ? 'pointer' : 'not-allowed' }}
+            >
+              FIN →
+            </button>
+          </div>
+        </div>
+        {/* Ligne 2 : boutons spéciaux + rapides (défilement horizontal) */}
+        <div className="flex items-center gap-1.5 px-2 pb-1.5 overflow-x-auto" style={{ borderTop: '1px solid #2a1e08' }}>
+          {/* Jetons dorés */}
+          {hasGoldenTokenMove && (
+            <button onClick={onGoldenTokenMoveActivate} disabled={!canUseGoldenToken} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseGoldenToken ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>⭐ Dépl.PM</button>
+          )}
+          {hasGoldenTokenMoveRecruit && !goldenTokenUsed && (
+            <>
+              <button onClick={onGoldenTokenMoveActivate} disabled={!canUseGoldenTokenMR} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseGoldenTokenMR ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>⭐ Dépl.</button>
+              <button onClick={onGoldenTokenRecruitActivate} disabled={!canUseGoldenTokenMR} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseGoldenTokenMR ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>⭐ Recr.</button>
+            </>
+          )}
+          {hasGoldenTokenMove3 && (
+            <button onClick={onGoldenTokenMoveActivate} disabled={!canUseGoldenTokenMove3} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseGoldenTokenMove3 ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>⭐ Dépl.</button>
+          )}
+          {hasGoldenTokenBuy && (
+            <button onClick={onGoldenTokenBuyActivate} disabled={!canUseGoldenTokenBuy} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseGoldenTokenBuy ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>⭐ Achat</button>
+          )}
+          {hasGoldenTokenPrayer && (
+            <button onClick={onGoldenTokenPrayerActivate} disabled={!canUseGoldenTokenPrayer} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseGoldenTokenPrayer ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>⭐ Prière</button>
+          )}
+          {/* Pending actions */}
+          {reinforcementPending > 0 && (
+            <button onClick={onRenforcementActivate} disabled={!canRenforce} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canRenforce ? 'bg-cyan-700/80 text-cyan-100 border-cyan-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🔰 Renf.({reinforcementPending})</button>
+          )}
+          {pyramidUpgradePending > 0 && (
+            <button onClick={() => canUpgradeFree && setLocalModal('pyramid_free')} disabled={!canUpgradeFree} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUpgradeFree ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🏛️ Pyr.({pyramidUpgradePending})</button>
+          )}
+          {taSetiNightAdvancePending > 0 && (
+            <button onClick={() => canNightTaSetiAdvance && onNightTaSetiAdvance?.()} disabled={!canNightTaSetiAdvance} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canNightTaSetiAdvance ? 'bg-red-900/80 text-red-200 border-red-700' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🌙 TS({taSetiNightAdvancePending})</button>
+          )}
+          {juTokenHand.map((token, idx) => {
+            const puCard = PU_CARDS.find(c => c.id === token.cardId);
+            return (
+              <button key={`m-${token.nodeId}-${idx}`} onClick={() => canUseJuToken && onUseJuToken?.(token.nodeId, token.cardId)} disabled={!canUseJuToken} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseJuToken ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🪬 {puCard?.label ?? token.cardId}</button>
+            );
+          })}
+          {hasIdDraft && (
+            <button onClick={() => setLocalModal('id_draft')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-purple-700/80 text-purple-100 border-purple-500">🃏 Choisir({idDraftPending.length})</button>
+          )}
+          {idRefreshPending && (
+            <button onClick={() => setLocalModal('id_refresh')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-teal-700/80 text-teal-100 border-teal-500">🔄 Draft ID</button>
+          )}
+          {/* Boutons rapides */}
+          <div className="w-px h-4 bg-gray-700 shrink-0" />
+          {onViewMyTiles && <button onClick={onViewMyTiles} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 text-amber-400 border-gray-700">📜 Tuiles</button>}
+          <button onClick={() => setShowIdModal(true)} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 text-amber-400 border-gray-700">
+            🃏 ID{myIdCards.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[9px] font-bold px-1 rounded-full">{myIdCards.length}</span>}
+          </button>
+          {creatureIds.length > 0 && (
+            <button onClick={() => setLocalModal('creatures')} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 border-gray-700 ${canEquipCreature ? 'text-amber-400' : 'text-gray-400'}`}>
+              🐉{equippableReserveIds.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[9px] font-bold px-1 rounded-full">{equippableReserveIds.length}</span>}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Bande 1 Desktop : infos joueur + ressources + contrôles ── */}
+      <div
+        className="hidden md:flex items-center gap-3 px-4 py-2 flex-wrap"
         style={{
           background: isMyTurn ? 'rgba(30,18,4,0.95)' : 'rgba(12,10,6,0.97)',
           borderBottom: '1px solid #3a2a0c',
@@ -414,6 +528,38 @@ export default function MyZone({
             🏛️ Améliorer pyramide ({pyramidUpgradePending})
           </button>
         )}
+        {/* Avancée de nuit Ta-Seti R_2_4 */}
+        {taSetiNightAdvancePending > 0 && (
+          <button
+            onClick={() => canNightTaSetiAdvance && onNightTaSetiAdvance?.()}
+            disabled={!canNightTaSetiAdvance}
+            className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
+              canNightTaSetiAdvance
+                ? "bg-red-900/80 hover:bg-red-800 text-red-200 border-red-700"
+                : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
+            }`}
+          >
+            🌙 Avancée Ta-Seti ({taSetiNightAdvancePending})
+          </button>
+        )}
+        {/* Jetons JU (PU) : utilisables à tout moment pendant son tour */}
+        {juTokenHand.map((token, idx) => {
+          const puCard = PU_CARDS.find(c => c.id === token.cardId);
+          return (
+            <button
+              key={`${token.nodeId}-${idx}`}
+              onClick={() => canUseJuToken && onUseJuToken?.(token.nodeId, token.cardId)}
+              disabled={!canUseJuToken}
+              className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
+                canUseJuToken
+                  ? "bg-yellow-700/80 hover:bg-yellow-600 text-yellow-100 border-yellow-500"
+                  : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
+              }`}
+            >
+              🪬 {puCard?.label ?? token.cardId}
+            </button>
+          );
+        })}
         {/* Choix supplémentaire ID W_3_2 */}
         {hasIdDraft && (
           <button
@@ -568,7 +714,7 @@ export default function MyZone({
       )}
 
       {/* ── Bande 2 : actions + tuiles ── */}
-      <div className="flex items-center gap-1 px-4 py-1.5 flex-wrap" style={{ background: '#0a0806', borderTop: '1px solid #2a1e08' }}>
+      <div className="flex items-center gap-1 px-2 md:px-4 py-1 md:py-1.5 overflow-x-auto md:flex-wrap" style={{ background: '#0a0806', borderTop: '1px solid #2a1e08' }}>
 
         {/* Groupes d'actions */}
         {[
@@ -618,11 +764,11 @@ export default function MyZone({
           </div>
         ))}
 
-        {/* Tuiles possédées (hors créatures) */}
+        {/* Tuiles possédées (hors créatures) — masquées sur mobile */}
         {ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.type !== "creature") && (
           <>
-            <div className="w-px h-5 mx-1" style={{ background: '#3a2a0c' }} />
-            <div className="flex gap-1 flex-wrap">
+            <div className="hidden md:block w-px h-5 mx-1" style={{ background: '#3a2a0c' }} />
+            <div className="hidden md:flex gap-1 flex-wrap">
               {ownedTileIds.map(id => {
                 const tile = POWER_TILES.find(t => t.id === id);
                 if (!tile || tile.type === "creature") return null;
@@ -646,11 +792,11 @@ export default function MyZone({
           </>
         )}
 
-        {/* Créatures */}
+        {/* Créatures — masquées sur mobile */}
         {creatureIds.length > 0 && (
           <>
-            <div className="w-px h-5 mx-1" style={{ background: '#3a2a0c' }} />
-            <div className="flex gap-1 flex-wrap">
+            <div className="hidden md:block w-px h-5 mx-1" style={{ background: '#3a2a0c' }} />
+            <div className="hidden md:flex gap-1 flex-wrap">
               {creatureIds.map(id => {
                 const tile = POWER_TILES.find(t => t.id === id);
                 if (!tile) return null;

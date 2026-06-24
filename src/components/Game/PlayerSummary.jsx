@@ -16,7 +16,7 @@ const BUY_CIRCLES = {
   buy_black: { bg: '#111111', border: '#C9973A', title: 'Achat Noir'  },
 };
 
-export default function PlayerSummary({ player, gameState, currentTurnPlayerId, allPlayers }) {
+export default function PlayerSummary({ player, gameState, currentTurnPlayerId, allPlayers, compact = false }) {
   const state       = gameState?.players?.[player.id] || {};
   const usedActions = state.usedActions || [];
   const tokens      = state.tokens ?? 5;
@@ -36,6 +36,35 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
     { label: "NIV. 2", actions: ACTIONS.level2 },
     { label: "NIV. 3", actions: ACTIONS.level3 },
   ];
+
+  if (compact) {
+    return (
+      <div
+        style={{
+          width: 96,
+          background: 'rgba(13,10,6,0.85)',
+          border: isActive ? `1px solid ${hdr.border}` : '1px solid #4a3410',
+          borderRadius: 4,
+          boxShadow: isActive ? `0 0 8px ${hdr.border}55` : '0 2px 8px rgba(0,0,0,0.7)',
+        }}
+      >
+        <div className="px-2 py-1" style={{ background: hdr.bg, borderBottom: `1px solid ${hdr.border}33`, borderRadius: '3px 3px 0 0' }}>
+          <span style={{ color: hdr.text, fontWeight: 700, fontSize: 10, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {player.name}{isActive ? ' ⚡' : ''}
+          </span>
+        </div>
+        <div className="px-2 py-1 flex gap-2" style={{ color: '#e5d5b0', fontSize: 10 }}>
+          <span>🪙{ank}</span>
+          <span>☀{vpTotal}</span>
+        </div>
+        <div className="flex items-center gap-0.5 px-2 pb-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', border: '1px solid', background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

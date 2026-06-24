@@ -199,6 +199,20 @@ export default function NightModal({ onClose, session, gameState }) {
       }
     });
 
+    // Avancée de nuit Ta-Seti
+    allPlayers.forEach(p => {
+      const ps = state.players?.[p.id] || {};
+      const ownedIds = ps.ownedTileIds || [];
+      const nightAdvCount = ownedIds.reduce((sum, id) => {
+        const tile = POWER_TILES.find(t => t.id === id);
+        return sum + (tile?.taSetiAdvancePerNight ?? 0);
+      }, 0);
+      if (nightAdvCount > 0) {
+        const base = updates[`rooms/${roomCode}/gameState/players/${p.id}/taSetiNightAdvancePending`] ?? (ps.taSetiNightAdvancePending ?? 0);
+        updates[`rooms/${roomCode}/gameState/players/${p.id}/taSetiNightAdvancePending`] = base + nightAdvCount;
+      }
+    });
+
     // Effacer les bonus Ta-Seti combat non utilisés + reset flag PV quotidien E_4_2
     updates[`rooms/${roomCode}/gameState/taSetiE4_2DailyVp`] = null;
     allPlayers.forEach(p => {
