@@ -2585,6 +2585,23 @@ export default function GameScreen({ session }) {
       </div>
     </div>
 
+    {/* Mobile : barre adversaires horizontale au-dessus du board */}
+    {opponents.length > 0 && (
+      <div className="md:hidden flex gap-1.5 px-2 py-1.5 shrink-0 overflow-x-auto" style={{ background: 'rgba(8,6,4,0.95)', borderBottom: '1px solid #2a1e08' }}>
+        {opponents.map(p => (
+          <div key={p.id} onClick={() => setViewTilesPlayer(p)} className="cursor-pointer flex-1 min-w-[100px]">
+            <PlayerSummary
+              player={p}
+              gameState={gameState}
+              currentTurnPlayerId={gameState?.currentTurnPlayerId}
+              allPlayers={session.allPlayers}
+              compact
+            />
+          </div>
+        ))}
+      </div>
+    )}
+
     {/* Zone principale */}
     <div className="flex-1 relative overflow-hidden">
 
@@ -2615,8 +2632,8 @@ export default function GameScreen({ session }) {
 	    />
 	  </div>
 
-      {/* Cadres adversaires à gauche — superposés */}
-      <div className="absolute top-0 left-0 flex flex-col gap-1 md:gap-3 z-10 p-2 md:p-4">
+      {/* Cadres adversaires à gauche — desktop uniquement */}
+      <div className="hidden md:flex absolute top-0 left-0 flex-col gap-3 z-10 p-4">
         {opponents.map(p => (
           <div key={p.id} onClick={() => setViewTilesPlayer(p)} className="cursor-pointer">
             <PlayerSummary
@@ -2625,7 +2642,6 @@ export default function GameScreen({ session }) {
               onActionToggle={handleActionToggle}
               currentTurnPlayerId={gameState?.currentTurnPlayerId}
               allPlayers={session.allPlayers}
-              compact={isMobile}
             />
           </div>
         ))}

@@ -41,26 +41,34 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
     return (
       <div
         style={{
-          width: 96,
-          background: 'rgba(13,10,6,0.85)',
+          background: 'rgba(13,10,6,0.88)',
           border: isActive ? `1px solid ${hdr.border}` : '1px solid #4a3410',
-          borderRadius: 4,
-          boxShadow: isActive ? `0 0 8px ${hdr.border}55` : '0 2px 8px rgba(0,0,0,0.7)',
+          borderRadius: 5,
+          boxShadow: isActive ? `0 0 10px ${hdr.border}55` : '0 2px 8px rgba(0,0,0,0.7)',
         }}
       >
-        <div className="px-2 py-1" style={{ background: hdr.bg, borderBottom: `1px solid ${hdr.border}33`, borderRadius: '3px 3px 0 0' }}>
-          <span style={{ color: hdr.text, fontWeight: 700, fontSize: 10, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {player.name}{isActive ? ' ⚡' : ''}
-          </span>
+        {/* Header coloré */}
+        <div style={{ background: hdr.bg, borderBottom: `1px solid ${hdr.border}33`, padding: '4px 8px', borderRadius: '4px 4px 0 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: hdr.text, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
+              {player.name}
+            </span>
+            {isActive && <span style={{ color: '#fbbf24', fontSize: 9, fontWeight: 700 }}>⚡</span>}
+          </div>
         </div>
-        <div className="px-2 py-1 flex gap-2" style={{ color: '#e5d5b0', fontSize: 10 }}>
-          <span>🪙{ank}</span>
-          <span>☀{vpTotal}</span>
-        </div>
-        <div className="flex items-center gap-0.5 px-2 pb-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', border: '1px solid', background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
-          ))}
+        {/* Stats */}
+        <div style={{ padding: '4px 8px 3px' }}>
+          <div style={{ display: 'flex', gap: 8, color: '#e5d5b0', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+            <span>🪙 {ank}</span>
+            <span>☀ {vpTotal}</span>
+            {dawnTokens > 0 && <span>🏆 {dawnTokens}</span>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} style={{ width: 9, height: 9, borderRadius: '50%', border: '1px solid', background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
+            ))}
+            <span style={{ fontSize: 9, color: '#6B4C1E', marginLeft: 2 }}>{tokens}/5</span>
+          </div>
         </div>
       </div>
     );

@@ -246,7 +246,13 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         </div>
       )}
 
-      {containerSize.width > 0 && BOARD_ZONES.map(zone => {
+      {containerSize.width > 0 && (() => {
+        const sf = Math.min(1, Math.max(0.60, containerSize.width / 820));
+        const unitPx     = Math.round(28 * sf);  // 17–28
+        const emptyPx    = Math.round(32 * sf);  // 19–32
+        const creaturePx = Math.round(28 * sf);  // 17–28
+        const fontPx     = Math.max(8, Math.round(12 * sf));
+        return BOARD_ZONES.map(zone => {
         const zoneUnits = boardUnits[zone.id] || {};
         const entries = Object.entries(zoneUnits).filter(([, count]) => count > 0);
         const isRecruitZone = recruitZones.some(rz => rz.id === zone.id);
@@ -318,16 +324,18 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                   const displayCount = count + (hasPriest ? 1 : 0);
                   const creatureName  = getCreatureNameAt(zone.id, color);
                   const creatureName2 = getCreatureNameAt2(zone.id, color);
-                  const creatureStyle  = creatureName  ? getCreatureSpriteStyle(creatureName,  28) : null;
-                  const creatureStyle2 = creatureName2 ? getCreatureSpriteStyle(creatureName2, 28) : null;
+                  const creatureStyle  = creatureName  ? getCreatureSpriteStyle(creatureName,  creaturePx) : null;
+                  const creatureStyle2 = creatureName2 ? getCreatureSpriteStyle(creatureName2, creaturePx) : null;
                   return (
                     <div key={color} className="flex flex-col items-center gap-0.5">
                       <div className="flex items-center gap-0.5">
                         <div
-                          className={`w-7 h-7 rounded-full border-2 flex items-center justify-center text-xs font-bold shadow-lg ${
+                          className={`rounded-full border-2 flex items-center justify-center font-bold shadow-lg ${
                             isMoveCurrentZone && color === playerColor ? "ring-2 ring-amber-300 ring-offset-1" : ""
                           }`}
                           style={{
+                            width: unitPx, height: unitPx,
+                            fontSize: fontPx,
                             backgroundColor: (COLOR_MAP[color] || "#666") + "cc",
                             borderColor: COLOR_MAP[color] || "#666",
                             color: color === "Blanc" ? "#111" : "#fff",
@@ -343,7 +351,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                             }}
                             title={creatureName}
                           >
-                            <div className="drop-shadow" style={creatureStyle} />
+                            <div className="drop-shadow" style={getCreatureSpriteStyle(creatureName, creaturePx)} />
                           </div>
                         )}
                         {creatureStyle2 && (
@@ -354,7 +362,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                             }}
                             title={creatureName2}
                           >
-                            <div className="drop-shadow" style={creatureStyle2} />
+                            <div className="drop-shadow" style={getCreatureSpriteStyle(creatureName2, creaturePx)} />
                           </div>
                         )}
                       </div>
@@ -371,59 +379,24 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                   );
                 })
               ) : isDestroyUnitZone ? (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-red-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#f87171" }}
-                >
-                  ✕
-                </div>
+                <div className="rounded-full border-2 border-red-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#f87171" }}>✕</div>
               ) : isTasetiRecruitZone ? (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-amber-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fbbf24" }}
-                >
-                  +
-                </div>
+                <div className="rounded-full border-2 border-amber-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#fbbf24" }}>+</div>
               ) : isVictoryRecruitZone ? (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-lime-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#a3e635" }}
-                >
-                  ★
-                </div>
+                <div className="rounded-full border-2 border-lime-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#a3e635" }}>★</div>
               ) : isRetreatZone ? (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-orange-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#fb923c" }}
-                >
-                  ↩
-                </div>
+                <div className="rounded-full border-2 border-orange-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#fb923c" }}>↩</div>
               ) : isRecruitZone ? (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-green-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#86efac" }}
-                >
-                  +
-                </div>
+                <div className="rounded-full border-2 border-green-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#86efac" }}>+</div>
               ) : isTeleportTarget ? (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-purple-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#c084fc" }}
-                >
-                  ✦
-                </div>
+                <div className="rounded-full border-2 border-purple-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#c084fc" }}>✦</div>
               ) : (
-                <div
-                  className="w-8 h-8 rounded-full border-2 border-blue-400 flex items-center justify-center text-xs font-bold shadow-lg"
-                  style={{ backgroundColor: "rgba(0,0,0,0.6)", color: "#93c5fd" }}
-                >
-                  ›
-                </div>
+                <div className="rounded-full border-2 border-blue-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#93c5fd" }}>›</div>
               )}
             </div>
           </div>
         );
-      })}
+      }); })()}
 
       {selectedZone && (
         <UnitModal
@@ -440,22 +413,27 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
       )}
 
       {/* Pyramides */}
-      {containerSize.width > 0 && PYRAMID_SLOTS.map(slot => {
-        const { left, top } = getZonePosition(slot);
-        const slotWithPos = { ...slot, displayLeft: left, displayTop: top };
-        const pyramid = getPyramidData(slot);
-        const ownerColor = getCityOwnerColor(slot.cityId);
-        return (
-          <PyramidMarker
-            key={slot.id}
-            slot={slotWithPos}
-            pyramid={pyramid}
-            canInteract={false}
-            ownerColor={ownerColor}
-            onClick={undefined}
-          />
-        );
-      })}
+      {containerSize.width > 0 && (() => {
+        const sf = Math.min(1, Math.max(0.60, containerSize.width / 820));
+        const pyramidPx = Math.round(32 * sf);
+        return PYRAMID_SLOTS.map(slot => {
+          const { left, top } = getZonePosition(slot);
+          const slotWithPos = { ...slot, displayLeft: left, displayTop: top };
+          const pyramid = getPyramidData(slot);
+          const ownerColor = getCityOwnerColor(slot.cityId);
+          return (
+            <PyramidMarker
+              key={slot.id}
+              slot={slotWithPos}
+              pyramid={pyramid}
+              canInteract={false}
+              ownerColor={ownerColor}
+              onClick={undefined}
+              size={pyramidPx}
+            />
+          );
+        });
+      })()}
     </div>
   );
 }

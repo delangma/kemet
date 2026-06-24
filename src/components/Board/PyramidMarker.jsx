@@ -1,6 +1,6 @@
 import { COLOR_STYLE } from "../../constants/pyramids";
 
-export default function PyramidMarker({ slot, pyramid, canInteract, ownerColor, onClick }) {
+export default function PyramidMarker({ slot, pyramid, canInteract, ownerColor, onClick, size = 32 }) {
   const color = pyramid?.color || null;
   const level = pyramid?.level ?? 0;
   const isCaptured = pyramid?.controllerId && pyramid?.ownerId && pyramid.controllerId !== pyramid.ownerId;
@@ -30,8 +30,11 @@ export default function PyramidMarker({ slot, pyramid, canInteract, ownerColor, 
         style={{ filter: ownerGlow }}
       >
         <div
-          className="w-8 h-8 flex items-center justify-center font-bold text-xs border-2"
+          className="flex items-center justify-center font-bold border-2"
           style={{
+            width: size,
+            height: size,
+            fontSize: Math.max(8, Math.round(12 * (size / 32))),
             backgroundColor: style.bg,
             color: style.text,
             borderColor: isCaptured ? "#f59e0b" : style.border,
@@ -44,7 +47,7 @@ export default function PyramidMarker({ slot, pyramid, canInteract, ownerColor, 
 
       {/* Point jaune si capturée */}
       {isCaptured && (
-        <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-yellow-400 border border-gray-900" />
+        <div className="absolute -top-0.5 -right-0.5 rounded-full bg-yellow-400 border border-gray-900" style={{ width: Math.max(6, Math.round(10 * (size / 32))), height: Math.max(6, Math.round(10 * (size / 32))) }} />
       )}
     </div>
   );
