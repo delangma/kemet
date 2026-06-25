@@ -10,9 +10,10 @@ import UnitModal from "./UnitModal";
 import { PYRAMID_SLOTS } from "../../constants/pyramids";
 import PyramidMarker from "./PyramidMarker";
 
-export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, destroyUnitZones = [], onDestroyUnitClick }) {
+export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, destroyUnitZones = [], onDestroyUnitClick }) {
   const { roomCode, playerId } = session;
   const [selectedZone, setSelectedZone] = useState(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const containerRef = useRef(null);
 
@@ -71,6 +72,10 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
   useEffect(() => {
     if (actionMode !== "recruit") setSelectedZone(null);
   }, [actionMode]);
+
+  useEffect(() => {
+    setConfirmEnd(false);
+  }, [moveState?.currentZoneId]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -248,17 +253,34 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                 Annuler
               </button>
             </>
+          ) : confirmEnd ? (
+            <>
+              <span className="text-white text-sm font-semibold">Terminer le déplacement ?</span>
+              <button onClick={() => { setConfirmEnd(false); onMoveDone(); }} className="px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded">
+                Oui
+              </button>
+              <button onClick={() => setConfirmEnd(false)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+                Non
+              </button>
+            </>
           ) : (
             <>
-              <span className="text-amber-300 text-sm font-semibold">
-                Déplacement : {moveState.pointsRemaining} point(s) restant(s)
+              <span className={`text-sm font-semibold ${moveState.pointsRemaining <= 0 ? 'text-orange-300' : 'text-amber-300'}`}>
+                {moveState.pointsRemaining <= 0
+                  ? '⚠ Plus de points de déplacement'
+                  : `Déplacement : ${moveState.pointsRemaining} point(s) restant(s)`}
               </span>
+              {canUndo && (
+                <button onClick={onMoveUndo} className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded">
+                  ↩ Annuler
+                </button>
+              )}
               {canTeleport && (
                 <button onClick={onTeleportStart} className="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded">
                   Téléportation ({teleportCost ?? 2}🪙)
                 </button>
               )}
-              <button onClick={onMoveDone} className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded">
+              <button onClick={() => setConfirmEnd(true)} className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded">
                 Terminer
               </button>
             </>

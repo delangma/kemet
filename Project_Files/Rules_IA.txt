@@ -12,118 +12,197 @@ Sélection finale : tirage aléatoire proportionnel aux poids.
 
 ---
 
-## 1. Phase de Jeu — aiDecideAction
+## PHASE SETUP
 
-Les candidats sont générés pour chaque action légale.
-Si aucune règle ne s'applique, tous les choix ont le même poids (1).
+### Choisir couleur de pyramide
+| Règle | Décision | Poids |
+|-------|----------|-------|
 
-### ACTION : Attaque
-Génère un candidat par paire (zone source → zone cible avec ennemis).
-Seules les attaques où mes unités >= unités ennemies sont éligibles.
+### Choisir niveau initial de pyramide
+| Règle | Décision | Poids |
+|-------|----------|-------|
 
-| Règle                                             | Décision  | Poids |
-|---------------------------------------------------|-----------|-------|
-| Attaque possible (ratio >= 1:1)                   | Attaquer  |  +20  |
-| Ratio >= 2:1 (mes unités / ennemies)              | Attaquer  |  +70  |
-| Ratio >= 1.5:1                                    | Attaquer  |  +30  |
-| Cible est un temple (T1, T2, T3, TB)              | Attaquer  |  +50  |
-| Cible est une cité ennemie (JxCy adverse)         | Attaquer  |  +30  |
-| Ennemi a seulement 1 unité                        | Attaquer  |  +40  |
-| J'ai >= 4 unités dans la zone attaquante          | Attaquer  |  +20  |
-
-### ACTION : Achat de tuile
-Génère un candidat par tuile achetable (couleur contrôlée, niveau >= pyramide, ank suffisant).
-Seulement si ank >= 3.
-
-| Règle                                             | Décision  | Poids |
-|---------------------------------------------------|-----------|-------|
-| Ank >= 7                                          | Acheter   |  +20  |
-| Je possède < 2 tuiles                             | Acheter   |  +30  |
-| Type créature                                     | Acheter   |  +40  |
-| Type combat                                       | Acheter   |  +20  |
-| Niveau >= 3                                       | Acheter   |  +30  |
-
-### ACTION : Recrutement
-Un seul candidat si réserve > 0, ank >= 1 et place disponible en cité.
-
-| Règle                                             | Décision  | Poids |
-|---------------------------------------------------|-----------|-------|
-| Réserve >= 3 unités                               | Recruter  |  +30  |
-| Total unités sur plateau < 5                      | Recruter  |  +40  |
-| Ank >= 3                                          | Recruter  |  +20  |
-
-### ACTION : Déplacement
-Génère un candidat par (zone source → zone cible sans ennemi).
-Seuls les candidats avec au moins une règle valide (poids > 1) sont inclus.
-
-| Règle                                             | Décision      | Poids |
-|---------------------------------------------------|---------------|-------|
-| Zone cible est un temple vide                     | Se déplacer   |  +60  |
-| Un prêtre peut avancer sur Ta-Seti                | Se déplacer   |  +30  |
-| Zone cible déjà occupée par mes unités            | Se déplacer   |  +10  |
-| Zone cible adjacente à un temple vide             | Se déplacer   |  +20  |
-
-### ACTION : Amélioration de pyramide
-Génère un candidat par pyramide contrôlée améliorable (niveau < 4, ank >= coût).
-Coût d'un niveau : égal au niveau cible (niveau 1 = 1 ank, niveau 2 = 2 ank, etc.).
-
-| Règle                                             | Décision           | Poids |
-|---------------------------------------------------|--------------------|-------|
-| Niveau cible == 2                                 | Améliorer pyramide |  +40  |
-| Niveau cible == 3                                 | Améliorer pyramide |  +30  |
-| Niveau cible == 4                                 | Améliorer pyramide |  +20  |
-| Aucune tuile achetée de cette couleur             | Améliorer pyramide |  +30  |
-| Ank >= 8                                          | Améliorer pyramide |  +20  |
-
-### ACTION : Prière
-Toujours disponible en dernier recours. Type prayer2 si ank <= 7, sinon prayer3.
-
-| Règle                                             | Décision  | Poids |
-|---------------------------------------------------|-----------|-------|
-| Ank < 2                                          | Prier     |  +70  |
-| Ank <= 6                                          | Prier     |  +40  |
-| Ank <= 8                                          | Prier     |  +20  |
+### Placer les unités initiales
+| Règle | Décision | Poids |
+|-------|----------|-------|
 
 ---
 
-## 2. Cartes Combat — aiChooseCombatCards
+## PHASE DRAFT
 
-Utilisé les combats.
-Deux sélections indépendantes : carte jouée, puis carte défaussée.
-
-### Carte de combat (jouée)
-
-| Règle                                             | Décision           | Poids |
-|---------------------------------------------------|--------------------|-------|
-| J'ai moins de 4 unités sur ma troupe              | Jouer une carte avec des boucliers  |  +30  |
-| J'ai beaucoup plus de force de base que mon adversaire | Jouer une carte avec des boucliers  |  +20  |
-| J'ai beaucoup plus de force de base que mon adversaire | Jouer une carte avec peu de force   |  +15  |
-| Mon adversaire a des gouttes de sang                   | Jouer une carte avec des boucliers   |  +15  |
-| J'ai une force équivalente à mon adversaire            | Joueur la carte la plus forte |  +15  |
-
-
-### Carte à défausser
-
-| Règle                                             | Décision              | Poids |
-|---------------------------------------------------|-----------------------|-------|
-| 2 force , 2 bouclier                              | Défausser cette carte |  +20  |
+### Choisir une tuile pouvoir
+| Règle | Décision | Poids |
+|-------|----------|-------|
 
 ---
 
-## 3. Déplacement — Nombre d'unités à déplacer
-Génère un candidat par nombre d'unités possible à déplacer.
-Par défaut déplace toutes les unités.
+## ACTIONS (Tour)
 
-| Règle                                                              | Décision           | Poids |
-|--------------------------------------------------------------------|--------------------|-------|
-| Dernier à jouer de la journée et possibilité de prendre 2 temples  | Laisser une unité  |  +60  |
+### ACTION : Prière — Niveau 2 ou 3
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Achat — Choisir couleur
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Achat — Choisir tuile spécifique
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Déplacement — Niveau 1 ou 2
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Déplacement — Choisir zone SOURCE
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Déplacement — Choisir zone CIBLE
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Déplacement — Nombre d'unités
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Téléportation — Choisir destination
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Déplacement Ta-Seti — Choisir quel prêtre
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Déplacement Ta-Seti — Choisir destination
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Recrutement — Combien et où
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Évolution de pyramide — Quelle pyramide / Quel niveau
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### ACTION : Attaque — Choisir zone source + zone cible
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+---
+
+## EFFETS DIFFÉRÉS
+
+### Amélioration de pyramide gratuite — Quelle pyramide
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Renforcement — Choisir zone de placement
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Recrutement de victoire — Choisir zone de placement
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Recrutement Ta-Seti — Choisir zone de placement
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Draft ID — Choisir cartes à défausser
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+---
+
+## JOUR (Hors action)
+
+### Rapatrier un prêtre — Lequel
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Jouer carte ID — Laquelle
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Jouer carte ID Téléportation — Destination
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Utiliser jeton JU — Lequel
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Jeton doré — Quelle action
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Jeton gris — Quelle action
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+---
+
+## TOUR ADVERSE
+
+### Annuler une carte ID adverse
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Fuite secrète — Fuir ou non
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+---
+
+## COMBAT
+
+### Choisir carte combat
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Cartes ID combat — Lesquelles jouer
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Zone de retraite — Après défaite
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Affecter prêtre JP à une troupe
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+---
+
+## TA-SETI
+
+### Jetons sur nœud — Prendre ou laisser
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+---
+
+## AUBE
+
+### Choisir carte combat reçue
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Choisir nombre de jetons divins
+| Règle | Décision | Poids |
+|-------|----------|-------|
+
+### Choisir position dans l'ordre de jeu
+| Règle | Décision | Poids |
+|-------|----------|-------|
 
 ---
 
 ## Notes d'implémentation
 
-- La fonction `weightedSelect(candidates)` tire aléatoirement parmi les candidats
-  proportionnellement à leurs poids.
+- La fonction `weightedSelect(candidates)` tire aléatoirement parmi les candidats proportionnellement à leurs poids.
 - Poids de base : 1 par candidat (avant application des règles).
 - Les poids de règles s'additionnent si plusieurs règles s'appliquent au même candidat.
 - Seuls les déplacements avec poids > 1 sont inclus (filtre les mouvements sans intérêt).

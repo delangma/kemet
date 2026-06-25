@@ -1,0 +1,470 @@
+# Règles de l'IA V2 — Kemet (Liste exhaustive des règles candidates)
+
+## Format
+Chaque règle possède 3 colonnes :
+  - **Règle** : condition d'application
+  - **Décision** : action ou choix favorisé si la règle est valide
+  - **Poids** : valeur ajoutée au poids de base (1) du candidat correspondant
+
+Ce fichier est une liste exhaustive de TOUTES les règles envisageables pour chaque décision.
+Il sert de référence pour remplir Rules_IA.txt avec les règles retenues.
+Les poids indiqués sont des suggestions à calibrer.
+
+---
+
+## PHASE SETUP
+
+### Choisir couleur de pyramide
+| Règle                                                              | Décision       | Poids |
+|--------------------------------------------------------------------|----------------|-------|
+| Couleur non encore prise par un adversaire                         | Choisir couleur |  +30  |
+| Couleur Rouge : je veux jouer agressif (créatures)                 | Rouge          |  +40  |
+| Couleur Blanc : je veux grossir mon armée (unités bonus)           | Blanc          |  +30  |
+| Couleur Bleue : je veux des bonus de déplacement                   | Bleu           |  +25  |
+| Couleur Noire : je veux du contrôle et des effets spéciaux         | Noir           |  +25  |
+| Adversaire a déjà cette couleur (concurrence sur les tuiles)       | Autre couleur  |  +20  |
+| Couleur avec les meilleures tuiles de combat disponibles           | Choisir couleur |  +35  |
+| Couleur dont je n'ai aucune pyramide (diversifier)                 | Choisir couleur |  +20  |
+
+### Choisir niveau initial de pyramide
+| Règle                                                              | Décision       | Poids |
+|--------------------------------------------------------------------|----------------|-------|
+| Ank suffisant pour niveau 2 (>= 2 ank restants après)             | Niveau 2       |  +40  |
+| Niveau 2 = accès aux tuiles niveau 2 dès le début                 | Niveau 2       |  +30  |
+| Ank < 5 après coût : préférer niveau 1                             | Niveau 1       |  +30  |
+| Adversaire prévu agressif : investir en ank plutôt qu'en niveaux  | Niveau 1       |  +20  |
+
+### Placer les unités initiales
+| Règle                                                              | Décision            | Poids |
+|--------------------------------------------------------------------|---------------------|-------|
+| Concentrer toutes les unités dans 1 zone cité                      | Zone unique         |  +20  |
+| Temple adjacent à ma cité : mettre unités côté du temple           | Zone proche temple  |  +40  |
+| Spread sur 2 zones : flexibilité de déplacement                    | 2 zones réparties   |  +15  |
+| Cité avec 3 zones : placer 1 unité par zone (contrôle cité)        | Répartition égale   |  +10  |
+| Prendre un temple dès le tour 1 : concentrer vers le temple        | Zone vers temple    |  +35  |
+
+---
+
+## PHASE DRAFT
+
+### Choisir une tuile pouvoir
+| Règle                                                              | Décision      | Poids |
+|--------------------------------------------------------------------|---------------|-------|
+| Tuile de type créature disponible                                  | Prendre       |  +40  |
+| Tuile donne VP immédiat (Point Majeur)                             | Prendre       |  +50  |
+| Tuile complète ma couleur de pyramide la plus haute                | Prendre       |  +35  |
+| Tuile de niveau 3 disponible et j'ai la pyramide correspondante    | Prendre       |  +30  |
+| Tuile donne bonus de combat (force, bouclier)                      | Prendre       |  +35  |
+| Tuile donne bonus de déplacement ou téléportation                  | Prendre       |  +25  |
+| Adversaire sur le point de prendre cette tuile                     | Prendre       |  +20  |
+| Je n'ai aucune tuile de cette couleur                              | Prendre       |  +15  |
+| Tuile avec effet "recrutement gratuit" ou "augmentation pyramide"  | Prendre       |  +30  |
+| Tuile de type Ta-Seti si je suis avancé sur Ta-Seti                | Prendre       |  +25  |
+
+---
+
+## ACTIONS (Tour)
+
+### ACTION : Prière — Niveau 2 ou 3
+| Règle                                                              | Décision  | Poids |
+|--------------------------------------------------------------------|-----------|-------|
+| Ank <= 2 : urgence maximale                                        | Prier niv2 |  +70  |
+| Ank <= 5 : besoin d'ank pour les prochaines actions                | Prier niv2 |  +40  |
+| Ank >= 7 : peut se permettre d'aller à 3                           | Prier niv3 |  +30  |
+| Tuile "Prière +1 ank" possédée                                     | Prier niv3 |  +20  |
+| Tuile "+1 ank en journée" possédée                                 | Prier niv2 |  +15  |
+| Achat de tuile prévu ce tour (coût >= 3)                           | Prier niv3 |  +25  |
+| Évolution de pyramide prévue ce tour                               | Prier niv3 |  +20  |
+| Ank déjà au maximum (11) : prière inutile                          | Ne pas prier | +100 |
+
+### ACTION : Achat — Choisir couleur
+| Règle                                                              | Décision        | Poids |
+|--------------------------------------------------------------------|-----------------|-------|
+| Couleur dont j'ai la pyramide la plus haute                        | Choisir couleur  |  +40  |
+| Couleur avec tuiles créature disponibles non possédées             | Choisir couleur  |  +35  |
+| Couleur avec tuiles VP disponibles                                 | Choisir couleur  |  +30  |
+| Je n'ai aucune tuile de cette couleur                              | Choisir couleur  |  +25  |
+| Adversaire n'a pas la pyramide de cette couleur (exclusivité)      | Choisir couleur  |  +15  |
+| Couleur avec la tuile la moins chère que je peux m'offrir          | Choisir couleur  |  +20  |
+
+### ACTION : Achat — Choisir tuile spécifique
+| Règle                                                              | Décision  | Poids |
+|--------------------------------------------------------------------|-----------|-------|
+| Tuile de type créature                                             | Acheter   |  +40  |
+| Tuile donne VP immédiat                                            | Acheter   |  +50  |
+| Tuile donne bonus de force en combat                               | Acheter   |  +35  |
+| Tuile donne bonus de déplacement (points sup, téléportation)       | Acheter   |  +25  |
+| Tuile "Augmentation pyramide" et j'ai une pyramide améliorable     | Acheter   |  +30  |
+| Tuile donne recrutement gratuit et réserve > 0                     | Acheter   |  +25  |
+| Tuile de niveau == niveau de ma pyramide de cette couleur          | Acheter   |  +10  |
+| Je possède < 2 tuiles au total                                     | Acheter   |  +20  |
+| Tuile complète un combo avec tuile déjà possédée                   | Acheter   |  +30  |
+| Tuile donne bouclier ou protection                                 | Acheter   |  +20  |
+| Tuile de niveau 3                                                  | Acheter   |  +30  |
+| Coût <= ank - 2 (ne pas se vider)                                  | Acheter   |  +15  |
+
+### ACTION : Déplacement — Niveau 1 ou 2
+| Règle                                                              | Décision    | Poids |
+|--------------------------------------------------------------------|-------------|-------|
+| Temple cible à 1 zone de distance                                  | Niveau 1    |  +40  |
+| Temple cible à 2 zones de distance                                 | Niveau 2    |  +60  |
+| Cible (temple/troupe) à 2 zones                                    | Niveau 2    |  +50  |
+| Veux conserver un jeton (préférer niveau 1 si suffisant)           | Niveau 1    |  +20  |
+| Attaque prévue à 2 zones                                           | Niveau 2    |  +40  |
+| Regroupement : cible à 1 zone                                      | Niveau 1    |  +30  |
+
+### ACTION : Déplacement — Choisir zone SOURCE
+| Règle                                                              | Décision         | Poids |
+|--------------------------------------------------------------------|------------------|-------|
+| Zone avec le plus d'unités disponibles                             | Choisir zone     |  +20  |
+| Zone adjacent à un temple vide                                     | Choisir zone     |  +40  |
+| Zone adjacent à une troupe ennemie (ratio favorable)               | Choisir zone     |  +35  |
+| Zone non menacée par les adversaires                               | Choisir zone     |  +15  |
+| Zone centrale permettant plusieurs directions                       | Choisir zone     |  +10  |
+| Cité propre sécurisée (unités superflues à déplacer)               | Choisir zone     |  +10  |
+| Zone avec mes unités les plus avancées sur le plateau              | Choisir zone     |  +25  |
+
+### ACTION : Déplacement — Choisir zone CIBLE
+| Règle                                                              | Décision     | Poids |
+|--------------------------------------------------------------------|--------------|-------|
+| Cible est un temple vide                                           | Se déplacer  |  +60  |
+| Cible contient des ennemis (ratio >= 1.5:1)                        | Attaquer     |  +50  |
+| Cible contient des ennemis (ratio >= 2:1)                          | Attaquer     |  +70  |
+| Cible adjacente à un temple vide                                   | Se déplacer  |  +25  |
+| Cible déjà occupée par mes unités (regroupement)                   | Se déplacer  |  +15  |
+| Cible est ma cité menacée par un ennemi                            | Défendre     |  +40  |
+| Cible permet de contrôler 2 temples ce tour                        | Se déplacer  |  +70  |
+| Cible est un désert stratégique (adjacences multiples)             | Se déplacer  |  +15  |
+| Cible avec 1 ennemi seul (facile à éliminer)                       | Attaquer     |  +40  |
+| Adversaire leader au score est dans cette zone                     | Attaquer     |  +30  |
+
+### ACTION : Déplacement — Nombre d'unités
+| Règle                                                              | Décision             | Poids |
+|--------------------------------------------------------------------|----------------------|-------|
+| Déplacer TOUTES les unités (défaut)                                | Tout déplacer        |  +10  |
+| Garder au moins 1 unité pour défendre ma cité                      | Garder 1             |  +30  |
+| Dernier à jouer + possibilité de prendre 2 temples                 | Laisser 1 unité      |  +60  |
+| Attaque prévue : déplacer le maximum                               | Tout déplacer        |  +40  |
+| Temple défendu par moi : garder le minimum pour contrôler          | Garder minimum       |  +25  |
+| Zone source adjacente à un temple ennemi                           | Garder 1 en arrière  |  +20  |
+
+### ACTION : Téléportation — Choisir destination
+| Règle                                                              | Décision       | Poids |
+|--------------------------------------------------------------------|----------------|-------|
+| Temple vide disponible                                             | Téléporter     |  +60  |
+| Temple avec 1 ennemi seul (ratio favorable)                        | Téléporter     |  +40  |
+| Destination adjacente à plusieurs temples                          | Téléporter     |  +30  |
+| Destination = temple le plus éloigné de ma position actuelle       | Téléporter     |  +25  |
+| Ma cité est menacée et je veux y retourner                         | Téléporter     |  +35  |
+| Adversaire leader va prendre ce temple au prochain tour            | Téléporter     |  +45  |
+
+### ACTION : Déplacement Ta-Seti — Choisir quel prêtre
+| Règle                                                              | Décision           | Poids |
+|--------------------------------------------------------------------|--------------------|-------|
+| Prêtre en réserve (entrer sur le plateau Ta-Seti)                  | Prêtre réserve     |  +20  |
+| Prêtre le plus avancé sur Ta-Seti                                  | Prêtre avancé      |  +30  |
+| Prêtre adjacent à un nœud avec jeton JP                            | Ce prêtre          |  +50  |
+| Prêtre adjacent à un nœud avec jeton JU                            | Ce prêtre          |  +35  |
+| Prêtre adjacent à un nœud final (E_4_X)                            | Ce prêtre          |  +45  |
+| Prêtre bloqué (0 destination valide disponible)                    | Ne pas choisir     | -100  |
+| Prêtre avec le plus de destinations valides                        | Ce prêtre          |  +15  |
+
+### ACTION : Déplacement Ta-Seti — Choisir destination
+| Règle                                                              | Décision       | Poids |
+|--------------------------------------------------------------------|----------------|-------|
+| Nœud avec jeton JP (pouvoir permanent)                             | Ce nœud        |  +60  |
+| Nœud avec jeton JU (utilisable)                                    | Ce nœud        |  +40  |
+| Nœud avec jeton JI (instantané utile)                              | Ce nœud        |  +35  |
+| Nœud final E_4_X (bonus fort)                                      | Ce nœud        |  +50  |
+| Nœud ouvre plus de destinations au prochain coup                   | Ce nœud        |  +20  |
+| Nœud avec bonus de combat (force/bouclier)                         | Ce nœud        |  +45  |
+| Nœud avec bonus de déplacement                                     | Ce nœud        |  +30  |
+| Nœud avec bonus de recrutement                                     | Ce nœud        |  +25  |
+| Nœud E_4_2 interdit si tuile R_2_4 possédée                       | Autre nœud     | -100  |
+
+### ACTION : Recrutement — Combien et où
+| Règle                                                              | Décision                  | Poids |
+|--------------------------------------------------------------------|---------------------------|-------|
+| Réserve >= 3 : recruter une troupe complète (3 unités)             | Recruter 3                |  +30  |
+| Total unités sur plateau < 5                                       | Recruter max possible     |  +40  |
+| Ank >= 3                                                           | Recruter 2+               |  +20  |
+| Zone de recrutement adjacente à temple vide                        | Placer dans cette zone    |  +35  |
+| Ma troupe la plus grande est incomplète (< 3 unités)               | Compléter cette troupe    |  +25  |
+| Réserve = 0 : recrutement impossible                               | Ne pas recruter           | -100  |
+| Ank = 1 : recruter exactement 1 unité                              | Recruter 1                |  +20  |
+| Temple adverse adjacent à ma cité : recruter vers ce temple        | Zone vers temple          |  +30  |
+
+### ACTION : Évolution de pyramide — Quelle pyramide / Quel niveau
+| Règle                                                              | Décision           | Poids |
+|-------------------------------------------------------------------|--------------------|-------|
+| Niveau cible == 2                                                  | Améliorer          |  +40  |
+| Niveau cible == 3                                                  | Améliorer          |  +30  |
+| Niveau cible == 4                                                  | Améliorer          |  +20  |
+| Aucune tuile achetée de cette couleur                              | Améliorer          |  +30  |
+| Ank >= 8                                                           | Améliorer          |  +20  |
+| Couleur avec plus de tuiles non possédées disponibles              | Cette pyramide     |  +25  |
+| Couleur Rouge : accès aux créatures (si peu de créatures)          | Rouge              |  +35  |
+| Couleur Blanc : accès aux tuiles d'armée (si réserve < 5)          | Blanc              |  +20  |
+| Pyramide la moins avancée (diversifier les couleurs)               | Cette pyramide     |  +15  |
+
+### ACTION : Attaque — Choisir zone source + zone cible
+| Règle                                                              | Décision  | Poids |
+|--------------------------------------------------------------------|-----------|-------|
+| Ratio >= 2:1 (mes unités / ennemies)                               | Attaquer  |  +70  |
+| Ratio >= 1.5:1                                                     | Attaquer  |  +30  |
+| Ratio >= 1:1 (attaque possible)                                    | Attaquer  |  +20  |
+| Cible est un temple (T1, T2, T3, TB)                               | Attaquer  |  +50  |
+| Cible est une cité ennemie (JxCy adverse)                          | Attaquer  |  +30  |
+| Ennemi a 1 seule unité                                             | Attaquer  |  +40  |
+| J'ai >= 4 unités dans la zone attaquante                           | Attaquer  |  +20  |
+| Adversaire leader au score                                         | Attaquer  |  +30  |
+| J'ai une créature avec bonus d'attaque                             | Attaquer  |  +20  |
+| J'ai une carte combat forte (force >= 4)                           | Attaquer  |  +15  |
+| Adversaire a une créature forte (risque élevé)                     | Attaquer  |  -20  |
+| Cible est adjacente à un temple vide que je prendrai ensuite        | Attaquer  |  +25  |
+
+---
+
+## EFFETS DIFFÉRÉS
+
+### Amélioration de pyramide gratuite — Quelle pyramide
+| Règle                                                              | Décision        | Poids |
+|--------------------------------------------------------------------|-----------------|-------|
+| Pyramide améliorable vers niveau 4 (tempVP)                        | Cette pyramide  |  +50  |
+| Couleur avec le plus de tuiles non achetées disponibles            | Cette pyramide  |  +40  |
+| Pyramide améliorable vers niveau 3 (accès tuiles niv 3)            | Cette pyramide  |  +30  |
+| Pyramide améliorable vers niveau 2 (accès tuiles niv 2)            | Cette pyramide  |  +20  |
+| Couleur dont j'ai la pyramide la moins avancée                     | Cette pyramide  |  +15  |
+
+### Renforcement — Choisir zone de placement
+| Règle                                                              | Décision      | Poids |
+|--------------------------------------------------------------------|---------------|-------|
+| Zone adjacente à temple vide                                       | Cette zone    |  +50  |
+| Zone avec ma troupe déjà présente (renforcer)                      | Cette zone    |  +30  |
+| Zone adjacente à une troupe ennemie (ratio amélioré)               | Cette zone    |  +40  |
+| Ma cité : sécurité si menacée                                      | Cette zone    |  +35  |
+| Zone la plus avancée sur le plateau                                | Cette zone    |  +20  |
+
+### Recrutement de victoire — Choisir zone de placement
+| Règle                                                              | Décision      | Poids |
+|--------------------------------------------------------------------|---------------|-------|
+| Zone du temple que je viens de capturer                            | Cette zone    |  +50  |
+| Zone adjacente au prochain temple à prendre                        | Cette zone    |  +40  |
+| Zone avec ma troupe la plus petite (renforcer)                     | Cette zone    |  +30  |
+| Ma cité (sécurité, réserve stratégique)                            | Cette zone    |  +20  |
+| Zone centrale sur le plateau (flexibilité maximale)                | Cette zone    |  +15  |
+
+### Recrutement Ta-Seti — Choisir zone de placement
+| Règle                                                              | Décision      | Poids |
+|--------------------------------------------------------------------|---------------|-------|
+| Zone adjacente à temple vide                                       | Cette zone    |  +50  |
+| Zone avec ma troupe la plus petite (renforcer)                     | Cette zone    |  +35  |
+| Ma cité (sécurité)                                                 | Cette zone    |  +20  |
+| Zone la plus avancée sur le plateau                                | Cette zone    |  +25  |
+
+### Draft ID — Choisir cartes à défausser
+| Règle                                                              | Décision       | Poids |
+|--------------------------------------------------------------------|----------------|-------|
+| Garder carte téléportation si temple éloigné disponible            | Garder         |  +40  |
+| Défausser carte "2 ank" si ank >= 8                                | Défausser      |  +30  |
+| Garder carte force combat si combat prévisible ce tour             | Garder         |  +35  |
+| Défausser carte passe-muraille si je n'attaque pas                 | Défausser      |  +20  |
+| Garder carte recrutement si réserve faible                         | Garder         |  +25  |
+| Défausser cartes en double (doublon inutile)                       | Défausser      |  +30  |
+| Garder protection si je suis en infériorité numérique              | Garder         |  +30  |
+
+---
+
+## JOUR (Hors action)
+
+### Rapatrier un prêtre — Lequel
+| Règle                                                              | Décision        | Poids |
+|--------------------------------------------------------------------|-----------------|-------|
+| Prêtre bloqué sur Ta-Seti (0 destination valide)                  | Rapatrier       |  +50  |
+| Prêtre sur nœud sans jetons adjacents intéressants                 | Rapatrier       |  +30  |
+| Prêtre le moins avancé sur Ta-Seti                                 | Rapatrier       |  +20  |
+| Prêtre sur la carte principale dans une zone non utile             | Rapatrier       |  +35  |
+| Besoin d'un prêtre sur la carte principale (zone avec ennemi)      | Rapatrier       |  +25  |
+| Prêtre le plus avancé sur Ta-Seti (progression à préserver)        | Ne pas rapatr.  |  +40  |
+
+### Jouer carte ID — Laquelle
+| Règle                                                              | Décision              | Poids |
+|--------------------------------------------------------------------|-----------------------|-------|
+| Carte "2 Ank" : ank < 3                                            | Jouer 2 Ank           |  +60  |
+| Carte "Téléportation" : temple vide accessible                     | Jouer Téléportation   |  +50  |
+| Carte "Téléportation" : dernier à jouer ce tour                    | Jouer Téléportation   |  +40  |
+| Carte "Échange ank" : adversaire >= 9 ank, moi <= 3 ank            | Jouer Échange         |  +70  |
+| Carte "Échange ank" : adversaire >= 7 ank, moi <= 5 ank            | Jouer Échange         |  +40  |
+| Carte "2 Recrues" : réserve = 0 et unités sur plateau < 6          | Jouer 2 Recrues       |  +50  |
+| Carte "Capacité déplacement" : veux atteindre zone à 2+ mouvements | Jouer Capacité        |  +45  |
+| Carte "Passe-muraille" : temple défendu à portée                   | Jouer Passe-muraille  |  +40  |
+| Carte "Pluie de feu" : adversaire a troupe de 3+ unités            | Jouer Pluie de feu    |  +50  |
+| Aucune urgence : ne pas jouer de carte (garder pour combat)        | Ne pas jouer          |  +20  |
+
+### Jouer carte ID Téléportation — Destination
+Utiliser les mêmes règles que : ACTION → Téléportation → Choisir destination (voir plus haut)
+
+### Utiliser jeton JU — Lequel
+| Règle                                                              | Décision          | Poids |
+|--------------------------------------------------------------------|-------------------|-------|
+| JU "Sceau divin" : je veux attaquer ce tour                        | Sceau divin       |  +50  |
+| JU "Combat simple" : j'ai une troupe engagée / combat prévisible   | Combat simple     |  +45  |
+| JU "Points" : je suis à 1 VP de la victoire                        | Points            |  +80  |
+| JU "Points" : tour final approche (< 2 tours)                      | Points            |  +60  |
+| JU "Carte ID" : j'ai < 2 cartes ID en main                         | Carte ID          |  +40  |
+| JU "Carte ID" : j'ai besoin d'un effet spécifique ce tour          | Carte ID          |  +30  |
+| Aucune urgence : conserver les jetons JU                           | Ne pas utiliser   |  +20  |
+
+### Jeton doré — Quelle action
+| Règle                                                              | Décision             | Poids |
+|--------------------------------------------------------------------|----------------------|-------|
+| Temple vide accessible en 1-2 mouvements                          | Déplacement doré     |  +60  |
+| Ank <= 3 : besoin urgent d'ank                                     | Prière dorée         |  +60  |
+| Réserve > 0 et plateau < 5 unités                                  | Recrutement doré     |  +40  |
+| Tuile intéressante disponible et ank suffisant                     | Achat doré           |  +50  |
+| Adversaire leader : l'attaquer ce tour (déplacement offensif)      | Déplacement doré     |  +45  |
+
+### Jeton gris — Quelle action
+| Règle                                                              | Décision             | Poids |
+|--------------------------------------------------------------------|----------------------|-------|
+| (À définir selon les règles spécifiques du jeton gris)            |                      |       |
+
+---
+
+## TOUR ADVERSE
+
+### Annuler une carte ID adverse
+| Règle                                                              | Décision          | Poids |
+|--------------------------------------------------------------------|-------------------|-------|
+| Carte adverse "Force niv 2" : je perdrais le combat sinon          | Annuler           |  +70  |
+| Carte adverse "Force niv 1" : forces déjà déséquilibrées           | Annuler           |  +50  |
+| Carte adverse "Goutte sang niv 2" : je n'ai pas de boucliers       | Annuler           |  +60  |
+| Carte adverse "Recrutement" : adversaire gagne + recrute           | Annuler           |  +40  |
+| Carte adverse "Victoire + 4 ank" : adversaire gagne déjà           | Annuler           |  +35  |
+| Carte adverse "Protection" : mon attaque est forte                 | Ne pas annuler    |  +30  |
+| Carte adverse "2 Ank" : effet faible                               | Ne pas annuler    |  +40  |
+| Je suis leader au score (défendre l'avance)                        | Annuler si fort   |  +20  |
+
+### Fuite secrète — Fuir ou non
+| Règle                                                              | Décision   | Poids |
+|--------------------------------------------------------------------|------------|-------|
+| Mes unités < 50% des unités adverses                               | Fuir       |  +70  |
+| Je défends un temple (perdre = perdre 1 VP)                        | Ne pas fuir |  +50  |
+| J'ai une bonne carte combat (force >= 4)                           | Ne pas fuir |  +30  |
+| Adversaire a une créature avec gros bonus                          | Fuir       |  +40  |
+| Je suis en avance au score (éviter les risques)                    | Fuir       |  +25  |
+| Je suis en retard au score (besoin de risques)                     | Ne pas fuir |  +20  |
+| Rapport de force 1:1 : combat incertain                            | Fuir       |  +20  |
+| Ma carte combat est plus forte que prévu                           | Ne pas fuir |  +25  |
+
+---
+
+## COMBAT
+
+### Choisir carte combat
+| Règle                                                              | Décision                              | Poids |
+|--------------------------------------------------------------------|---------------------------------------|-------|
+| J'ai < 4 unités dans ma troupe                                     | Jouer carte avec boucliers            |  +30  |
+| Adversaire a plus de force de base (unités + bonus)                | Jouer carte avec force maximale       |  +40  |
+| Forces égales : combat indécis                                     | Jouer carte avec force maximale       |  +50  |
+| Adversaire a des gouttes de sang                                   | Jouer carte avec boucliers            |  +35  |
+| J'ai une créature avec bonus de force                              | Jouer carte équilibrée (force/bclier) |  +20  |
+| Je veux gagner par victoire défensive                              | Jouer carte avec boucliers            |  +25  |
+| J'attaque (ratio >= 2:1) : viser l'élimination                    | Jouer carte avec force maximale       |  +30  |
+| Peu de cartes restantes : jouer équilibré pour conserver options   | Carte équilibrée                      |  +20  |
+| Adversaire prévisible (pattern détecté)                            | Contre-carte                          |  +15  |
+| J'ai le JP bonus de force                                          | Jouer carte avec force modérée        |  +15  |
+
+### Cartes ID combat — Lesquelles jouer
+| Règle                                                              | Décision                       | Poids |
+|--------------------------------------------------------------------|--------------------------------|-------|
+| "Protection niv 1" : adversaire a >= 2 gouttes de sang             | Jouer Protection 1             |  +50  |
+| "Protection niv 2" : adversaire a >= 4 gouttes de sang             | Jouer Protection 2             |  +70  |
+| "Victoire sans saignement" : je vais probablement perdre           | Jouer Victoire sans sang       |  +40  |
+| "Recrutement" : je gagne clairement (ratio >= 2:1)                 | Jouer Recrutement              |  +50  |
+| "Victoire + 4 ank" : je gagne clairement et ank < 5               | Jouer Victoire + 4 ank         |  +60  |
+| "Force niv 1" : forces équilibrées (diff <= 1)                     | Jouer Force 1                  |  +40  |
+| "Force niv 2" : je suis clairement en dessous (-3 force ou plus)   | Jouer Force 2                  |  +60  |
+| "Goutte sang niv 1" : adversaire a 0 bouclier                      | Jouer Sang 1                   |  +35  |
+| "Goutte sang niv 2" : adversaire a 0 bouclier et < 4 unités        | Jouer Sang 2                   |  +50  |
+| "Changement carte combat" : ma carte actuelle est très faible      | Jouer Changement               |  +45  |
+| Ne pas jouer de carte ID combat si déjà en avance confortable      | Ne pas jouer                   |  +30  |
+
+### Zone de retraite — Après défaite
+| Règle                                                              | Décision       | Poids |
+|--------------------------------------------------------------------|----------------|-------|
+| Ma propre cité                                                     | Cité propre    |  +50  |
+| Zone déjà occupée par mes unités (regroupement)                    | Zone amie      |  +40  |
+| Zone adjacente à temple que je veux défendre                       | Zone adjacente |  +35  |
+| Éviter les zones avec ennemis présents                             | Zone sûre      |  +30  |
+| Zone la plus éloignée des ennemis                                  | Zone éloignée  |  +20  |
+| Zone permettant une contre-attaque au prochain tour                | Zone offensive |  +25  |
+
+### Affecter prêtre JP à une troupe
+| Règle                                                              | Décision        | Poids |
+|--------------------------------------------------------------------|-----------------|-------|
+| Troupe la plus grande (> 2 unités)                                 | Cette troupe    |  +40  |
+| Troupe dans zone de combat prévisible (adjacente à ennemi)         | Cette troupe    |  +50  |
+| Troupe contrôlant un temple                                        | Cette troupe    |  +35  |
+| Troupe la plus avancée sur le plateau                              | Cette troupe    |  +30  |
+| Troupe dans ma cité (défense sécurisée)                            | Cette troupe    |  +20  |
+
+---
+
+## TA-SETI
+
+### Jetons sur nœud — Prendre ou laisser
+| Règle                                                              | Décision  | Poids |
+|--------------------------------------------------------------------|-----------|-------|
+| Jeton JP (pouvoir permanent) disponible et j'ai des troupes        | Prendre   |  +60  |
+| Jeton JU (utilisable) disponible                                   | Prendre   |  +50  |
+| Jeton JI (instantané) disponible et effet utile                    | Prendre   |  +40  |
+| Jeton JP et aucune troupe disponible (inutile sans troupe)         | Laisser   |  +40  |
+| Jeton inutile pour ma stratégie actuelle                           | Laisser   |  +20  |
+| Je veux garder mon prêtre en mouvement (ne pas bloquer sur JP)     | Laisser   |  +15  |
+
+---
+
+## AUBE
+
+### Choisir carte combat reçue
+| Règle                                                              | Décision             | Poids |
+|--------------------------------------------------------------------|----------------------|-------|
+| Carte à haute force (>= 4) si je prévois d'attaquer               | Garder haute force   |  +40  |
+| Carte avec boucliers si je veux défendre                           | Garder boucliers     |  +35  |
+| Carte équilibrée (force + bouclier) par défaut                     | Garder équilibrée    |  +20  |
+| Éviter les doublons de cartes déjà en main                         | Éviter doublon       |  +15  |
+| Carte avec sang si adversaire a peu de boucliers                   | Garder sang          |  +25  |
+| Garder la carte avec l'effet bonus le plus rare                    | Garder rare          |  +20  |
+
+### Choisir nombre de jetons divins
+| Règle                                                              | Décision        | Poids |
+|--------------------------------------------------------------------|-----------------|-------|
+| Je planifie une attaque ce tour                                    | Maximum jetons  |  +50  |
+| Je suis en retard au score (besoin de risques)                     | Maximum jetons  |  +40  |
+| Je suis en avance au score (jouer prudent)                         | Minimum jetons  |  +30  |
+| Ma position sur le plateau est forte (peu besoin de combat)        | Minimum jetons  |  +20  |
+| Dernier tour prévu : maximiser les chances                         | Maximum jetons  |  +60  |
+| Peu de cartes combat restantes : jetons pour compenser             | Maximum jetons  |  +35  |
+
+### Choisir position dans l'ordre de jeu
+| Règle                                                              | Décision          | Poids |
+|--------------------------------------------------------------------|-------------------|-------|
+| Temple vide accessible que je veux prendre avant les autres        | Jouer en premier  |  +60  |
+| Je veux attaquer avant que l'adversaire se renforce                | Jouer en premier  |  +50  |
+| Adversaire leader : l'intercepter avant qu'il joue                 | Jouer en premier  |  +40  |
+| Je veux voir les actions des autres avant de décider               | Jouer en dernier  |  +40  |
+| Je peux prendre 2 temples si les autres partent d'abord            | Jouer en dernier  |  +60  |
+| Ma stratégie est réactive (répondre aux menaces)                   | Jouer en dernier  |  +30  |
+| Peu importe l'ordre pour ma stratégie ce tour                      | Indifférent       |  +10  |
+
+---
+
+## Notes d'implémentation
+
+- Ce fichier V2 liste toutes les règles ENVISAGEABLES — toutes ne sont pas forcément à implémenter.
+- Les poids sont des suggestions à calibrer par test.
+- Poids de base : 1 par candidat (avant application des règles).
+- Les poids de règles s'additionnent si plusieurs règles s'appliquent au même candidat.
+- Pour les sections "idem" (ex: Téléportation Carte ID = Téléportation Action), utiliser la même implémentation.
+- Certaines règles nécessitent de connaître l'état des adversaires (VP, ank, unités) : bien passer ces données à chaque fonction de décision.

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { ref, onValue, update, remove, set, get } from "firebase/database";
 import { COMBAT_CARDS } from "../../constants/cards";
-import { aiChooseCombatCards } from "../../ai/aiPlayer";
+import { aiChooseCombatCards, aiChooseDawnPosition } from "../../ai/aiPlayer";
 
 const TEST_BADGES = {
   Rouge: { on: "bg-red-600 text-white border-yellow-400", off: "bg-red-900/50 text-red-300 border-transparent hover:bg-red-800/60" },
@@ -132,7 +132,7 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
     const taken = Object.values(dawn.chosenPositions || {});
     const available = [1, 2, 3, 4, 5].slice(0, allPlayers.length).filter(pos => !taken.includes(pos));
     if (available.length === 0) return;
-    const chosen = available[0]; // Déterministe : prend la première position disponible
+    const chosen = aiChooseDawnPosition(gameState, currentPlayer.id, allPlayers, taken, available);
     const t = setTimeout(async () => {
       const snapshot = await get(ref(db, `rooms/${roomCode}/dawn`));
       if (!snapshot.exists()) return;

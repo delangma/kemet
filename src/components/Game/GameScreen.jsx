@@ -133,6 +133,7 @@ export default function GameScreen({ session }) {
   const [fleeOffer, setFleeOffer] = useState(null);
   const [pendingIdCard, setPendingIdCard] = useState(null);
   const [localTurnHistory, setLocalTurnHistory] = useState(null);
+  const [moveHistory, setMoveHistory] = useState([]);
   const [viewTilesPlayer, setViewTilesPlayer] = useState(null);
   const [actionNotif, setActionNotif] = useState(null); // { playerName, color, text, meta }
   const [pendingTokenPickup, setPendingTokenPickup] = useState(null); // { priestIndex, tokens: [{nodeId, cardId}] }
@@ -282,7 +283,7 @@ export default function GameScreen({ session }) {
     }
 
     if (Object.keys(patch).length > 0) update(ref(db, `rooms/${roomCode}/gameState`), patch);
-  }, [gameState?.taSetiLayout, JSON.stringify(gameState?.puAssignment), JSON.stringify(gameState?.jiAssignment), JSON.stringify(gameState?.jpAssignment)]);
+  }, [gameState?.taSetiLayout]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migration : initialise taSetiPriestPositions si absent
   useEffect(() => {
@@ -993,15 +994,25 @@ export default function GameScreen({ session }) {
       }
     }
 
+    if (!hasEnemy) {
+      setMoveHistory(prev => [...prev, {
+        boardUnits: gameState.boardUnits || {},
+        boardPriests: gameState.boardPriests || {},
+        creatureAssignments: gameState.creatureAssignments || {},
+        creatureAssignments2: gameState.creatureAssignments2 || {},
+        pyramids: gameState.pyramids || {},
+        playerAnk: gameState.players?.[effectivePlayerId]?.ank ?? 7,
+        pendingWallPass: gameState.players?.[effectivePlayerId]?.pendingWallPass ?? null,
+        pendingFreeAnyTeleport: gameState.players?.[effectivePlayerId]?.pendingFreeAnyTeleport ?? null,
+        prevMoveState: { ...moveState },
+      }]);
+    }
+
     await update(ref(db, "/"), updates);
 
     if (hasEnemy) {
       const enemyName = currentPlayers.find(p => p.color === Object.keys(toZoneUnits).find(c => c !== col && (toZoneUnits[c] || 0) > 0))?.name || "?";
       await logAction(effectivePlayerId, `attaque ${enemyName} en ${toZoneId}`, { type: "attack" });
-      setMoveState(null);
-      setActionMode(null);
-    } else if (pointsRemaining <= 0) {
-      await logAction(effectivePlayerId, `déplace des troupes vers ${toZoneId}`, { type: "move" });
       setMoveState(null);
       setActionMode(null);
     } else {
@@ -1032,6 +1043,7 @@ export default function GameScreen({ session }) {
     }
     await update(ref(db, "/"), fbUpdates);
 
+    setMoveHistory([]);
     setMoveConfig(null);
     setMoveState({
       phase: "moving",
@@ -1331,15 +1343,25 @@ export default function GameScreen({ session }) {
       }
     }
 
+    if (!hasEnemy) {
+      setMoveHistory(prev => [...prev, {
+        boardUnits: gameState.boardUnits || {},
+        boardPriests: gameState.boardPriests || {},
+        creatureAssignments: gameState.creatureAssignments || {},
+        creatureAssignments2: gameState.creatureAssignments2 || {},
+        pyramids: gameState.pyramids || {},
+        playerAnk: gameState.players?.[effectivePlayerId]?.ank ?? 7,
+        pendingWallPass: gameState.players?.[effectivePlayerId]?.pendingWallPass ?? null,
+        pendingFreeAnyTeleport: gameState.players?.[effectivePlayerId]?.pendingFreeAnyTeleport ?? null,
+        prevMoveState: { ...moveState },
+      }]);
+    }
+
     await update(ref(db, "/"), updates);
 
     if (hasEnemy) {
       const enemyName = currentPlayers.find(p => p.color === Object.keys(toZoneUnits).find(c => c !== col && (toZoneUnits[c] || 0) > 0))?.name || "?";
       await logAction(effectivePlayerId, `attaque ${enemyName} en ${toZoneId}`, { type: "attack" });
-      setMoveState(null);
-      setActionMode(null);
-    } else if (newPoints <= 0) {
-      await logAction(effectivePlayerId, `se téléporte vers ${toZoneId}`, { type: "move" });
       setMoveState(null);
       setActionMode(null);
     } else {
@@ -1349,6 +1371,11 @@ export default function GameScreen({ session }) {
 
   async function handleMoveDone() {
     const ps = gameState?.players?.[effectivePlayerId] || {};
+    const { currentZoneId, col } = moveState || {};
+    const boardUnits = gameState?.boardUnits || {};
+    const toZoneUnits = boardUnits[currentZoneId] || {};
+    const hasEnemy = col && currentZoneId && Object.entries(toZoneUnits).some(([color, cnt]) => color !== col && (cnt || 0) > 0);
+
     const updates = {};
     if (ps.pendingWallPass) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingWallPass`] = null;
     if (ps.pendingFreeAnyTeleport) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingFreeAnyTeleport`] = null;
@@ -1363,15 +1390,65 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = (ps.tokens ?? 5) - 1;
       }
     }
+    if (hasEnemy) {
+      const enemyColor = Object.keys(toZoneUnits).find(c => c !== col && (toZoneUnits[c] || 0) > 0);
+      const enemyPlayerId = currentPlayers.find(p => p.color === enemyColor)?.id;
+      if (enemyPlayerId) {
+        const hasTile = (pid, name) => (gameState?.players?.[pid]?.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === name);
+        const prescience = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Préscience")) ?? null;
+        const prescienceId = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Prescience des IDs")) ?? null;
+        updates[`rooms/${roomCode}/combat`] = {
+          attacker: effectivePlayerId,
+          defender: enemyPlayerId,
+          zoneId: currentZoneId,
+          status: "selecting",
+          choices: {},
+          ...(prescience && { prescience }),
+          ...(prescienceId && { prescienceId }),
+        };
+      }
+    }
     if (Object.keys(updates).length > 0) await update(ref(db, "/"), updates);
+    if (hasEnemy) {
+      const enemyName = currentPlayers.find(p => p.color === Object.keys(toZoneUnits).find(c => c !== col && (toZoneUnits[c] || 0) > 0))?.name || "?";
+      await logAction(effectivePlayerId, `attaque ${enemyName} en ${currentZoneId}`, { type: "attack" });
+    } else {
+      await logAction(effectivePlayerId, `déplacement terminé`, { type: "move" });
+    }
+    setMoveHistory([]);
     setMoveState(null);
     setActionMode(null);
   }
 
-  function handleMoveCancel() {
+  async function handleMoveCancel() {
     setMoveConfig(null);
     setMoveState(null);
+    setMoveHistory([]);
     setActionMode(null);
+    // If the action token was never consumed (priest moved in Ta-Seti but unit move cancelled),
+    // restore the full gameState from startState to undo priest positions and any traversal bonuses.
+    const myState = gameState?.players?.[effectivePlayerId] || {};
+    if ((myState.actionsThisTurn ?? 0) === 0 && localTurnHistory?.startState) {
+      await set(ref(db, `rooms/${roomCode}/gameState`), localTurnHistory.startState);
+    }
+  }
+
+  async function handleMoveUndo() {
+    if (moveHistory.length === 0) return;
+    const snap = moveHistory[moveHistory.length - 1];
+    setMoveHistory(h => h.slice(0, -1));
+    const updates = {
+      [`rooms/${roomCode}/gameState/boardUnits`]: snap.boardUnits,
+      [`rooms/${roomCode}/gameState/boardPriests`]: snap.boardPriests,
+      [`rooms/${roomCode}/gameState/creatureAssignments`]: snap.creatureAssignments,
+      [`rooms/${roomCode}/gameState/creatureAssignments2`]: snap.creatureAssignments2,
+      [`rooms/${roomCode}/gameState/pyramids`]: snap.pyramids,
+      [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`]: snap.playerAnk,
+    };
+    if (snap.pendingWallPass !== null) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingWallPass`] = snap.pendingWallPass;
+    if (snap.pendingFreeAnyTeleport !== null) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingFreeAnyTeleport`] = snap.pendingFreeAnyTeleport;
+    await update(ref(db, "/"), updates);
+    setMoveState(snap.prevMoveState);
   }
 
   async function handleSetupConfirm(choices) {
@@ -2607,6 +2684,8 @@ export default function GameScreen({ session }) {
 		  onBoardZoneClick={handleBoardZoneClick}
 		  onMoveDone={handleMoveDone}
 		  onMoveCancel={handleMoveCancel}
+		  onMoveUndo={handleMoveUndo}
+		  canUndo={moveHistory.length > 0}
 		  onTeleportStart={handleTeleportStart}
 		  onTeleportCancel={handleTeleportCancel}
 		  teleportCost={gameState?.players?.[effectivePlayerId]?.pendingFreeAnyTeleport ? 0 : computeTeleportCost(effectivePlayerId, moveState?.currentZoneId)}
