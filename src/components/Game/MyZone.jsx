@@ -241,7 +241,12 @@ export default function MyZone({
       {/* ── Bande 1 Mobile : version compacte ── */}
       <div
         className="md:hidden"
-        style={{ background: isMyTurn ? 'rgba(30,18,4,0.97)' : 'rgba(12,10,6,0.99)', borderBottom: '1px solid #3a2a0c' }}
+        style={{
+          backgroundImage: `linear-gradient(${isMyTurn ? 'rgba(28,16,2,0.82)' : 'rgba(8,6,2,0.80)'},${isMyTurn ? 'rgba(28,16,2,0.82)' : 'rgba(8,6,2,0.80)'}),url(/ui/backend.png)`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: 'auto',
+          borderBottom: '1px solid #3a2a0c',
+        }}
       >
         {/* Ligne 1 : badge + stats + fin de tour */}
         <div className="flex items-center gap-2 px-2 py-1.5">
@@ -714,7 +719,7 @@ export default function MyZone({
       )}
 
       {/* ── Bande 2 : actions + tuiles ── */}
-      <div className="flex items-center gap-1 px-2 md:px-4 py-1 md:py-1.5 overflow-x-auto md:flex-wrap" style={{ background: '#0a0806', borderTop: '1px solid #2a1e08' }}>
+      <div className="flex items-center gap-1 px-2 md:px-4 py-1 md:py-1.5 overflow-x-auto md:flex-wrap" style={{ backgroundImage: 'linear-gradient(rgba(6,4,2,0.85),rgba(6,4,2,0.85)),url(/ui/backend.png)', backgroundRepeat: 'repeat', backgroundSize: 'auto', borderTop: '1px solid #2a1e08' }}>
 
         {/* Groupes d'actions */}
         {[

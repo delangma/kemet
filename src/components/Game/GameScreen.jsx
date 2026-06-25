@@ -2587,7 +2587,7 @@ export default function GameScreen({ session }) {
 
     {/* Mobile : barre adversaires horizontale au-dessus du board */}
     {opponents.length > 0 && (
-      <div className="md:hidden flex gap-1.5 px-2 py-1.5 shrink-0 overflow-x-auto" style={{ background: 'rgba(8,6,4,0.95)', borderBottom: '1px solid #2a1e08' }}>
+      <div className="md:hidden flex gap-1.5 px-2 py-1.5 shrink-0 overflow-x-auto" style={{ backgroundImage: 'linear-gradient(rgba(6,4,2,0.78),rgba(6,4,2,0.78)),url(/ui/backend.png)', backgroundRepeat: 'repeat', backgroundSize: 'auto', borderBottom: '1px solid #4a3410' }}>
         {opponents.map(p => (
           <div key={p.id} onClick={() => setViewTilesPlayer(p)} className="cursor-pointer flex-1 min-w-[100px]">
             <PlayerSummary

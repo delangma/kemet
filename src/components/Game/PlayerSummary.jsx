@@ -38,37 +38,70 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
   ];
 
   if (compact) {
+    const BUY_DOT = { buy_red: '#ef4444', buy_blue: '#3b82f6', buy_white: '#d1d5db', buy_black: '#4b5563' };
+    const allActions = [...ACTIONS.level1, ...ACTIONS.level2, ...ACTIONS.level3];
     return (
       <div
         style={{
-          background: 'rgba(13,10,6,0.88)',
+          background: 'rgba(10,8,4,0.90)',
           border: isActive ? `1px solid ${hdr.border}` : '1px solid #4a3410',
           borderRadius: 5,
           boxShadow: isActive ? `0 0 10px ${hdr.border}55` : '0 2px 8px rgba(0,0,0,0.7)',
         }}
       >
         {/* Header coloré */}
-        <div style={{ background: hdr.bg, borderBottom: `1px solid ${hdr.border}33`, padding: '4px 8px', borderRadius: '4px 4px 0 0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: hdr.text, fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80%' }}>
-              {player.name}
-            </span>
-            {isActive && <span style={{ color: '#fbbf24', fontSize: 9, fontWeight: 700 }}>⚡</span>}
-          </div>
+        <div style={{ background: hdr.bg, borderBottom: `1px solid ${hdr.border}33`, padding: '3px 7px', borderRadius: '4px 4px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: hdr.text, fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '85%' }}>
+            {player.name}
+          </span>
+          {isActive && <span style={{ color: '#fbbf24', fontSize: 8, fontWeight: 700, flexShrink: 0 }}>⚡</span>}
         </div>
-        {/* Stats */}
-        <div style={{ padding: '4px 8px 3px' }}>
-          <div style={{ display: 'flex', gap: 8, color: '#e5d5b0', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-            <span>🪙 {ank}</span>
-            <span>☀ {vpTotal}</span>
-            {dawnTokens > 0 && <span>🏆 {dawnTokens}</span>}
+
+        <div style={{ padding: '3px 7px 4px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+
+          {/* Ressources */}
+          <div style={{ display: 'flex', gap: 6, color: '#e5d5b0', fontSize: 11, fontWeight: 600 }}>
+            <span title="Or">🪙{ank}</span>
+            <span title={`${vpPermanent}p+${vpTemp}t`}>☀{vpTotal}</span>
+            {dawnTokens > 0 && <span title="Jetons aube">🏆{dawnTokens}</span>}
           </div>
+
+          {/* Jetons action */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} style={{ width: 9, height: 9, borderRadius: '50%', border: '1px solid', background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
+              <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', border: '1px solid', background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
             ))}
-            <span style={{ fontSize: 9, color: '#6B4C1E', marginLeft: 2 }}>{tokens}/5</span>
+            <span style={{ fontSize: 8, color: '#6B4C1E', marginLeft: 1 }}>{tokens}/5</span>
           </div>
+
+          {/* Actions par niveau */}
+          {[
+            { label: 'N1', actions: ACTIONS.level1 },
+            { label: 'N2', actions: ACTIONS.level2 },
+            { label: 'N3', actions: ACTIONS.level3 },
+          ].map(({ label, actions: lvlActions }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{ fontSize: 7, color: '#6B4C1E', minWidth: 12, fontWeight: 700 }}>{label}</span>
+              {lvlActions.map(a => {
+                const used = usedActions.includes(a.id);
+                const buyC = BUY_DOT[a.id];
+                return (
+                  <div key={a.id} title={a.label} style={{
+                    width: 7, height: 7, borderRadius: 2, flexShrink: 0,
+                    background: buyC ? (used ? buyC : '#1a1200') : (used ? '#C9973A' : '#1a1508'),
+                    border: `1px solid ${buyC ? (used ? buyC + 'aa' : '#4a3410') : (used ? '#8B6014' : '#3a2a0c')}`,
+                  }} />
+                );
+              })}
+            </div>
+          ))}
+
+          {/* Cartes */}
+          <div style={{ display: 'flex', gap: 8, color: '#6B4C1E', fontSize: 9 }}>
+            <span>✗<strong style={{ color: '#a88a40' }}>{combatCards.length}</strong></span>
+            <span>🃏<strong style={{ color: '#a88a40' }}>{idCards.length}</strong></span>
+          </div>
+
         </div>
       </div>
     );
