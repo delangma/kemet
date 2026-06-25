@@ -90,26 +90,17 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
     const { width: containerWidth, height: containerHeight } = containerSize;
     if (!containerWidth || !containerHeight) return { left: 0, top: 0 };
 
+    // Image displayed at 125% container width (crops 10% from each side)
+    const CROP = 0.10;
     const imgNaturalRatio = 1619 / 972;
-    const containerRatio = containerWidth / containerHeight;
-
-    let displayWidth, displayHeight, offsetX, offsetY;
-
-    if (imgNaturalRatio < containerRatio) {
-      displayHeight = containerHeight;
-      displayWidth = containerHeight * imgNaturalRatio;
-      offsetX = (containerWidth - displayWidth) / 2;
-      offsetY = 0;
-    } else {
-      displayWidth = containerWidth;
-      displayHeight = containerWidth / imgNaturalRatio;
-      offsetX = 0;
-      offsetY = (containerHeight - displayHeight) / 2;
-    }
+    const imgDisplayWidth = containerWidth / (1 - 2 * CROP);
+    const imgDisplayHeight = imgDisplayWidth / imgNaturalRatio;
+    const imgLeft = -CROP * imgDisplayWidth;
+    const imgTop = (containerHeight - imgDisplayHeight) / 2;
 
     return {
-      left: offsetX + (zone.x / 100) * displayWidth,
-      top: offsetY + (zone.y / 100) * displayHeight,
+      left: imgLeft + (zone.x / 100) * imgDisplayWidth,
+      top: imgTop + (zone.y / 100) * imgDisplayHeight,
     };
   }
 
@@ -194,11 +185,19 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
   }
 
   return (
-    <div ref={containerRef} className="relative h-full w-full">
+    <div ref={containerRef} className="relative h-full w-full overflow-hidden">
       <img
         src="/map_V2.png"
         alt="Plateau Kemet"
-        className="h-full w-full object-contain object-center"
+        style={{
+          position: 'absolute',
+          width: '125%',
+          height: 'auto',
+          left: '-12.5%',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          pointerEvents: 'none',
+        }}
       />
 
       {/* Retreat zone selection HUD */}

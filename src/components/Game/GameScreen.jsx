@@ -610,9 +610,6 @@ export default function GameScreen({ session }) {
         [`rooms/${roomCode}/gameState/pyramids/${slotId}/level`]: newLvlFree,
         [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pyramidUpgradePending`]: pendingCount - 1,
       };
-      if (newLvlFree === 4) {
-        freeUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = (myState.vpPermanent ?? 0) + 1;
-      }
       await update(ref(db, "/"), freeUpdates);
       return;
     }
@@ -670,9 +667,6 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/controllerId`] = effectivePlayerId;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = currentTokens - levelsUp;
-        if (params.level === 4) {
-          updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = (myState.vpPermanent ?? 0) + 1;
-        }
       } else {
         const newLevel = params.level ?? (pyr.level ?? 0) + 1;
         if (newLevel > 4 || newLevel <= (pyr.level ?? 0)) return;
@@ -684,9 +678,6 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = newLevel;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = currentTokens - levelsUp;
-        if (newLevel === 4) {
-          updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/vpPermanent`] = (myState.vpPermanent ?? 0) + 1;
-        }
       }
     } else if (actionId === "move1" || actionId === "move2") {
       const { fromZone, toZone, count, creatureGoesWithMove } = params;
@@ -1807,6 +1798,7 @@ export default function GameScreen({ session }) {
         const pyramidCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
         const cost = pyramidCost(fromLevel, targetLevel);
         if (ank < cost) return;
+        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/usedActions`] = [...usedActions, "pyramid"];
         baseUpdates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = targetLevel;
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ank - cost;
         logText = `améliore sa pyramide ${pyr.color} au niveau ${targetLevel} pour ${cost} Ank`;
@@ -2854,10 +2846,10 @@ export default function GameScreen({ session }) {
               </div>
             )}
 
-            <div className="flex flex-row items-stretch gap-3">
+            <div className={isMobile ? "flex flex-col items-center gap-2" : "flex flex-row items-stretch gap-3"}>
 
-              {/* Panneau prêtres — gauche */}
-              <div style={{
+              {/* Panneau prêtres — gauche (desktop uniquement) */}
+              {!isMobile && <div style={{
                 background: 'rgba(8,6,4,0.92)',
                 border: '1px solid #4a3410',
                 borderRadius: 6,
@@ -2966,7 +2958,7 @@ export default function GameScreen({ session }) {
                     );
                   })
                 )}
-              </div>
+              </div>}
 
               {/* Plateau Ta-Seti */}
               <TaSetiBoard
@@ -2982,6 +2974,68 @@ export default function GameScreen({ session }) {
                 selectablePlayerId={selectMode ? effectivePlayerId : null}
                 onPriestSelect={selectMode ? setSelectedPriestIndex : null}
               />
+
+              {/* Strip prêtres horizontal — mobile uniquement, sous le plateau */}
+              {isMobile && (
+                <div style={{
+                  background: 'rgba(8,6,4,0.92)',
+                  border: '1px solid #4a3410',
+                  borderRadius: 6,
+                  padding: '6px 12px',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '95vw',
+                }}>
+                  <div style={{ color: '#C9973A', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', width: '100%', textAlign: 'center' }}>
+                    {pendingMoveAction ? 'Prêtres' : 'Réserve'}
+                  </div>
+
+                  {pendingMoveAction ? (
+                    <>
+                      {myReservePriests.length > 0 && (() => {
+                        const reserveDests = getValidPriestDestinations('', layout);
+                        const isSelectable = selectMode && reserveDests.length > 0;
+                        return (
+                          <div
+                            onClick={isSelectable ? () => handleReservePriestClick(myReservePriests[0].i) : undefined}
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: isSelectable ? 'pointer' : 'default' }}
+                          >
+                            {myReservePriests.map(({ i }) => (
+                              <img key={i} src={`/${meImgFile}.png`} draggable={false} style={{ width: 36, height: 'auto', filter: isSelectable ? 'drop-shadow(0 0 6px #c084fc)' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.7))' }} />
+                            ))}
+                            <div style={{ color: '#a88a40', fontSize: 10 }}>
+                              Réserve ({myReservePriests.length})
+                              {isSelectable && <span style={{ color: '#c084fc' }}> ← tap</span>}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                      {selectedPriestIndex !== null && (
+                        <button onClick={() => setSelectedPriestIndex(null)} style={{ fontSize: 9, color: '#666', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                          ← Changer
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    currentPlayers.map(p => {
+                      const positions = getPriestPositions(p.id);
+                      const reserve = positions.filter(pos => !pos || pos === '').length;
+                      const imgFile = PRIEST_IMGS[p.color] || 'Pretre_noir';
+                      return (
+                        <div key={p.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                          <img src={`/${imgFile}.png`} draggable={false} style={{ width: 28, height: 'auto', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.7))', opacity: reserve === 0 ? 0.25 : 1 }} />
+                          <span style={{ color: '#a88a40', fontSize: 10, fontWeight: 700 }}>{reserve}</span>
+                          <span style={{ color: '#6B4C1E', fontSize: 8 }}>{p.name.substring(0, 5)}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
             <button
