@@ -247,7 +247,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
       )}
 
       {containerSize.width > 0 && (() => {
-        const sf = Math.min(1, Math.max(0.50, containerSize.width / 900));
+        const sf = Math.min(1, Math.max(0.44, containerSize.width / 900));
         const unitPx     = Math.round(28 * sf);  // 14–28
         const emptyPx    = Math.round(32 * sf);  // 16–32
         const creaturePx = Math.round(28 * sf);  // 14–28
@@ -414,7 +414,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
 
       {/* Pyramides */}
       {containerSize.width > 0 && (() => {
-        const sf = Math.min(1, Math.max(0.50, containerSize.width / 900));
+        const sf = Math.min(1, Math.max(0.44, containerSize.width / 900));
         const pyramidPx = Math.round(32 * sf);
         return PYRAMID_SLOTS.map(slot => {
           const { left, top } = getZonePosition(slot);
