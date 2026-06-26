@@ -214,15 +214,27 @@ function getReachableEmptyTemples(fromZoneId, maxPts, boardUnits, aiColor) {
   return reachable;
 }
 
-// Vérifie si un temple vide est atteignable en 1 ou 2 zones depuis fromZone
-function canReachEmptyTemple(fromZone, boardUnits) {
-  for (const adj of (ZONE_ADJACENCY[fromZone] || [])) {
-    if (TEMPLES.includes(adj) && !Object.values(boardUnits[adj] || {}).some(n => n > 0)) return true;
-    for (const adj2 of (ZONE_ADJACENCY[adj] || [])) {
-      if (TEMPLES.includes(adj2) && !Object.values(boardUnits[adj2] || {}).some(n => n > 0)) return true;
+// BFS : retourne toutes les zones accessibles depuis fromZoneId en <= maxPts pas
+// (ne traverse pas les zones ennemies)
+function getReachableZonesForMove(fromZoneId, maxPts, boardUnits, aiColor) {
+  const visited = new Set([fromZoneId]);
+  let frontier = [fromZoneId];
+  const reachable = [];
+  for (let step = 1; step <= maxPts; step++) {
+    const next = [];
+    for (const zone of frontier) {
+      for (const adj of (ZONE_ADJACENCY[zone] || [])) {
+        if (visited.has(adj)) continue;
+        visited.add(adj);
+        const hasEnemy = Object.entries(boardUnits[adj] || {}).some(([c, n]) => c !== aiColor && (n || 0) > 0);
+        if (hasEnemy) continue;
+        reachable.push(adj);
+        next.push(adj);
+      }
     }
+    frontier = next;
   }
-  return false;
+  return reachable;
 }
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
@@ -425,23 +437,29 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
 
   for (const fromZoneId of myZones) {
     const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
-    if (myUnits < 2) continue;
+    if (myUnits < 1) continue;
 
     // Exception unique : dernier joueur + 1 seule troupe + sur un temple
-    // + au moins 1 autre temple vide atteignable selon la capacité max de déplacement
+    // + au moins 1 autre temple vide atteignable → garder 1 unité sur le temple source
     const sourceIsTemple = TEMPLES.includes(fromZoneId);
     const reachableEmptyTemples = (sourceIsTemple && isLastToPlay && hasOnlyOneGroup)
       ? getReachableEmptyTemples(fromZoneId, maxMovePts, boardUnits, aiColor)
       : [];
-    const keepBack = reachableEmptyTemples.length > 0 ? 1 : 0;
+    const canSplitForTemple = reachableEmptyTemples.length > 0;
 
-    for (const adjZoneId of (ZONE_ADJACENCY[fromZoneId] || [])) {
+    // BFS : toutes les zones atteignables dans maxMovePts déplacements
+    const reachableZones = getReachableZonesForMove(fromZoneId, maxMovePts, boardUnits, aiColor);
+
+    for (const adjZoneId of reachableZones) {
       const adjUnits = boardUnits[adjZoneId] || {};
-      const hasEnemies = Object.entries(adjUnits).some(([c, n]) => c !== aiColor && (n || 0) > 0);
-      if (hasEnemies) continue;
-
       const existingFriendly = adjUnits[aiColor] || 0;
-      const canAdd = Math.min(myUnits - keepBack, MAX_UNITS_PER_ZONE - existingFriendly);
+
+      // keepBack ne s'applique que si la destination EST un temple vide (exception prise de 2 temples)
+      const destIsEmptyTemple = TEMPLES.includes(adjZoneId) && !Object.values(adjUnits).some(n => n > 0);
+      const keepBack = (canSplitForTemple && destIsEmptyTemple) ? 1 : 0;
+
+      const intendedMove = myUnits - keepBack;
+      const canAdd = Math.min(intendedMove, MAX_UNITS_PER_ZONE - existingFriendly);
       if (canAdd <= 0) continue;
 
       const isTemple   = TEMPLES.includes(adjZoneId);
