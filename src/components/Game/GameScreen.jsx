@@ -937,10 +937,12 @@ export default function GameScreen({ session }) {
 
     // Contrôle pyramide : quitter une cité ennemie via téléport (restaurer si plus d'unités)
     const fromPyrSlotT = getPyramidSlotForZone(currentZoneId);
+    const pyramidControllerUndoT = {};
     if (fromPyrSlotT && gameState?.pyramids?.[fromPyrSlotT] && fromCount === 0) {
       const pyr = gameState.pyramids[fromPyrSlotT];
       if (pyr.ownerId !== effectivePlayerId && pyr.controllerId === effectivePlayerId) {
         updates[`rooms/${roomCode}/gameState/pyramids/${fromPyrSlotT}/controllerId`] = pyr.ownerId;
+        pyramidControllerUndoT[fromPyrSlotT] = pyr.controllerId;
       }
     }
 
@@ -1000,7 +1002,7 @@ export default function GameScreen({ session }) {
         boardPriests: gameState.boardPriests || {},
         creatureAssignments: gameState.creatureAssignments || {},
         creatureAssignments2: gameState.creatureAssignments2 || {},
-        pyramids: gameState.pyramids || {},
+        pyramidControllerUndo: pyramidControllerUndoT,
         playerAnk: gameState.players?.[effectivePlayerId]?.ank ?? 7,
         pendingWallPass: gameState.players?.[effectivePlayerId]?.pendingWallPass ?? null,
         pendingFreeAnyTeleport: gameState.players?.[effectivePlayerId]?.pendingFreeAnyTeleport ?? null,
@@ -1274,10 +1276,12 @@ export default function GameScreen({ session }) {
 
     // Contrôle de pyramide : quitter une cité ennemie (restaurer le propriétaire si plus d'unités)
     const fromPyrSlot = getPyramidSlotForZone(currentZoneId);
+    const pyramidControllerUndo = {};
     if (fromPyrSlot && gameState?.pyramids?.[fromPyrSlot] && fromCount === 0) {
       const pyr = gameState.pyramids[fromPyrSlot];
       if (pyr.ownerId !== effectivePlayerId && pyr.controllerId === effectivePlayerId) {
         updates[`rooms/${roomCode}/gameState/pyramids/${fromPyrSlot}/controllerId`] = pyr.ownerId;
+        pyramidControllerUndo[fromPyrSlot] = pyr.controllerId;
       }
     }
 
@@ -1302,6 +1306,7 @@ export default function GameScreen({ session }) {
         const pyr = gameState.pyramids[toPyrSlot];
         if (pyr.ownerId !== effectivePlayerId) {
           updates[`rooms/${roomCode}/gameState/pyramids/${toPyrSlot}/controllerId`] = effectivePlayerId;
+          pyramidControllerUndo[toPyrSlot] = pyr.controllerId;
         }
       }
     }
@@ -1349,7 +1354,7 @@ export default function GameScreen({ session }) {
         boardPriests: gameState.boardPriests || {},
         creatureAssignments: gameState.creatureAssignments || {},
         creatureAssignments2: gameState.creatureAssignments2 || {},
-        pyramids: gameState.pyramids || {},
+        pyramidControllerUndo,
         playerAnk: gameState.players?.[effectivePlayerId]?.ank ?? 7,
         pendingWallPass: gameState.players?.[effectivePlayerId]?.pendingWallPass ?? null,
         pendingFreeAnyTeleport: gameState.players?.[effectivePlayerId]?.pendingFreeAnyTeleport ?? null,
@@ -1442,9 +1447,12 @@ export default function GameScreen({ session }) {
       [`rooms/${roomCode}/gameState/boardPriests`]: snap.boardPriests,
       [`rooms/${roomCode}/gameState/creatureAssignments`]: snap.creatureAssignments,
       [`rooms/${roomCode}/gameState/creatureAssignments2`]: snap.creatureAssignments2,
-      [`rooms/${roomCode}/gameState/pyramids`]: snap.pyramids,
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`]: snap.playerAnk,
     };
+    // Restaurer uniquement les controllerId de pyramide modifiés pendant ce hop
+    for (const [slotId, originalId] of Object.entries(snap.pyramidControllerUndo || {})) {
+      updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/controllerId`] = originalId;
+    }
     if (snap.pendingWallPass !== null) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingWallPass`] = snap.pendingWallPass;
     if (snap.pendingFreeAnyTeleport !== null) updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingFreeAnyTeleport`] = snap.pendingFreeAnyTeleport;
     await update(ref(db, "/"), updates);
@@ -1748,13 +1756,22 @@ export default function GameScreen({ session }) {
 
             baseUpdates[`rooms/${roomCode}/gameState/taSetiPriestPositions/${aiId}/${pi}`] = chosenDest;
 
-            // Bonus du nœud I traversé
-            const iNode = getTraversedINode(pPos[pi], chosenDest, layout);
-            if (iNode) {
-              const im = iNode.match(/^I_(\d+)_/);
+            // Bonus du nœud I traversé (certains nœuds : une seule fois par jour)
+            const AI_DAILY_I_NODES = new Set(['I_1_1', 'I_1_3', 'I_1_4', 'I_3_1']);
+            const iNodeAi = getTraversedINode(pPos[pi], chosenDest, layout);
+            if (iNodeAi) {
+              const im = iNodeAi.match(/^I_(\d+)_/);
               if (im) {
                 const iFk = `${im[1]}${faces[parseInt(im[1]) - 1]}`;
-                (TASETI_I_BONUSES[iFk]?.[iNode] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
+                if (AI_DAILY_I_NODES.has(iNodeAi)) {
+                  const alreadyConsumed = baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNodeAi}`] ?? gameState?.taSetiDailyBonuses?.[iNodeAi];
+                  if (!alreadyConsumed) {
+                    (TASETI_I_BONUSES[iFk]?.[iNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
+                    baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNodeAi}`] = true;
+                  }
+                } else {
+                  (TASETI_I_BONUSES[iFk]?.[iNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
+                }
               }
             }
 
@@ -2069,15 +2086,24 @@ export default function GameScreen({ session }) {
         Math.max(0, (myState.taSetiNightAdvancePending ?? 0) - 1);
     }
 
-    // Nœud I traversé → appliquer ses bonus
+    // Nœud I traversé → appliquer ses bonus (certains nœuds : une seule fois par jour)
+    const DAILY_I_NODES = new Set(['I_1_1', 'I_1_3', 'I_1_4', 'I_3_1']);
     const iNode = getTraversedINode(oldPos, nodeId, layout);
     if (iNode) {
       const iMatch = iNode.match(/^I_(\d+)_/);
       if (iMatch) {
         const iSection = parseInt(iMatch[1]);
         const iFaceKey = `${iSection}${faces[iSection - 1]}`;
-        const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
-        iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
+        if (DAILY_I_NODES.has(iNode)) {
+          if (!gameState?.taSetiDailyBonuses?.[iNode]) {
+            const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
+            iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
+            updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNode}`] = true;
+          }
+        } else {
+          const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
+          iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
+        }
       }
     }
 
@@ -3052,6 +3078,10 @@ export default function GameScreen({ session }) {
                 onDestinationClick={pendingMoveAction && !selectMode ? handlePriestDestinationClick : null}
                 selectablePlayerId={selectMode ? effectivePlayerId : null}
                 onPriestSelect={selectMode ? setSelectedPriestIndex : null}
+                dailyBonuses={{
+                  ...(gameState.taSetiDailyBonuses || {}),
+                  'E_4_2': !!gameState.taSetiE4_2DailyVp,
+                }}
               />
 
               {/* Strip prêtres horizontal — mobile uniquement, sous le plateau */}

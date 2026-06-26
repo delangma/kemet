@@ -1,4 +1,4 @@
-import { TASETI_NODE_POSITIONS, NODE_COLORS, E_NODE_WIDTH_PCT, JU_CARD_WIDTH_PCT, JI_CARD_WIDTH_PCT, JP_CARD_WIDTH_PCT } from '../../constants/taSetiPositions';
+import { TASETI_NODE_POSITIONS, NODE_COLORS, E_NODE_WIDTH_PCT, JU_CARD_WIDTH_PCT, JI_CARD_WIDTH_PCT, JP_CARD_WIDTH_PCT, TASETI_DAILY_BONUS_NODES } from '../../constants/taSetiPositions';
 import { PU_CARDS } from '../../constants/puCards';
 import { JI_CARDS } from '../../constants/jiCards';
 import { JP_CARDS } from '../../constants/jpCards';
@@ -27,29 +27,42 @@ function buildPriestsAtNode(priestPositions, players) {
   return map;
 }
 
+const DAILY_BONUS_IMG_STYLE = {
+  width: `calc(95vw * 6.5 / 100)`,
+  height: 'auto',
+  display: 'block',
+  pointerEvents: 'none',
+  mixBlendMode: 'multiply',
+  borderRadius: 3,
+};
+
 function NodeOverlay({
   sectionKey, puAssignment, jiAssignment, jpAssignment,
   priestsAtNode, validDestinations, onDestinationClick,
   selectablePlayerId, onPriestSelect,
+  dailyBonuses,
 }) {
   const nodes = TASETI_NODE_POSITIONS[sectionKey];
   if (!nodes) return null;
   const validSet = new Set(validDestinations || []);
+  const sectionBonusNodes = TASETI_DAILY_BONUS_NODES[sectionKey] || {};
 
   return (
     <>
       {Object.entries(nodes).map(([id, pos]) => {
+        const dailyBonusImg = sectionBonusNodes[id];
 
         // ── Nœuds E_ ──────────────────────────────────────────────────────
         if (id.startsWith('E')) {
           const priestsHere = priestsAtNode?.[id] || [];
           const isValidDest = validSet.has(id);
+          const hasDailyBonus = dailyBonusImg && !dailyBonuses?.[id];
           const selectablePriestsHere = selectablePlayerId
             ? priestsHere.filter(p => p.playerId === selectablePlayerId)
             : [];
           const isSelectable = selectablePriestsHere.length > 0;
 
-          if (priestsHere.length === 0 && !isValidDest) return null;
+          if (priestsHere.length === 0 && !isValidDest && !hasDailyBonus) return null;
 
           return (
             <div
@@ -115,6 +128,21 @@ function NodeOverlay({
                   }}
                 />
               ))}
+
+              {hasDailyBonus && (
+                <img
+                  src={dailyBonusImg}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    position: 'absolute',
+                    top: '50%', left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    ...DAILY_BONUS_IMG_STYLE,
+                    width: '130%',
+                  }}
+                />
+              )}
             </div>
           );
         }
@@ -173,7 +201,46 @@ function NodeOverlay({
           );
         }
 
-        // Nœuds C_ non affichés
+        // ── Nœuds I_ (chemins d'entrée) — uniquement si bonus quotidien disponible
+        if (id.startsWith('I')) {
+          if (!dailyBonusImg || dailyBonuses?.[id]) return null;
+          return (
+            <img
+              key={id}
+              src={dailyBonusImg}
+              alt=""
+              draggable={false}
+              style={{
+                position: 'absolute',
+                left: `${pos.x}%`, top: `${pos.y}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 8,
+                ...DAILY_BONUS_IMG_STYLE,
+              }}
+            />
+          );
+        }
+
+        // ── Nœuds C_ — affichés si bonus quotidien disponible
+        if (id.startsWith('C')) {
+          if (!dailyBonusImg || dailyBonuses?.[id]) return null;
+          return (
+            <img
+              key={id}
+              src={dailyBonusImg}
+              alt=""
+              draggable={false}
+              style={{
+                position: 'absolute',
+                left: `${pos.x}%`, top: `${pos.y}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: 8,
+                ...DAILY_BONUS_IMG_STYLE,
+              }}
+            />
+          );
+        }
+
         return null;
       })}
     </>
@@ -193,6 +260,7 @@ export default function TaSetiBoard({
   onDestinationClick,
   selectablePlayerId,   // prêtres de ce joueur sont cliquables pour sélection
   onPriestSelect,       // (priestIndex) => void
+  dailyBonuses,         // { nodeId: true } → true = bonus déjà pris aujourd'hui
 }) {
   if (!layout) return null;
   const faces = Array.isArray(layout) ? layout : Object.values(layout);
@@ -223,6 +291,7 @@ export default function TaSetiBoard({
                 onDestinationClick={onDestinationClick}
                 selectablePlayerId={selectablePlayerId}
                 onPriestSelect={onPriestSelect}
+                dailyBonuses={dailyBonuses}
               />
             </div>
           );

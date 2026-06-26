@@ -213,8 +213,9 @@ export default function NightModal({ onClose, session, gameState }) {
       }
     });
 
-    // Effacer les bonus Ta-Seti combat non utilisés + reset flag PV quotidien E_4_2
+    // Effacer les bonus Ta-Seti combat non utilisés + reset flags quotidiens
     updates[`rooms/${roomCode}/gameState/taSetiE4_2DailyVp`] = null;
+    updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses`] = null;
     allPlayers.forEach(p => {
       const ps = state.players?.[p.id] || {};
       if ((ps.tasetiForce   ?? 0) > 0) updates[`rooms/${roomCode}/gameState/players/${p.id}/tasetiForce`]   = null;
