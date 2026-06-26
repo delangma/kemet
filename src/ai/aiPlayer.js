@@ -159,6 +159,61 @@ function countMyTemples(aiColor, boardUnits) {
   return TEMPLES.filter(t => (boardUnits[t]?.[aiColor] || 0) > 0).length;
 }
 
+// Capacité de déplacement max théorique :
+// tuiles pouvoirs + cartes ID Marche Forcée en main + jetons JP sur les prêtres
+function computeMaxMovePoints(aiPlayerId, gameState) {
+  const myState = gameState.players?.[aiPlayerId] || {};
+  const ownedTileIds = myState.ownedTileIds || [];
+
+  let pts = 1 + ownedTileIds.filter(id => {
+    const name = POWER_TILES.find(t => t.id === id)?.name;
+    return name === "Déplacement" || name === "Furie Bestiale";
+  }).length;
+
+  // Cartes ID Marche Forcée en main
+  pts += (myState.idCards || []).filter(c => c.id === "marche_forcee").length;
+
+  // Jetons JP capacité déplacement portés par les prêtres sur le plateau
+  const aiColor = myState.color;
+  const boardPriests = gameState.boardPriests || {};
+  Object.values(boardPriests).forEach(zoneColors => {
+    const priest = zoneColors?.[aiColor];
+    if (priest?.jpTokenIds) {
+      pts += priest.jpTokenIds.filter(id => id === 'JP_capacite_deplacement').length;
+    }
+  });
+
+  return pts;
+}
+
+// BFS : retourne les temples vides atteignables depuis fromZoneId en <= maxPts pas
+// (ne traverse pas les zones occupées par des ennemis)
+function getReachableEmptyTemples(fromZoneId, maxPts, boardUnits, aiColor) {
+  const visited = new Set([fromZoneId]);
+  let frontier = [fromZoneId];
+  const reachable = [];
+
+  for (let step = 1; step <= maxPts; step++) {
+    const next = [];
+    for (const zone of frontier) {
+      for (const adj of (ZONE_ADJACENCY[zone] || [])) {
+        if (visited.has(adj)) continue;
+        visited.add(adj);
+        const adjUnits = boardUnits[adj] || {};
+        const hasEnemy = Object.entries(adjUnits).some(([c, n]) => c !== aiColor && (n || 0) > 0);
+        if (hasEnemy) continue;
+        next.push(adj);
+        if (TEMPLES.includes(adj) && !Object.values(adjUnits).some(n => n > 0)) {
+          reachable.push(adj);
+        }
+      }
+    }
+    frontier = next;
+  }
+
+  return reachable;
+}
+
 // Vérifie si un temple vide est atteignable en 1 ou 2 zones depuis fromZone
 function canReachEmptyTemple(fromZone, boardUnits) {
   for (const adj of (ZONE_ADJACENCY[fromZone] || [])) {
@@ -363,10 +418,22 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
 
   // ── Déplacement ───────────────────────────────────────────────────────────
   const myTemples = countMyTemples(aiColor, boardUnits);
+  const aiOrder = aiPlayer?.order ?? 0;
+  const isLastToPlay = allPlayers.every(p => p.id === aiPlayerId || (p.order ?? 0) <= aiOrder);
+  const hasOnlyOneGroup = myZones.length === 1;
+  const maxMovePts = computeMaxMovePoints(aiPlayerId, gameState);
 
   for (const fromZoneId of myZones) {
     const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
     if (myUnits < 2) continue;
+
+    // Exception unique : dernier joueur + 1 seule troupe + sur un temple
+    // + au moins 1 autre temple vide atteignable selon la capacité max de déplacement
+    const sourceIsTemple = TEMPLES.includes(fromZoneId);
+    const reachableEmptyTemples = (sourceIsTemple && isLastToPlay && hasOnlyOneGroup)
+      ? getReachableEmptyTemples(fromZoneId, maxMovePts, boardUnits, aiColor)
+      : [];
+    const keepBack = reachableEmptyTemples.length > 0 ? 1 : 0;
 
     for (const adjZoneId of (ZONE_ADJACENCY[fromZoneId] || [])) {
       const adjUnits = boardUnits[adjZoneId] || {};
@@ -374,7 +441,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
       if (hasEnemies) continue;
 
       const existingFriendly = adjUnits[aiColor] || 0;
-      const canAdd = Math.min(myUnits - 1, MAX_UNITS_PER_ZONE - existingFriendly);
+      const canAdd = Math.min(myUnits - keepBack, MAX_UNITS_PER_ZONE - existingFriendly);
       if (canAdd <= 0) continue;
 
       const isTemple   = TEMPLES.includes(adjZoneId);

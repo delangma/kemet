@@ -141,12 +141,18 @@ Les poids indiqués sont des suggestions à calibrer.
 ### ACTION : Déplacement — Nombre d'unités
 | Règle                                                              | Décision             | Poids |
 |--------------------------------------------------------------------|----------------------|-------|
-| Déplacer TOUTES les unités (défaut)                                | Tout déplacer        |  +10  |
-| Garder au moins 1 unité pour défendre ma cité                      | Garder 1             |  +30  |
-| Dernier à jouer + possibilité de prendre 2 temples                 | Laisser 1 unité      |  +60  |
-| Attaque prévue : déplacer le maximum                               | Tout déplacer        |  +40  |
-| Temple défendu par moi : garder le minimum pour contrôler          | Garder minimum       |  +25  |
-| Zone source adjacente à un temple ennemi                           | Garder 1 en arrière  |  +20  |
+| **Règle principale** : toujours déplacer TOUTES les unités         | Tout déplacer        | défaut |
+| Toute autre situation (défense cité, regroupement, etc.)           | Tout déplacer        | défaut |
+
+> **Exception unique** : garder 1 unité en place UNIQUEMENT si toutes ces
+> conditions sont réunies simultanément :
+> 1. Je suis le **dernier joueur** dans l'ordre de jeu ce tour
+> 2. Je n'ai qu'**une seule troupe** sur le plateau
+> 3. Cette troupe est **sur un temple**
+> 4. Il existe **un temple vide adjacent** à cette zone
+>
+> Dans ce cas, on garde 1 unité sur le premier temple et on envoie le reste
+> prendre le second temple adjacent.
 
 ### ACTION : Téléportation — Choisir destination
 | Règle                                                              | Décision       | Poids |
