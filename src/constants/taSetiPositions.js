@@ -22,8 +22,6 @@ export const TASETI_NODE_POSITIONS = {
     JI_1_2: { x: 47, y: 40.5 },
     E_1_3:  { x: 50, y: 75 },
     JI_1_3: { x: 52, y: 87.3 },
-    I_1_1:  { x: 85, y: 18 },
-    I_1_3:  { x: 85, y: 77 },
   },
 
   // ── Section 1 face B ────────────────────────────────────────────────────
@@ -36,8 +34,6 @@ export const TASETI_NODE_POSITIONS = {
     JI_1_3: { x: 51, y: 67 },
     E_1_4:  { x: 52, y: 78 },
     JI_1_4: { x: 51, y: 90 },
-    I_1_1:  { x: 85, y: 15 },
-    I_1_4:  { x: 85, y: 80 },
   },
 
   // ── Section 2 face A ────────────────────────────────────────────────────
@@ -63,7 +59,6 @@ export const TASETI_NODE_POSITIONS = {
   // ── Section 3 face A ────────────────────────────────────────────────────
   '3A': {
     E_3_1:  { x: 65, y: 20 },
-    I_3_1:  { x: 85, y: 18 },
     JI_3_1: { x: 42.5, y: 10 },
     JU_3_1: { x: 80, y: 10.1 },
     E_3_2:  { x: 22, y: 45 },
@@ -146,14 +141,31 @@ export function getJuPositionsForLayout(layout) {
 }
 
 // Nœuds avec bonus quotidien (une fois par jour, premier passant seulement)
-// sectionKey → { nodeId: cheminImage }
+// sectionKey → { nodeId: { img, x, y, size } }
+//   img  : chemin de l'image (public/)
+//   x, y : position en % de l'image de la section (0–100)
+//   size : largeur en % de la largeur totale du plateau (95vw)
 export const TASETI_DAILY_BONUS_NODES = {
-  '1A': { 'I_1_1': '/TS_bouclier.jpeg', 'I_1_3': '/TS_goutte_sang.jpeg' },
-  '1B': { 'I_1_1': '/TS_bouclier.jpeg', 'I_1_4': '/TS_goutte_sang.jpeg' },
-  '3A': { 'I_3_1': '/TS_force.jpeg' },
-  '3B': { 'C_3_1': '/TS_force.jpeg' },
-  '4A': { 'E_4_2': '/TS_PV.jpeg' },
-  '4B': { 'E_4_2': '/TS_PV.jpeg' },
+  '1A': {
+    'I_1_1': { img: '/TS_bouclier.png',   x: 14, y: 12, size: 5 },
+    'I_1_3': { img: '/TS_goutte_sang.png', x: 14, y: 77, size: 5 },
+  },
+  '1B': {
+    'I_1_1': { img: '/TS_bouclier.png',   x: 14, y: 12, size: 5 },
+    'I_1_4': { img: '/TS_goutte_sang.png', x: 14, y: 77, size: 5 },
+  },
+  '3A': {
+    'I_3_1': { img: '/TS_force.png', x: 15, y: 14, size: 5 },
+  },
+  '3B': {
+    'C_3_1': { img: '/TS_force.png', x: 70, y: 35, size: 5 },
+  },
+  '4A': {
+    'E_4_2': { img: '/TS_PV.png', x: 82, y: 48, size: 3.6 },
+  },
+  '4B': {
+    'E_4_2': { img: '/TS_PV.png', x: 82, y: 48, size: 3.6 },
+  },
 };
 
 // Retourne les E_ nodes dans l'ordre du parcours (section 1→4, nœud 1→N)

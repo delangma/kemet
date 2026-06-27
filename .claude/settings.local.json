@@ -16,7 +16,14 @@
       "PowerShell(\\(Get-Content \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Game\\\\GameScreen.jsx\" | Measure-Object -Line\\).Lines)",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\" -Recurse -File | Where-Object {$_.Extension -eq \".js\" -or $_.Extension -eq \".jsx\"} | Select-Object -ExpandProperty FullName)",
       "Bash(npx vite *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "PowerShell(python --version; python -c \"from PIL import Image; print\\('Pillow OK'\\)\")",
+      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\process_combat.py\")",
+      "PowerShell(python -c \"from skimage.exposure import match_histograms; print\\('skimage OK'\\)\")",
+      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\match_colors.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113_lab.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113_targeted.py\")"
     ]
   }
 }

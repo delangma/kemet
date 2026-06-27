@@ -226,7 +226,6 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
 
 async function handleStartChoosing() {
   if (!dawn) return;
-  // Calcule le classement par score
   const ranked = allPlayers
     .map(p => {
       const choice = dawn.choices?.[p.id];
@@ -238,57 +237,63 @@ async function handleStartChoosing() {
       if (b.score !== a.score) return b.score - a.score;
       return a.order - b.order;
     });
-
-  await update(ref(db, `rooms/${roomCode}/dawn`), {
-    status: "choosing",
-    currentTurn: ranked[0].id,
-    rankedPlayers: ranked.map(p => p.id),
-    chosenPositions: {},
-  });
+  if (!ranked.length) return;
+  try {
+    await update(ref(db, `rooms/${roomCode}/dawn`), {
+      status: "choosing",
+      currentTurn: ranked[0].id,
+      rankedPlayers: ranked.map(p => p.id),
+      chosenPositions: {},
+    });
+  } catch (err) {
+    console.error("handleStartChoosing error:", err);
+  }
 }
 
 async function handleChoosePosition(position) {
   if (!dawn) return;
+  try {
+    const snapshot = await get(ref(db, `rooms/${roomCode}/dawn`));
+    if (!snapshot.exists()) return;
+    const freshDawn = snapshot.val();
 
-  // Lit les positions depuis Firebase directement pour éviter la désync
-  const snapshot = await get(ref(db, `rooms/${roomCode}/dawn`));
-  if (!snapshot.exists()) return;
-  const freshDawn = snapshot.val();
-  
-  const chosenPositions = freshDawn.chosenPositions || {};
-  const newChosenPositions = { ...chosenPositions, [playerId]: position };
+    const chosenPositions = freshDawn.chosenPositions || {};
+    const newChosenPositions = { ...chosenPositions, [playerId]: position };
 
-  const ranked = freshDawn.rankedPlayers || [];
-  const nextPlayer = ranked.find(pid => !newChosenPositions[pid]);
+    const ranked = freshDawn.rankedPlayers || [];
+    const nextPlayer = ranked.find(pid => !newChosenPositions[pid]);
 
-  const updates = {
-    [`rooms/${roomCode}/dawn/chosenPositions/${playerId}`]: position,
-  };
+    if (nextPlayer) {
+      await update(ref(db, `rooms/${roomCode}/dawn`), {
+        [`chosenPositions/${playerId}`]: position,
+        currentTurn: nextPlayer,
+      });
+    } else {
+      // Tous ont choisi → applique l'ordre et termine
+      const finalUpdates = {};
+      Object.entries(newChosenPositions).forEach(([pid, pos]) => {
+        finalUpdates[`rooms/${roomCode}/players/${pid}/order`] = pos;
+        finalUpdates[`rooms/${roomCode}/gameState/players/${pid}/order`] = pos;
+      });
 
-  if (nextPlayer) {
-    updates[`rooms/${roomCode}/dawn/currentTurn`] = nextPlayer;
-    await update(ref(db, "/"), updates);
-  } else {
-    // Tous ont choisi → applique l'ordre et termine
-    Object.entries(newChosenPositions).forEach(([pid, pos]) => {
-      updates[`rooms/${roomCode}/players/${pid}/order`] = pos;
-      updates[`rooms/${roomCode}/gameState/players/${pid}/order`] = pos;
-    });
+      allPlayers.forEach(p => {
+        const choice = freshDawn.choices?.[p.id];
+        const playerState = gameState?.players?.[p.id] || {};
+        const available = playerState.availableCombatCards || [1,2,3,4,5,6,7,8];
+        let newAvailable = available.filter(id => id !== choice?.combatCard && id !== choice?.discardCard);
+        if (newAvailable.length < 2) newAvailable = [1,2,3,4,5,6,7,8];
+        finalUpdates[`rooms/${roomCode}/gameState/players/${p.id}/availableCombatCards`] = newAvailable;
+      });
 
-    allPlayers.forEach(p => {
-      const choice = freshDawn.choices?.[p.id];
-      const playerState = gameState?.players?.[p.id] || {};
-      const available = playerState.availableCombatCards || [1,2,3,4,5,6,7,8];
-      let newAvailable = available.filter(id => id !== choice?.combatCard && id !== choice?.discardCard);
-      if (newAvailable.length < 2) newAvailable = [1,2,3,4,5,6,7,8];
-      updates[`rooms/${roomCode}/gameState/players/${p.id}/availableCombatCards`] = newAvailable;
-    });
-
-    await update(ref(db, "/"), updates);
-    await remove(ref(db, `rooms/${roomCode}/dawn`));
-    setSelectedCombat(null);
-    setSelectedDiscard(null);
-    setDawnTokens(0);
+      finalUpdates[`rooms/${roomCode}/dawn/chosenPositions/${playerId}`] = position;
+      await update(ref(db, "/"), finalUpdates);
+      await remove(ref(db, `rooms/${roomCode}/dawn`));
+      setSelectedCombat(null);
+      setSelectedDiscard(null);
+      setDawnTokens(0);
+    }
+  } catch (err) {
+    console.error("handleChoosePosition error:", err);
   }
 }
   
@@ -385,14 +390,22 @@ async function handleChoosePosition(position) {
                           key={id}
                           onClick={() => setSelectedCombat(isSelected ? null : id)}
                           disabled={isDiscarded}
-                          className={`rounded-lg p-2 text-xs w-16 text-center border transition-all
-                            ${isSelected ? "border-orange-400 bg-orange-900" :
-                              isDiscarded ? "border-gray-700 bg-gray-800 opacity-30 cursor-not-allowed" :
-                              "border-gray-600 bg-gray-800 hover:border-gray-400"}`}
+                          style={{
+                            width: 96, padding: 0, borderRadius: 8, overflow: 'hidden',
+                            cursor: isDiscarded ? 'not-allowed' : 'pointer',
+                            border: `2px solid ${isSelected ? '#fb923c' : isDiscarded ? '#374151' : '#4b5563'}`,
+                            opacity: isDiscarded ? 0.3 : 1,
+                            boxShadow: isSelected ? '0 0 8px rgba(251,146,60,0.6)' : 'none',
+                            transition: 'border-color 0.15s, box-shadow 0.15s',
+                            background: 'transparent',
+                          }}
                         >
-                          <p className="text-yellow-400 font-bold text-lg">{card.force}</p>
-                          <p className="text-red-400 text-xs">🩸{card.blood}</p>
-                          <p className="text-blue-400 text-xs">🛡️{card.shields}</p>
+                          <img
+                            src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                            alt={`F${card.force}`}
+                            draggable={false}
+                            style={{ width: '100%', height: 'auto', display: 'block' }}
+                          />
                         </button>
                       );
                     })}
@@ -412,14 +425,22 @@ async function handleChoosePosition(position) {
                           key={id}
                           onClick={() => setSelectedDiscard(isSelected ? null : id)}
                           disabled={isCombat}
-                          className={`rounded-lg p-2 text-xs w-16 text-center border transition-all
-                            ${isSelected ? "border-red-400 bg-red-900" :
-                              isCombat ? "border-gray-700 bg-gray-800 opacity-30 cursor-not-allowed" :
-                              "border-gray-600 bg-gray-800 hover:border-gray-400"}`}
+                          style={{
+                            width: 96, padding: 0, borderRadius: 8, overflow: 'hidden',
+                            cursor: isCombat ? 'not-allowed' : 'pointer',
+                            border: `2px solid ${isSelected ? '#f87171' : isCombat ? '#374151' : '#4b5563'}`,
+                            opacity: isCombat ? 0.3 : 1,
+                            boxShadow: isSelected ? '0 0 8px rgba(248,113,113,0.6)' : 'none',
+                            transition: 'border-color 0.15s, box-shadow 0.15s',
+                            background: 'transparent',
+                          }}
                         >
-                          <p className="text-yellow-400 font-bold text-lg">{card.force}</p>
-                          <p className="text-red-400 text-xs">🩸{card.blood}</p>
-                          <p className="text-blue-400 text-xs">🛡️{card.shields}</p>
+                          <img
+                            src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                            alt={`F${card.force}`}
+                            draggable={false}
+                            style={{ width: '100%', height: 'auto', display: 'block' }}
+                          />
                         </button>
                       );
                     })}
@@ -533,11 +554,11 @@ async function handleChoosePosition(position) {
               <p className="text-xs text-gray-400 mb-1">#{i + 1}</p>
               <p className="font-bold text-white mb-2">{p.name}</p>
               {card && (
-                <div className="bg-gray-700 rounded-lg p-2 mb-2">
-                  <p className="text-yellow-400 font-bold text-2xl">{card.force}</p>
-                  <p className="text-red-400 text-xs">🩸{card.blood}</p>
-                  <p className="text-blue-400 text-xs">🛡️{card.shields}</p>
-                </div>
+                <img
+                  src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                  alt="" draggable={false}
+                  style={{ width: '100%', borderRadius: 6, display: 'block', marginBottom: 8 }}
+                />
               )}
               {p.choice?.dawnTokens > 0 && (
                 <p className="text-orange-400 text-sm">+{p.choice.dawnTokens} 🌅</p>

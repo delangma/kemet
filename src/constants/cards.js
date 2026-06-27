@@ -2,7 +2,7 @@
 export const COMBAT_CARDS = [
   { id: 1, force: 5, blood: 0, shields: 0, effect: "lose2units" },
   { id: 2, force: 4, blood: 1, shields: 0, effect: null },
-  { id: 3, force: 3, blood: 1, shields: 0, effect: null },
+  { id: 3, force: 3, blood: 2, shields: 0, effect: null },
   { id: 4, force: 3, blood: 0, shields: 1, effect: null },
   { id: 5, force: 2, blood: 0, shields: 2, effect: null },
   { id: 6, force: 2, blood: 2, shields: 1, effect: null },

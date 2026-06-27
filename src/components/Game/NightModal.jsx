@@ -131,6 +131,7 @@ export default function NightModal({ onClose, session, gameState }) {
       updates[`rooms/${roomCode}/gameState/players/${p.id}/usedActions`] = [];
       updates[`rooms/${roomCode}/gameState/players/${p.id}/actionsThisTurn`] = 0;
       updates[`rooms/${roomCode}/gameState/players/${p.id}/goldenTokenUsed`] = false;
+      updates[`rooms/${roomCode}/gameState/players/${p.id}/goldenBuyBlockedThisTurn`] = false;
     });
 
     if (t1Controller) ankBonus[t1Controller.id] += 2;

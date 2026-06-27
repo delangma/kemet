@@ -27,14 +27,6 @@ function buildPriestsAtNode(priestPositions, players) {
   return map;
 }
 
-const DAILY_BONUS_IMG_STYLE = {
-  width: `calc(95vw * 6.5 / 100)`,
-  height: 'auto',
-  display: 'block',
-  pointerEvents: 'none',
-  mixBlendMode: 'multiply',
-  borderRadius: 3,
-};
 
 function NodeOverlay({
   sectionKey, puAssignment, jiAssignment, jpAssignment,
@@ -49,20 +41,19 @@ function NodeOverlay({
 
   return (
     <>
+      {/* ── Nœuds principaux ─────────────────────────────────────────── */}
       {Object.entries(nodes).map(([id, pos]) => {
-        const dailyBonusImg = sectionBonusNodes[id];
 
-        // ── Nœuds E_ ──────────────────────────────────────────────────────
+        // ── E_ ────────────────────────────────────────────────────────
         if (id.startsWith('E')) {
           const priestsHere = priestsAtNode?.[id] || [];
           const isValidDest = validSet.has(id);
-          const hasDailyBonus = dailyBonusImg && !dailyBonuses?.[id];
           const selectablePriestsHere = selectablePlayerId
             ? priestsHere.filter(p => p.playerId === selectablePlayerId)
             : [];
           const isSelectable = selectablePriestsHere.length > 0;
 
-          if (priestsHere.length === 0 && !isValidDest && !hasDailyBonus) return null;
+          if (priestsHere.length === 0 && !isValidDest) return null;
 
           return (
             <div
@@ -84,7 +75,6 @@ function NodeOverlay({
                 pointerEvents: (isValidDest && onDestinationClick) || (isSelectable && onPriestSelect) ? 'auto' : 'none',
               }}
             >
-              {/* Emplacement valide vide → cercle doré */}
               {isValidDest && priestsHere.length === 0 && (
                 <div style={{
                   width: '100%', aspectRatio: '1', borderRadius: '50%',
@@ -93,8 +83,6 @@ function NodeOverlay({
                   boxShadow: '0 0 10px 2px rgba(255,215,0,0.5)',
                 }} />
               )}
-
-              {/* Halo doré sur emplacement valide occupé */}
               {isValidDest && priestsHere.length > 0 && (
                 <div style={{
                   position: 'absolute', inset: '-5px', borderRadius: 6,
@@ -103,8 +91,6 @@ function NodeOverlay({
                   pointerEvents: 'none', zIndex: 25,
                 }} />
               )}
-
-              {/* Halo violet pour prêtre sélectionnable */}
               {isSelectable && !isValidDest && (
                 <div style={{
                   position: 'absolute', inset: '-5px', borderRadius: 6,
@@ -113,7 +99,6 @@ function NodeOverlay({
                   pointerEvents: 'none', zIndex: 25,
                 }} />
               )}
-
               {priestsHere.map(({ color }, i) => (
                 <img
                   key={i}
@@ -128,26 +113,11 @@ function NodeOverlay({
                   }}
                 />
               ))}
-
-              {hasDailyBonus && (
-                <img
-                  src={dailyBonusImg}
-                  alt=""
-                  draggable={false}
-                  style={{
-                    position: 'absolute',
-                    top: '50%', left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    ...DAILY_BONUS_IMG_STYLE,
-                    width: '130%',
-                  }}
-                />
-              )}
             </div>
           );
         }
 
-        // ── Nœuds JU_ ────────────────────────────────────────────────────
+        // ── JU_ ───────────────────────────────────────────────────────
         if (id.startsWith('JU')) {
           const cardId = puAssignment?.[id];
           const card = cardId ? PU_CARDS.find(c => c.id === cardId) : null;
@@ -165,7 +135,7 @@ function NodeOverlay({
           );
         }
 
-        // ── Nœuds JI_ ────────────────────────────────────────────────────
+        // ── JI_ ───────────────────────────────────────────────────────
         if (id.startsWith('JI')) {
           const cardId = jiAssignment?.[id];
           const card = cardId ? JI_CARDS.find(c => c.id === cardId) : null;
@@ -183,7 +153,7 @@ function NodeOverlay({
           );
         }
 
-        // ── Nœuds JP_ ────────────────────────────────────────────────────
+        // ── JP_ ───────────────────────────────────────────────────────
         if (id.startsWith('JP')) {
           const cardId = jpAssignment?.[id];
           const card = cardId ? JP_CARDS.find(c => c.id === cardId) : null;
@@ -201,47 +171,32 @@ function NodeOverlay({
           );
         }
 
-        // ── Nœuds I_ (chemins d'entrée) — uniquement si bonus quotidien disponible
-        if (id.startsWith('I')) {
-          if (!dailyBonusImg || dailyBonuses?.[id]) return null;
-          return (
-            <img
-              key={id}
-              src={dailyBonusImg}
-              alt=""
-              draggable={false}
-              style={{
-                position: 'absolute',
-                left: `${pos.x}%`, top: `${pos.y}%`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 8,
-                ...DAILY_BONUS_IMG_STYLE,
-              }}
-            />
-          );
-        }
-
-        // ── Nœuds C_ — affichés si bonus quotidien disponible
-        if (id.startsWith('C')) {
-          if (!dailyBonusImg || dailyBonuses?.[id]) return null;
-          return (
-            <img
-              key={id}
-              src={dailyBonusImg}
-              alt=""
-              draggable={false}
-              style={{
-                position: 'absolute',
-                left: `${pos.x}%`, top: `${pos.y}%`,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 8,
-                ...DAILY_BONUS_IMG_STYLE,
-              }}
-            />
-          );
-        }
-
         return null;
+      })}
+
+      {/* ── Images bonus quotidiennes ────────────────────────────────── */}
+      {Object.entries(sectionBonusNodes).map(([id, cfg]) => {
+        if (dailyBonuses?.[id]) return null;
+        return (
+          <img
+            key={`bonus-${id}`}
+            src={cfg.img}
+            alt=""
+            draggable={false}
+            style={{
+              position: 'absolute',
+              left: `${cfg.x}%`, top: `${cfg.y}%`,
+              transform: 'translate(-50%, -50%)',
+              width: `calc(95vw * ${cfg.size} / 100)`,
+              height: 'auto',
+              display: 'block',
+              pointerEvents: 'none',
+              borderRadius: 3,
+              zIndex: 8,
+              filter: 'drop-shadow(0 0 6px rgba(255,255,255,0.85))',
+            }}
+          />
+        );
       })}
     </>
   );

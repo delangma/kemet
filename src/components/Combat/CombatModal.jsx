@@ -24,6 +24,16 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   const myIdCards = myState.idCards || [];
   const myIdCombatCards = myIdCards.filter(c => c.timing === "combat" || c.timing === "any");
 
+  // gameState.players ne contient pas la couleur (stockée dans session.allPlayers).
+  // On l'enrichit ici pour que getCombatResult/getCombatCreatureBonus puissent
+  // résoudre colorA/colorD correctement.
+  const gameStateForCombat = {
+    ...gameState,
+    players: Object.fromEntries(
+      allPlayers.map(p => [p.id, { ...(gameState?.players?.[p.id] || {}), color: p.color }])
+    ),
+  };
+
   useEffect(() => {
     const unsubscribe = onValue(ref(db, `rooms/${roomCode}/combat`), snapshot => {
       if (!snapshot.exists()) {
@@ -263,7 +273,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   // Applique les dégâts et passe en phase post_combat
   async function handleApplyResults() {
     if (!combat || combat.status !== "revealed") return; // guard anti-double-clic
-    const result = getCombatResult(combat, gameState, POWER_TILES, COMBAT_CARDS);
+    try {
+    const result = getCombatResult(combat, gameStateForCombat, POWER_TILES, COMBAT_CARDS);
     if (!result) return;
 
     const {
@@ -510,6 +521,9 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const winnerName = allPlayers.find(p => p.id === winnerId)?.name || "?";
     const loserName  = allPlayers.find(p => p.id === loserId)?.name  || "?";
     logAction?.(winnerId, `remporte le combat contre ${loserName} en ${combat.zoneId} (${winnerUnitsAfter} surv. vs ${loserUnitsAfter})`);
+    } catch (err) {
+      console.error("handleApplyResults error:", err);
+    }
   }
 
   // Finalise le post-combat : applique retraite/rappel
@@ -734,14 +748,22 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                               key={id}
                               onClick={() => setSelectedCombat(isSelected ? null : id)}
                               disabled={isDiscarded}
-                              className={`rounded-lg p-2 text-xs w-16 text-center border transition-all
-                                ${isSelected ? "border-yellow-400 bg-yellow-900" :
-                                  isDiscarded ? "border-gray-700 bg-gray-800 opacity-30 cursor-not-allowed" :
-                                  "border-gray-600 bg-gray-800 hover:border-gray-400"}`}
+                              style={{
+                                width: 96, padding: 0, borderRadius: 8, overflow: 'hidden',
+                                cursor: isDiscarded ? 'not-allowed' : 'pointer',
+                                border: `2px solid ${isSelected ? '#facc15' : isDiscarded ? '#374151' : '#4b5563'}`,
+                                opacity: isDiscarded ? 0.3 : 1,
+                                boxShadow: isSelected ? '0 0 8px rgba(250,204,21,0.6)' : 'none',
+                                transition: 'border-color 0.15s, box-shadow 0.15s',
+                                background: 'transparent',
+                              }}
                             >
-                              <p className="text-yellow-400 font-bold text-lg">{card.force}</p>
-                              <p className="text-red-400 text-xs">s{card.blood}</p>
-                              <p className="text-blue-400 text-xs">b{card.shields}</p>
+                              <img
+                                src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                                alt={`F${card.force}`}
+                                draggable={false}
+                                style={{ width: '100%', height: 'auto', display: 'block' }}
+                              />
                             </button>
                           );
                         })}
@@ -761,14 +783,22 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                               key={id}
                               onClick={() => setSelectedDiscard(isSelected ? null : id)}
                               disabled={isCombat}
-                              className={`rounded-lg p-2 text-xs w-16 text-center border transition-all
-                                ${isSelected ? "border-red-400 bg-red-900" :
-                                  isCombat ? "border-gray-700 bg-gray-800 opacity-30 cursor-not-allowed" :
-                                  "border-gray-600 bg-gray-800 hover:border-gray-400"}`}
+                              style={{
+                                width: 96, padding: 0, borderRadius: 8, overflow: 'hidden',
+                                cursor: isCombat ? 'not-allowed' : 'pointer',
+                                border: `2px solid ${isSelected ? '#f87171' : isCombat ? '#374151' : '#4b5563'}`,
+                                opacity: isCombat ? 0.3 : 1,
+                                boxShadow: isSelected ? '0 0 8px rgba(248,113,113,0.6)' : 'none',
+                                transition: 'border-color 0.15s, box-shadow 0.15s',
+                                background: 'transparent',
+                              }}
                             >
-                              <p className="text-yellow-400 font-bold text-lg">{card.force}</p>
-                              <p className="text-red-400 text-xs">s{card.blood}</p>
-                              <p className="text-blue-400 text-xs">b{card.shields}</p>
+                              <img
+                                src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                                alt={`F${card.force}`}
+                                draggable={false}
+                                style={{ width: '100%', height: 'auto', display: 'block' }}
+                              />
                             </button>
                           );
                         })}
@@ -925,23 +955,27 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
               {myStatus === "pending" ? (
                 <div className="bg-gray-800 rounded-xl p-4">
                   <p className="text-white font-semibold mb-3">Échanger votre carte combat avec votre défausse ?</p>
-                  <div className="flex gap-4 justify-center mb-4">
+                  <div className="flex gap-4 justify-center items-center mb-4">
                     <div className="text-center">
                       <p className="text-xs text-gray-400 mb-1">Combat</p>
-                      <div className="bg-yellow-900 border border-yellow-400 rounded-lg p-2 w-16">
-                        <p className="text-yellow-400 font-bold text-lg">{myCombatCard?.force}</p>
-                        <p className="text-red-400 text-xs">s{myCombatCard?.blood}</p>
-                        <p className="text-blue-400 text-xs">b{myCombatCard?.shields}</p>
-                      </div>
+                      {myCombatCard && (
+                        <img
+                          src={`/Combat_${myCombatCard.force}${myCombatCard.blood}${myCombatCard.shields}.png`}
+                          alt="" draggable={false}
+                          style={{ width: 112, height: 'auto', borderRadius: 8, border: '2px solid #b45309', display: 'block' }}
+                        />
+                      )}
                     </div>
-                    <div className="flex items-center text-gray-400 text-xl">⇄</div>
+                    <div className="text-gray-400 text-xl">⇄</div>
                     <div className="text-center">
                       <p className="text-xs text-gray-400 mb-1">Défausse</p>
-                      <div className="bg-red-900 border border-red-400 rounded-lg p-2 w-16">
-                        <p className="text-yellow-400 font-bold text-lg">{myDiscardCard?.force}</p>
-                        <p className="text-red-400 text-xs">s{myDiscardCard?.blood}</p>
-                        <p className="text-blue-400 text-xs">b{myDiscardCard?.shields}</p>
-                      </div>
+                      {myDiscardCard && (
+                        <img
+                          src={`/Combat_${myDiscardCard.force}${myDiscardCard.blood}${myDiscardCard.shields}.png`}
+                          alt="" draggable={false}
+                          style={{ width: 112, height: 'auto', borderRadius: 8, border: '2px solid #b91c1c', display: 'block' }}
+                        />
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -969,15 +1003,15 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
           const attacker = combat?.attacker;
           const defender = combat?.defender;
           const zoneId   = combat?.zoneId;
-          const players  = gameState?.players || {};
-          const creatureAssignments  = gameState?.creatureAssignments  || {};
-          const creatureAssignments2 = gameState?.creatureAssignments2 || {};
+          const players  = gameStateForCombat?.players || {};
+          const creatureAssignments  = gameStateForCombat?.creatureAssignments  || {};
+          const creatureAssignments2 = gameStateForCombat?.creatureAssignments2 || {};
 
           const bonusA = getCombatCreatureBonus(attacker, defender, zoneId, creatureAssignments, players, POWER_TILES, creatureAssignments2);
           const bonusD = getCombatCreatureBonus(defender, attacker, zoneId, creatureAssignments, players, POWER_TILES, creatureAssignments2);
           const bonusMap = { [attacker]: bonusA, [defender]: bonusD };
 
-          const result = getCombatResult(combat, gameState, POWER_TILES, COMBAT_CARDS);
+          const result = getCombatResult(combat, gameStateForCombat, POWER_TILES, COMBAT_CARDS);
           const { winnerId, forceA, forceD, unitsA, unitsD, attackerUnitsAfter, defenderUnitsAfter, attackerDamage, defenderDamage } = result || {};
 
           const forceMap    = { [attacker]: forceA,    [defender]: forceD    };
@@ -1055,6 +1089,11 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
 
                       {card && (
                         <div className="bg-gray-700 rounded-lg p-3 mb-2">
+                          <img
+                            src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                            alt="" draggable={false}
+                            style={{ width: '100%', borderRadius: 6, marginBottom: 8, display: 'block' }}
+                          />
                           {/* Force = unités + carte + créature */}
                           <p className="text-yellow-400 font-bold text-3xl">{force}</p>
                           <p className="text-gray-400 text-xs">

@@ -129,10 +129,12 @@ export default function MyZone({
   // Jeton doré — N_3_3 "Jeton Doré Déplacement"
   const hasGoldenTokenMove3 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton Doré Déplacement");
   const canUseGoldenTokenMove3 = isMyTurn && hasGoldenTokenMove3 && !goldenTokenUsed && !actionMode;
-  // Jeton doré — N_2_4 "Jeton doré achat ×2" (seulement si au moins une couleur achetée ce jour)
+  // Jeton doré — N_2_4 "Jeton doré achat ×2"
+  // Disponible pour la (les) couleur(s) d'achat sur lesquelles un jeton a été posé ce jour
   const hasGoldenTokenBuy = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré achat *2");
-  const hasBoughtColorToday = usedActions.some(a => a.startsWith("buy_"));
-  const canUseGoldenTokenBuy = isMyTurn && hasGoldenTokenBuy && !goldenTokenUsed && !actionMode && hasBoughtColorToday;
+  const boughtColorsToday = usedActions.filter(a => a.startsWith("buy_"));
+  const goldenBuyBlockedThisTurn = state.goldenBuyBlockedThisTurn ?? false;
+  const canUseGoldenTokenBuy = isMyTurn && hasGoldenTokenBuy && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode && boughtColorsToday.length > 0;
   // Renforcement
   const reinforcementPending = state.reinforcementPending ?? 0;
   const canRenforce = isMyTurn && reinforcementPending > 0 && !actionMode;
@@ -154,7 +156,8 @@ export default function MyZone({
 
   function handleActionClick(action) {
     if (actionMode === "buy_golden") {
-      if (BUY_COLOR_MAP[action.id]) setLocalModal(action.id);
+      // Restreint au(x) couleur(s) sur lesquelles un jeton a été posé ce jour
+      if (BUY_COLOR_MAP[action.id] && boughtColorsToday.includes(action.id)) setLocalModal(action.id);
       return;
     }
     if (!canPlayAction) return;
@@ -852,6 +855,7 @@ export default function MyZone({
           color={BUY_COLOR_MAP[localModal]}
           gameState={gameState}
           session={session}
+          isGoldenBuy={actionMode === "buy_golden"}
           onBuy={tileId => { onActionActivate(localModal, { tileId }); setLocalModal(null); }}
           onClose={() => setLocalModal(null)}
         />

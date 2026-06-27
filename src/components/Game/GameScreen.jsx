@@ -478,6 +478,9 @@ export default function GameScreen({ session }) {
     prevTurnPlayerIdRef.current = currentTurnId;
     if (currentTurnId !== effectivePlayerId) {
       setLocalTurnHistory(null);
+      setMoveState(null);
+      setActionMode(null);
+      setMoveConfig(null);
       return;
     }
     // Vérifie si un snapshot existe déjà (rechargement de page en cours de tour)
@@ -586,9 +589,7 @@ export default function GameScreen({ session }) {
         const base = gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] ?? (currentAnk - effectiveCost);
         gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, base + ankOnPurchaseG);
       }
-      if (tile.name.toLowerCase().includes('doré') || tile.id === 'R_4_1') {
-        gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
-      }
+      gbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
       const taSetiAdvOnPurchaseG = tile.taSetiAdvanceOnPurchase ?? 0;
       if (taSetiAdvOnPurchaseG > 0) {
         const myStateG = gameState.players?.[effectivePlayerId] || {};
@@ -792,7 +793,12 @@ export default function GameScreen({ session }) {
 
       // Jeton doré : interdit de l'utiliser le tour même de l'achat
       if (tile.name.toLowerCase().includes('doré') || tile.id === 'R_4_1') {
-        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
+        if (tile.id === 'N_2_4') {
+          // Le jeton doré achat se débloque dès le tour suivant, pas la nuit
+          updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenBuyBlockedThisTurn`] = true;
+        } else {
+          updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
+        }
       }
 
       // Avancée Ta-Seti à l'achat
@@ -2277,6 +2283,10 @@ export default function GameScreen({ session }) {
     const myState = gameState.players?.[effectivePlayerId] || {};
     if ((myState.actionsThisTurn ?? 0) < 1) return;
 
+    setMoveState(null);
+    setActionMode(null);
+    setMoveConfig(null);
+
     const sorted = [...currentPlayers].sort((a, b) => a.order - b.order);
     const idx = sorted.findIndex(p => p.id === effectivePlayerId);
     const next = sorted[(idx + 1) % sorted.length];
@@ -2284,6 +2294,7 @@ export default function GameScreen({ session }) {
     await update(ref(db, `rooms/${roomCode}/gameState`), {
       currentTurnPlayerId: next.id,
       [`players/${next.id}/actionsThisTurn`]: 0,
+      [`players/${effectivePlayerId}/goldenBuyBlockedThisTurn`]: false,
     });
     await logAction(effectivePlayerId, `a terminé son tour → ${next.name} joue`);
 

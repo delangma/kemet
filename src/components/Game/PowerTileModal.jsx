@@ -7,7 +7,7 @@ const COLOR_META = {
   Noir:  { emoji: "⬛", title: "Pouvoirs Noirs"  },
 };
 
-export default function PowerTileModal({ color, gameState, session, onBuy, onClose }) {
+export default function PowerTileModal({ color, gameState, session, isGoldenBuy = false, onBuy, onClose }) {
   const { playerId } = session;
   const pyramids = gameState?.pyramids || {};
   const playerState = gameState?.players?.[playerId] || {};
@@ -24,13 +24,16 @@ export default function PowerTileModal({ color, gameState, session, onBuy, onClo
   const style = TILE_COLOR_STYLE[color] || TILE_COLOR_STYLE.Noir;
   const meta  = COLOR_META[color] || { emoji: "", title: color };
 
+  // Avec le jeton doré, le coût est majoré de +1
+  const costSurcharge = isGoldenBuy ? 1 : 0;
+
   function secondaryOk(tile) {
     if (!tile.secondaryColor) return true;
     return getPlayerPyramidLevel(playerId, tile.secondaryColor, pyramids) >= tile.secondaryLevel;
   }
 
   function canBuy(tile) {
-    if (ank < tile.cost) return false;
+    if (ank < tile.cost + costSurcharge) return false;
     if (ownedNames.includes(tile.name)) return false;
     if (maxPyramidLevel < tile.level) return false;
     if (!secondaryOk(tile)) return false;
@@ -41,7 +44,7 @@ export default function PowerTileModal({ color, gameState, session, onBuy, onClo
     if (ownedNames.includes(tile.name)) return "Déjà possédée";
     if (maxPyramidLevel < tile.level) return `Pyramide ${color} niv.${tile.level} requise`;
     if (!secondaryOk(tile)) return `Pyramide ${tile.secondaryColor} niv.${tile.secondaryLevel} requise`;
-    if (ank < tile.cost) return `${tile.cost} 🪙 requis`;
+    if (ank < tile.cost + costSurcharge) return `${tile.cost + costSurcharge} 🪙 requis`;
     return null;
   }
 
@@ -75,7 +78,7 @@ export default function PowerTileModal({ color, gameState, session, onBuy, onClo
                   <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${style.badge || "bg-gray-700"} text-white`}>
                     Niveau {lvl}
                   </span>
-                  <span className="text-gray-500 text-xs">— coût : {lvl} 🪙</span>
+                  <span className="text-gray-500 text-xs">— coût : {lvl + costSurcharge} 🪙{isGoldenBuy ? " (+1 jeton doré)" : ""}</span>
                   {!levelUnlocked && (
                     <span className="text-red-400 text-xs">🔒 pyramide niv.{lvl} requise</span>
                   )}
