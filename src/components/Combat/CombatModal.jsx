@@ -152,7 +152,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     if (!pc) return;
     const loserPlayer = allPlayers.find(p => p.id === pc.loserId);
     if (!loserPlayer?.isAI) return;
-    if (pc.loserUnitsAfter === 0 || pc.loserChoice !== null) return;
+    if (pc.loserUnitsAfter === 0 || pc.loserChoice != null) return;
     const t = setTimeout(() => {
       update(ref(db, `rooms/${roomCode}/combat/postCombat`), { loserChoice: "recall" });
     }, 600);
@@ -167,7 +167,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     if (!pc) return;
     const winnerPlayer = allPlayers.find(p => p.id === pc.winnerId);
     if (!winnerPlayer?.isAI) return;
-    if (pc.winnerUnitsAfter === 0 || pc.winnerRecall !== null) return;
+    if (pc.winnerUnitsAfter === 0 || pc.winnerRecall != null) return;
     const t = setTimeout(() => {
       // L'IA gagne → reste sur la zone pour contrôler le territoire
       update(ref(db, `rooms/${roomCode}/combat/postCombat`), { winnerRecall: false });
@@ -185,8 +185,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const winnerPlayer = allPlayers.find(p => p.id === pc.winnerId);
     if (!loserPlayer?.isAI || !winnerPlayer?.isAI) return;
     const canFinalize =
-      (pc.loserUnitsAfter === 0 || pc.loserChoice !== null) &&
-      (pc.winnerUnitsAfter === 0 || pc.winnerRecall !== null);
+      (pc.loserUnitsAfter === 0 || pc.loserChoice != null) &&
+      (pc.winnerUnitsAfter === 0 || pc.winnerRecall != null);
     if (!canFinalize) return;
     const t = setTimeout(() => handleFinalizePostCombat(), 800);
     return () => clearTimeout(t);

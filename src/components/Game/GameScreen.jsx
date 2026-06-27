@@ -289,7 +289,7 @@ export default function GameScreen({ session }) {
     }
 
     if (Object.keys(patch).length > 0) update(ref(db, `rooms/${roomCode}/gameState`), patch);
-  }, [gameState?.taSetiLayout]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(gameState?.taSetiLayout)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Migration : initialise taSetiPriestPositions si absent
   useEffect(() => {
