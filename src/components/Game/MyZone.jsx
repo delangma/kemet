@@ -41,7 +41,7 @@ const BUY_CIRCLE_STYLE = {
 
 export default function MyZone({
   player, gameState, onActionActivate, onSetActionMode, actionMode,
-  onEndTurn, onOpenTaSeti, onOpenCombat, onOpenDawn, onOpenNight, session,
+  onEndTurn, canEndTurn: canEndTurnProp, onOpenTaSeti, onOpenCombat, onOpenDawn, onOpenNight, session,
   onMoveCancel, onGoldenTokenMoveActivate, onGoldenTokenRecruitActivate,
   onGoldenTokenPrayerActivate, onGoldenTokenBuyActivate, onRenforcementActivate,
   onNightTaSetiAdvance, onUseJuToken,
@@ -96,7 +96,7 @@ export default function MyZone({
   const currentTurnPlayerId = gameState?.currentTurnPlayerId;
   const isMyTurn  = currentTurnPlayerId === player.id;
   const canPlayAction = isMyTurn && actionsThisTurn < 1 && tokens > 0 && !actionMode;
-  const canEndTurn = isMyTurn && actionsThisTurn >= 1;
+  const canEndTurn = canEndTurnProp !== undefined ? canEndTurnProp : (isMyTurn && actionsThisTurn >= 1);
 
   // Couleurs d'achat disponibles : pyramides possédées + pyramides adverses sur nos zones
   const allPyramids = gameState?.pyramids || {};

@@ -493,14 +493,15 @@ export default function GameScreen({ session }) {
     get(ref(db, `rooms/${roomCode}/turnSnapshot`)).then(snap => {
       if (cancelled) return;
       const existing = snap.exists() ? snap.val() : null;
-      if (existing?.playerId === effectivePlayerId) {
-        // Rechargement : restaure le snapshot existant
+      const actionsAlreadyDone = (gameState?.players?.[effectivePlayerId]?.actionsThisTurn ?? 0) > 0;
+      if (existing?.playerId === effectivePlayerId && actionsAlreadyDone) {
+        // Rechargement de page en cours de tour : restaure le snapshot existant
         setLocalTurnHistory({
           startState: existing.startState,
           lastInfoState: existing.lastInfoState || null,
         });
       } else {
-        // Nouveau tour : crée le snapshot
+        // Nouveau tour : crée toujours un nouveau snapshot (écrase l'éventuel snapshot du tour précédent)
         set(ref(db, `rooms/${roomCode}/turnSnapshot`), {
           playerId: effectivePlayerId,
           startState: gameState,
@@ -2288,7 +2289,9 @@ export default function GameScreen({ session }) {
     if (!gameState) return;
     const myState = gameState.players?.[effectivePlayerId] || {};
     if ((myState.actionsThisTurn ?? 0) < 1) return;
+    if (actionMode || moveState || combatData || retreatZones.length > 0 || pendingCerbereId) return;
 
+    setLocalTurnHistory(null);
     setMoveState(null);
     setActionMode(null);
     setMoveConfig(null);
@@ -2839,6 +2842,15 @@ export default function GameScreen({ session }) {
           onSetActionMode={handleSetActionMode}
           actionMode={actionMode}
           onEndTurn={handleEndTurn}
+          canEndTurn={
+            gameState?.currentTurnPlayerId === effectivePlayerId &&
+            (gameState?.players?.[effectivePlayerId]?.actionsThisTurn ?? 0) >= 1 &&
+            !actionMode &&
+            !moveState &&
+            !combatData &&
+            retreatZones.length === 0 &&
+            !pendingCerbereId
+          }
           onOpenTaSeti={() => setShowTaSeti(true)}
           onOpenCombat={() => setShowCombat(true)}
 		  onOpenNight={() => setShowNight(true)}
