@@ -158,10 +158,10 @@ export const TASETI_DAILY_BONUS_NODES = {
     'I_3_1': { img: '/TS_force.png', x: 15, y: 14, size: 5 },
   },
   '3B': {
-    'C_3_1': { img: '/TS_force.png', x: 60, y: 30, size: 5 },
+    'C_3_1': { img: '/TS_force.png', x: 57, y: ,28, size: 5 },
   },
   '4A': {
-    'E_4_2': { img: '/TS_PV.png', x: 77, y: 52, size: 3.6 },
+    'E_4_2': { img: '/TS_PV.png', x: 75, y: 51, size: 3.6 },
   },
   '4B': {
     'E_4_2': { img: '/TS_PV.png', x: 82, y: 48, size: 3.6 },
