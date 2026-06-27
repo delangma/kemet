@@ -592,6 +592,14 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       }
     }
 
+    // Jeton aube : perdant reçoit toujours 1, vainqueur aussi si toutes ses unités sont éliminées
+    const loserState = gameState?.players?.[loserId] || {};
+    updates[`rooms/${roomCode}/gameState/players/${loserId}/dawnTokens`] = (loserState.dawnTokens ?? 0) + 1;
+    if (winnerUnitsAfter === 0) {
+      const winnerState = gameState?.players?.[winnerId] || {};
+      updates[`rooms/${roomCode}/gameState/players/${winnerId}/dawnTokens`] = (winnerState.dawnTokens ?? 0) + 1;
+    }
+
     await update(ref(db, "/"), updates);
     await remove(ref(db, `rooms/${roomCode}/combat`));
 
