@@ -10,7 +10,7 @@ import UnitModal from "./UnitModal";
 import { PYRAMID_SLOTS } from "../../constants/pyramids";
 import PyramidMarker from "./PyramidMarker";
 
-export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, destroyUnitZones = [], onDestroyUnitClick }) {
+export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm }) {
   const { roomCode, playerId } = session;
   const [selectedZone, setSelectedZone] = useState(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -226,6 +226,27 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         }
       />
 
+      {/* Placement initial HUD */}
+      {placementZones.length > 0 && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-4 py-2 flex items-center gap-3 pointer-events-auto">
+          <span className="text-amber-300 text-sm font-semibold">
+            {placementSelected.length < 2
+              ? `Cliquez sur ${2 - placementSelected.length} zone${2 - placementSelected.length > 1 ? 's' : ''} de votre cité (surlignées)`
+              : '✓ 2 zones sélectionnées'}
+          </span>
+          {placementSelected.length > 0 && (
+            <button onClick={onPlacementReset} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+              Réinitialiser
+            </button>
+          )}
+          {placementSelected.length === 2 && (
+            <button onClick={onPlacementConfirm} className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-yellow-100 text-xs font-bold rounded">
+              Confirmer le déploiement
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Retreat zone selection HUD */}
       {retreatZones.length > 0 && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-orange-500/60 rounded-lg px-4 py-2 pointer-events-none">
@@ -303,6 +324,8 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         const isVictoryRecruitZone = victoryRecruitZones.includes(zone.id);
         const isTasetiRecruitZone = tasetiRecruitZones.includes(zone.id);
         const isDestroyUnitZone = destroyUnitZones.includes(zone.id);
+        const isPlacementZone = placementZones.includes(zone.id);
+        const isPlacementSelected = placementSelected.includes(zone.id);
 
         const myUnitsHere = boardUnits[zone.id]?.[playerColor] || 0;
         const isMoveSourceZone = isMoveSourcePhase && myUnitsHere > 0;
@@ -317,7 +340,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
           && (wallPassActive || existingPlayerUnits + moveCount <= destMax) && !enemyCerbereHere;
         const isTeleportTarget = teleportPending && TELEPORT_TARGETS.has(zone.id) && !enemyCerbereHere;
 
-        if (entries.length === 0 && !isRecruitZone && !isRenforcementZone && !isMoveDestZone && !isTeleportTarget && !isRetreatZone && !isVictoryRecruitZone && !isTasetiRecruitZone && !isDestroyUnitZone) return null;
+        if (entries.length === 0 && !isRecruitZone && !isRenforcementZone && !isMoveDestZone && !isTeleportTarget && !isRetreatZone && !isVictoryRecruitZone && !isTasetiRecruitZone && !isDestroyUnitZone && !isPlacementZone) return null;
 
         const { left, top } = getZonePosition(zone);
 
@@ -332,8 +355,10 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         else if (isTeleportTarget) ringClass = "outline outline-2 outline-purple-400 rounded-full p-0.5 animate-pulse";
         else if (isMoveDestZone) ringClass = "outline outline-2 outline-blue-400 rounded-full p-0.5 animate-pulse";
         else if (isMoveSourceZone) ringClass = "outline outline-2 outline-cyan-400 rounded-full p-0.5";
+        else if (isPlacementSelected) ringClass = "outline outline-2 outline-yellow-400 rounded-full p-0.5";
+        else if (isPlacementZone) ringClass = "outline outline-2 outline-yellow-400 rounded-full p-0.5 animate-pulse";
 
-        const isClickable = isRecruitZone || isRenforcementZone || isMoveSourceZone || isMoveDestZone || isTeleportTarget || isRetreatZone || isVictoryRecruitZone || isTasetiRecruitZone || isDestroyUnitZone;
+        const isClickable = isRecruitZone || isRenforcementZone || isMoveSourceZone || isMoveDestZone || isTeleportTarget || isRetreatZone || isVictoryRecruitZone || isTasetiRecruitZone || isDestroyUnitZone || isPlacementZone;
 
         function handleClick() {
           if (isDestroyUnitZone && onDestroyUnitClick) onDestroyUnitClick(zone.id);
@@ -341,6 +366,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
           else if (isVictoryRecruitZone && onVictoryRecruitClick) onVictoryRecruitClick(zone.id);
           else if (isRetreatZone) onRetreatZoneClick(zone.id);
           else if (isRecruitZone || isRenforcementZone) setSelectedZone(zone);
+          else if (isPlacementZone) onPlacementZoneClick?.(zone.id);
           else if (isClickable) onBoardZoneClick(zone.id);
         }
 
@@ -420,6 +446,10 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                     </div>
                   );
                 })
+              ) : isPlacementSelected ? (
+                <div className="rounded-full border-2 border-yellow-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.75)", color: "#fbbf24" }}>5</div>
+              ) : isPlacementZone ? (
+                <div className="rounded-full border-2 border-yellow-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#fde68a" }}>+</div>
               ) : isDestroyUnitZone ? (
                 <div className="rounded-full border-2 border-red-400 flex items-center justify-center font-bold shadow-lg" style={{ width: emptyPx, height: emptyPx, fontSize: fontPx, backgroundColor: "rgba(0,0,0,0.6)", color: "#f87171" }}>✕</div>
               ) : isTasetiRecruitZone ? (

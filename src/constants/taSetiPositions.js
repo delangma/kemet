@@ -147,8 +147,8 @@ export function getJuPositionsForLayout(layout) {
 //   size : largeur en % de la largeur totale du plateau (95vw)
 export const TASETI_DAILY_BONUS_NODES = {
   '1A': {
-    'I_1_1': { img: '/TS_bouclier.png',   x: 14, y: 12, size: 5 },
-    'I_1_3': { img: '/TS_goutte_sang.png', x: 14, y: 77, size: 5 },
+    'I_1_1': { img: '/TS_bouclier.png',   x: 12, y: 12, size: 5 },
+    'I_1_3': { img: '/TS_goutte_sang.png', x: 12, y: 73, size: 5 },
   },
   '1B': {
     'I_1_1': { img: '/TS_bouclier.png',   x: 14, y: 12, size: 5 },
@@ -158,10 +158,10 @@ export const TASETI_DAILY_BONUS_NODES = {
     'I_3_1': { img: '/TS_force.png', x: 15, y: 14, size: 5 },
   },
   '3B': {
-    'C_3_1': { img: '/TS_force.png', x: 70, y: 35, size: 5 },
+    'C_3_1': { img: '/TS_force.png', x: 60, y: 30, size: 5 },
   },
   '4A': {
-    'E_4_2': { img: '/TS_PV.png', x: 82, y: 48, size: 3.6 },
+    'E_4_2': { img: '/TS_PV.png', x: 77, y: 52, size: 3.6 },
   },
   '4B': {
     'E_4_2': { img: '/TS_PV.png', x: 82, y: 48, size: 3.6 },

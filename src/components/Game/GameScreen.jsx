@@ -143,6 +143,7 @@ export default function GameScreen({ session }) {
   const aiTurnInProgressRef = useRef(false);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [showMobileLog, setShowMobileLog] = useState(false);
+  const [placementSelected, setPlacementSelected] = useState([]);
 
   const effectivePlayerId = isTestMode ? testViewPlayerId : playerId;
   const me = currentPlayers.find(p => p.id === effectivePlayerId) ?? allPlayers.find(p => p.id === effectivePlayerId);
@@ -154,6 +155,11 @@ export default function GameScreen({ session }) {
     mq.addEventListener('change', h);
     return () => mq.removeEventListener('change', h);
   }, []);
+
+  // Réinitialise la sélection du déploiement quand la phase change
+  useEffect(() => {
+    if (gameState?.phase !== "placement") setPlacementSelected([]);
+  }, [gameState?.phase]);
 
   // Auto-efface la notification d'action
   useEffect(() => {
@@ -2737,6 +2743,19 @@ export default function GameScreen({ session }) {
 		  onTasetiRecruitClick={handleTasetiRecruitClick}
 		  destroyUnitZones={destroyUnitZones}
 		  onDestroyUnitClick={handleDestroyUnitClick}
+		  placementZones={
+		    gameState?.phase === "placement" && !gameState?.placements?.[effectivePlayerId]?.confirmed
+		      ? BOARD_ZONES.filter(z => z.id.startsWith(`J${me?.joinOrder}C`)).map(z => z.id)
+		      : []
+		  }
+		  placementSelected={placementSelected}
+		  onPlacementZoneClick={(zoneId) => setPlacementSelected(prev =>
+		    prev.includes(zoneId) ? prev.filter(z => z !== zoneId)
+		    : prev.length >= 2 ? prev
+		    : [...prev, zoneId]
+		  )}
+		  onPlacementReset={() => setPlacementSelected([])}
+		  onPlacementConfirm={() => handlePlacementConfirm(placementSelected)}
 	    />
 	  </div>
 
@@ -2874,10 +2893,9 @@ export default function GameScreen({ session }) {
       <PlacementPhaseModal
         session={effectiveSession}
         gameState={gameState}
-        onConfirm={handlePlacementConfirm}
         isTestMode={isTestMode}
         testPlayers={isTestMode ? currentPlayers : null}
-        onSwitchTestPlayer={id => { setTestViewPlayerId(id); setActionMode(null); setMoveState(null); setMoveConfig(null); }}
+        onSwitchTestPlayer={id => { setTestViewPlayerId(id); setPlacementSelected([]); setActionMode(null); setMoveState(null); setMoveConfig(null); }}
       />
     )}
 
