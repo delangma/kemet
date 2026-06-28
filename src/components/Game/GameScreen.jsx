@@ -1728,7 +1728,8 @@ export default function GameScreen({ session }) {
         if (getPlayerPyramidLevel(aiId, tile.color, aiPyramids) < tile.level) return;
         if (tile.secondaryColor && getPlayerPyramidLevel(aiId, tile.secondaryColor, aiPyramids) < tile.secondaryLevel) return;
         const hasCoutReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1");
-        const effectiveCost = Math.max(0, tile.cost - (hasCoutReduc ? 1 : 0));
+        const hasAnkReducAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
+        const effectiveCost = Math.max(0, tile.cost - (hasCoutReduc ? 1 : 0) - (hasAnkReducAI ? 1 : 0));
         if (ank < effectiveCost) return;
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ank - effectiveCost;
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ownedTileIds`] = [...ownedTileIds, decision.tileId];

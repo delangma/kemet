@@ -9,6 +9,7 @@ import { getZoneMaxUnits, CREATURE_POWERS, hasEnemyCerbereInZone } from "../../c
 import UnitModal from "./UnitModal";
 import { PYRAMID_SLOTS } from "../../constants/pyramids";
 import PyramidMarker from "./PyramidMarker";
+import { BOARD_STATIC_IMAGES } from "../../constants/boardStaticImages";
 
 export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm }) {
   const { roomCode, playerId } = session;
@@ -93,16 +94,13 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
 
   const isMobileBoardView = containerSize.width > 0 && containerSize.width < 768;
 
-  function getZonePosition(zone) {
+  function getDisplayDimensions() {
     const { width: containerWidth, height: containerHeight } = containerSize;
-    if (!containerWidth || !containerHeight) return { left: 0, top: 0 };
-
+    if (!containerWidth || !containerHeight) return null;
     const imgNaturalRatio = 1619 / 972;
     const containerRatio = containerWidth / containerHeight;
     let displayWidth, displayHeight, offsetX, offsetY;
-
     if (isMobileBoardView) {
-      // Mobile : object-cover — l'image remplit tout le conteneur, les côtés sont rognés
       if (containerRatio > imgNaturalRatio) {
         displayWidth = containerWidth;
         displayHeight = containerWidth / imgNaturalRatio;
@@ -115,7 +113,6 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         offsetY = 0;
       }
     } else {
-      // Desktop : object-contain — l'image entière tient dans le conteneur
       if (imgNaturalRatio < containerRatio) {
         displayHeight = containerHeight;
         displayWidth = containerHeight * imgNaturalRatio;
@@ -128,10 +125,16 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         offsetY = (containerHeight - displayHeight) / 2;
       }
     }
+    return { displayWidth, displayHeight, offsetX, offsetY };
+  }
 
+  function getZonePosition(zone) {
+    const dims = getDisplayDimensions();
+    if (!dims) return { left: 0, top: 0 };
+    const { displayWidth, displayHeight, offsetX, offsetY } = dims;
     return {
       left: offsetX + (zone.x / 100) * displayWidth,
-      top: offsetY + (zone.y / 100) * displayHeight,
+      top:  offsetY + (zone.y / 100) * displayHeight,
     };
   }
 
@@ -225,6 +228,27 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
           : "h-full w-full object-contain object-center pointer-events-none"
         }
       />
+
+      {/* Images statiques (temples, etc.) — entre la carte et les unités */}
+      {containerSize.width > 0 && (() => {
+        const dims = getDisplayDimensions();
+        if (!dims) return null;
+        const playerCount = session.allPlayers.length;
+        return BOARD_STATIC_IMAGES.filter(img => !img.minPlayers || playerCount >= img.minPlayers).map(img => {
+          const { left, top } = getZonePosition(img);
+          const widthPx = (img.widthPct / 100) * dims.displayWidth;
+          return (
+            <img
+              key={img.id}
+              src={img.src}
+              alt=""
+              draggable={false}
+              className="absolute pointer-events-none select-none"
+              style={{ left, top, width: widthPx, transform: "translate(-50%, -50%)" }}
+            />
+          );
+        });
+      })()}
 
       {/* Placement initial HUD */}
       {placementZones.length > 0 && (
@@ -336,7 +360,8 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         const movingCreatureName = movingCreatureId ? POWER_TILES.find(t => t.id === movingCreatureId)?.name : null;
         const destMax = getZoneMaxUnits(zone.id, playerColor, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE);
         const enemyCerbereHere = hasEnemyCerbereInZone(zone.id, playerColor, creatureAssignments, POWER_TILES);
-        const isMoveDestZone = isMoveMovingPhase && !teleportPending && adjToCurrentZone.includes(zone.id)
+        const isMoveDestZone = isMoveMovingPhase && !teleportPending && (moveState?.pointsRemaining ?? 0) > 0
+          && adjToCurrentZone.includes(zone.id)
           && (wallPassActive || existingPlayerUnits + moveCount <= destMax) && !enemyCerbereHere;
         const isTeleportTarget = teleportPending && TELEPORT_TARGETS.has(zone.id) && !enemyCerbereHere;
 

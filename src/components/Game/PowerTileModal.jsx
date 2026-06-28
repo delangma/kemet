@@ -26,6 +26,12 @@ export default function PowerTileModal({ color, gameState, session, isGoldenBuy 
 
   // Avec le jeton doré, le coût est majoré de +1
   const costSurcharge = isGoldenBuy ? 1 : 0;
+  const hasAnkReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
+  const hasCoutReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1");
+
+  function effectiveCost(tile) {
+    return Math.max(0, tile.cost + costSurcharge - (hasCoutReduc ? 1 : 0) - (hasAnkReduc ? 1 : 0));
+  }
 
   function secondaryOk(tile) {
     if (!tile.secondaryColor) return true;
@@ -33,7 +39,7 @@ export default function PowerTileModal({ color, gameState, session, isGoldenBuy 
   }
 
   function canBuy(tile) {
-    if (ank < tile.cost + costSurcharge) return false;
+    if (ank < effectiveCost(tile)) return false;
     if (ownedNames.includes(tile.name)) return false;
     if (maxPyramidLevel < tile.level) return false;
     if (!secondaryOk(tile)) return false;
@@ -44,7 +50,7 @@ export default function PowerTileModal({ color, gameState, session, isGoldenBuy 
     if (ownedNames.includes(tile.name)) return "Déjà possédée";
     if (maxPyramidLevel < tile.level) return `Pyramide ${color} niv.${tile.level} requise`;
     if (!secondaryOk(tile)) return `Pyramide ${tile.secondaryColor} niv.${tile.secondaryLevel} requise`;
-    if (ank < tile.cost + costSurcharge) return `${tile.cost + costSurcharge} 🪙 requis`;
+    if (ank < effectiveCost(tile)) return `${effectiveCost(tile)} 🪙 requis`;
     return null;
   }
 
