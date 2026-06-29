@@ -358,7 +358,7 @@ export default function MyZone({
           )}
           {/* Boutons rapides */}
           <div className="w-px h-4 bg-gray-700 shrink-0" />
-          {onViewMyTiles && <button onClick={onViewMyTiles} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 text-amber-400 border-gray-700">📜 Tuiles</button>}
+          {onViewMyTiles && <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }} className="shrink-0"><img src="/Boutique.png" alt="Mes tuiles" style={{ height: 28, width: 'auto', objectFit: 'contain', display: 'block' }} /></button>}
           <button onClick={() => setShowIdModal(true)} className="shrink-0 relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
             <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 20, height: 28, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
             {myIdCards.length > 0 && (
@@ -611,7 +611,7 @@ export default function MyZone({
         {/* Boutons rapides */}
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
           {onViewMyTiles && (
-            <button onClick={onViewMyTiles} className="kmt-btn-ghost">📜 Mes tuiles</button>
+            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}><img src="/Boutique.png" alt="Mes tuiles" style={{ height: 36, width: 'auto', objectFit: 'contain', display: 'block' }} /></button>
           )}
 
           <button onClick={() => setShowIdModal(true)} className="relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
