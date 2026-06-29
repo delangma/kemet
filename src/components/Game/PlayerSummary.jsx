@@ -105,7 +105,7 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
 
           {/* Actions par niveau */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-            {[ACTIONS.level1, ACTIONS.level2, ACTIONS.level3].map((lvlActions, gi) => (
+            {[ACTIONS.level1, ACTIONS.level2, level3Displayed].map((lvlActions, gi) => (
               <div key={gi} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%' }}>
                 {gi > 0 && <div style={{ width: '60%', height: 1, background: 'linear-gradient(to right, transparent, #6B4C1E, transparent)' }} />}
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 2 }}>

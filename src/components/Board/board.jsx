@@ -16,7 +16,9 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
   const [selectedZone, setSelectedZone] = useState(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [hudPos, setHudPos] = useState(null);
   const containerRef = useRef(null);
+  const hudDragRef = useRef(null);
 
   const playerColor = session.playerColor;
   const boardUnits = gameState?.boardUnits || {};
@@ -91,6 +93,55 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (!isMoveMode) setHudPos(null);
+  }, [isMoveMode]);
+
+  function startHudDrag(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    const isTouch = e.type === 'touchstart';
+    const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+    const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+    const container = containerRef.current;
+    const hud = e.currentTarget;
+    const containerRect = container.getBoundingClientRect();
+    const hudRect = hud.getBoundingClientRect();
+    const origX = hudRect.left - containerRect.left;
+    const origY = hudRect.top - containerRect.top;
+
+    setHudPos({ x: origX, y: origY });
+    hudDragRef.current = { startClientX: clientX, startClientY: clientY, origX, origY };
+
+    function onMove(ev) {
+      if (!hudDragRef.current) return;
+      ev.preventDefault();
+      const cx = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const cy = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      const dx = cx - hudDragRef.current.startClientX;
+      const dy = cy - hudDragRef.current.startClientY;
+      const rect = containerRef.current?.getBoundingClientRect() || { width: 400, height: 400 };
+      setHudPos({
+        x: Math.max(0, Math.min(rect.width - 200, hudDragRef.current.origX + dx)),
+        y: Math.max(0, Math.min(rect.height - 60, hudDragRef.current.origY + dy)),
+      });
+    }
+
+    function onUp() {
+      hudDragRef.current = null;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchend', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchend', onUp);
+    e.preventDefault();
+  }
 
   const isMobileBoardView = containerSize.width > 0 && containerSize.width < 768;
 
@@ -282,31 +333,47 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
 
       {/* Move mode HUD */}
       {isMoveSourcePhase && (
-        <div className="absolute bottom-2 md:top-2 md:bottom-auto left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-blue-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto">
+        <div
+          onMouseDown={startHudDrag}
+          onTouchStart={startHudDrag}
+          className="absolute z-30 bg-gray-900/90 border border-blue-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto select-none"
+          style={hudPos
+            ? { left: hudPos.x, top: hudPos.y, cursor: 'grab' }
+            : { bottom: 8, left: '50%', transform: 'translateX(-50%)', cursor: 'grab' }
+          }
+        >
           <span className="text-blue-300 text-xs md:text-sm font-semibold">Cliquez sur une troupe</span>
-          <button onClick={onMoveCancel} className="px-2 py-1 md:px-3 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+          <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={onMoveCancel} className="px-2 py-1 md:px-3 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
             Annuler
           </button>
         </div>
       )}
       {isMoveMovingPhase && (
-        <div className="absolute bottom-2 md:top-2 md:bottom-auto left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto">
+        <div
+          onMouseDown={startHudDrag}
+          onTouchStart={startHudDrag}
+          className="absolute z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto select-none"
+          style={hudPos
+            ? { left: hudPos.x, top: hudPos.y, cursor: 'grab' }
+            : { bottom: 8, left: '50%', transform: 'translateX(-50%)', cursor: 'grab' }
+          }
+        >
           {teleportPending ? (
             <>
               <span className="text-purple-300 text-sm font-semibold">
                 Choisissez un temple ou désert (obelisque)
               </span>
-              <button onClick={onTeleportCancel} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+              <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={onTeleportCancel} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
                 Annuler
               </button>
             </>
           ) : confirmEnd ? (
             <>
               <span className="text-white text-xs md:text-sm font-semibold">Terminer le déplacement ?</span>
-              <button onClick={() => { setConfirmEnd(false); onMoveDone(); }} className="px-2 md:px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded">
+              <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={() => { setConfirmEnd(false); onMoveDone(); }} className="px-2 md:px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded">
                 Oui
               </button>
-              <button onClick={() => setConfirmEnd(false)} className="px-2 md:px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+              <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={() => setConfirmEnd(false)} className="px-2 md:px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
                 Non
               </button>
             </>
@@ -318,16 +385,16 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                   : `${moveState.pointsRemaining} pt`}
               </span>
               {canUndo && (
-                <button onClick={onMoveUndo} className="px-2 md:px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded">
+                <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={onMoveUndo} className="px-2 md:px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded">
                   ↩
                 </button>
               )}
               {canTeleport && (
-                <button onClick={onTeleportStart} className="px-2 md:px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded">
+                <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={onTeleportStart} className="px-2 md:px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded">
                   Téléport ({teleportCost ?? 2}🪙)
                 </button>
               )}
-              <button onClick={() => setConfirmEnd(true)} className="px-2 md:px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded">
+              <button onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} onClick={() => setConfirmEnd(true)} className="px-2 md:px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded">
                 Terminer
               </button>
             </>
