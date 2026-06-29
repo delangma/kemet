@@ -6,7 +6,6 @@ import IdDraftModal from "../Cards/IdDraftModal";
 import IdRefreshModal from "../Cards/IdRefreshModal";
 import PyramidEvolveModal from "./PyramidEvolveModal";
 import PowerTileModal from "./PowerTileModal";
-import AllTilesModal from "./AllTilesModal";
 import CreatureEquipModal from "./CreatureEquipModal";
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
@@ -40,6 +39,19 @@ const BUY_CIRCLE_STYLE = {
   Noir:  { bg: "bg-neutral-900", border: "border-yellow-600", active: "hover:bg-neutral-800" },
 };
 
+const ACTION_IMG = {
+  move1:   "/Action_Deplacement.png",
+  move2:   "/Action_Deplacement.png",
+  recruit: "/Action_Recrutement.png",
+  pyramid: "/Action_Evolution_Pyramide.png",
+  prayer2: "/Action_Priere.png",
+  prayer3: "/Action_Priere.png",
+  buy_red:   "/Action_Achat_Rouge.png",
+  buy_blue:  "/Action_Achat_Bleu.png",
+  buy_white: "/Action_Achat_Blanc.png",
+  buy_black: "/Action_Achat_Noir.png",
+};
+
 export default function MyZone({
   player, gameState, onActionActivate, onSetActionMode, actionMode,
   onEndTurn, canEndTurn: canEndTurnProp, onOpenTaSeti, onOpenCombat, onOpenDawn, onOpenNight, session,
@@ -51,7 +63,6 @@ export default function MyZone({
   const [showCombat, setShowCombat] = useState(false);
   const [showIdModal, setShowIdModal] = useState(false);
   const [localModal, setLocalModal] = useState(null);
-  const [showAllTiles, setShowAllTiles] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const state   = gameState?.players?.[player.id] || {};
@@ -137,6 +148,8 @@ export default function MyZone({
   const boughtColorsToday = usedActions.filter(a => a.startsWith("buy_"));
   const goldenBuyBlockedThisTurn = state.goldenBuyBlockedThisTurn ?? false;
   const canUseGoldenTokenBuy = isMyTurn && hasGoldenTokenBuy && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode && boughtColorsToday.length > 0;
+  const hasGoldenToken = hasGoldenTokenMove || hasGoldenTokenMoveRecruit || hasGoldenTokenPrayer || hasGoldenTokenMove3 || hasGoldenTokenBuy;
+  const hasGrayToken   = ownedTileIds.some(id => (POWER_TILES.find(t => t.id === id)?.name ?? "").toLowerCase().startsWith("jeton gris"));
   // Renforcement
   const reinforcementPending = state.reinforcementPending ?? 0;
   const canRenforce = isMyTurn && reinforcementPending > 0 && !actionMode;
@@ -271,10 +284,13 @@ export default function MyZone({
             <span style={{ color: '#fbbf24' }}>☀</span>
             <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{vpTotal}</span>
           </span>
-          <div className="flex gap-0.5 shrink-0">
-            {Array.from({ length: Math.max(5, tokens) }).map((_, i) => (
+          <div className="flex gap-0.5 shrink-0 items-center">
+            {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="w-2.5 h-2.5 rounded-full border" style={{ background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
             ))}
+            {(hasGrayToken || hasGoldenToken) && <div style={{ width: 1, height: 10, background: '#3a2a0c', margin: '0 2px' }} />}
+            {hasGrayToken && <div title="Jeton gris" className="w-2.5 h-2.5 rounded-full border" style={{ background: tokens >= 6 ? '#9ca3af' : '#1a1508', borderColor: tokens >= 6 ? '#6b7280' : '#3a2a0c' }} />}
+            {hasGoldenToken && <div title="Jeton doré" className="w-2.5 h-2.5 rounded-full border" style={{ background: !goldenTokenUsed ? '#fbbf24' : '#1a1508', borderColor: !goldenTokenUsed ? '#b45309' : '#3a2a0c' }} />}
           </div>
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             {canCancelTurn && (
@@ -343,8 +359,13 @@ export default function MyZone({
           {/* Boutons rapides */}
           <div className="w-px h-4 bg-gray-700 shrink-0" />
           {onViewMyTiles && <button onClick={onViewMyTiles} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 text-amber-400 border-gray-700">📜 Tuiles</button>}
-          <button onClick={() => setShowIdModal(true)} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 text-amber-400 border-gray-700">
-            🃏 ID{myIdCards.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[9px] font-bold px-1 rounded-full">{myIdCards.length}</span>}
+          <button onClick={() => setShowIdModal(true)} className="shrink-0 relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 20, height: 28, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
+            {myIdCards.length > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -5, background: '#b45309', color: '#fff', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 13, height: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {myIdCards.length}
+              </span>
+            )}
           </button>
           {creatureIds.length > 0 && (
             <button onClick={() => setLocalModal('creatures')} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 border-gray-700 ${canEquipCreature ? 'text-amber-400' : 'text-gray-400'}`}>
@@ -407,16 +428,12 @@ export default function MyZone({
 
         {/* Jetons action */}
         <div className="flex gap-1 shrink-0 items-center">
-          {Array.from({ length: Math.max(5, tokens) }).map((_, i) => (
-            <div
-              key={i}
-              className="w-3.5 h-3.5 rounded-full border"
-              style={{
-                background: i < tokens ? (i < 5 ? '#C9973A' : '#9ca3af') : '#1a1508',
-                borderColor: i < tokens ? (i < 5 ? '#8B6014' : '#6b7280') : '#3a2a0c',
-              }}
-            />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="w-3.5 h-3.5 rounded-full border" style={{ background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
           ))}
+          {(hasGrayToken || hasGoldenToken) && <div style={{ width: 1, height: 12, background: '#3a2a0c', margin: '0 2px' }} />}
+          {hasGrayToken && <div title="Jeton gris" className="w-3.5 h-3.5 rounded-full border" style={{ background: tokens >= 6 ? '#9ca3af' : '#1a1508', borderColor: tokens >= 6 ? '#6b7280' : '#3a2a0c' }} />}
+          {hasGoldenToken && <div title="Jeton doré" className="w-3.5 h-3.5 rounded-full border" style={{ background: !goldenTokenUsed ? '#fbbf24' : '#1a1508', borderColor: !goldenTokenUsed ? '#b45309' : '#3a2a0c' }} />}
         </div>
         {/* Jeton doré R_4_1 — Déplacement Passe/Muraille */}
         {hasGoldenTokenMove && (
@@ -597,10 +614,13 @@ export default function MyZone({
             <button onClick={onViewMyTiles} className="kmt-btn-ghost">📜 Mes tuiles</button>
           )}
 
-          <button onClick={() => setShowAllTiles(true)} className="kmt-btn-ghost">🏪 Boutique</button>
-
-          <button onClick={() => setShowIdModal(true)} className="kmt-btn-ghost">
-            🃏 Cartes ID {myIdCards.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{myIdCards.length}</span>}
+          <button onClick={() => setShowIdModal(true)} className="relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 26, height: 36, objectFit: 'cover', borderRadius: 4, display: 'block' }} />
+            {myIdCards.length > 0 && (
+              <span style={{ position: 'absolute', top: -5, right: -6, background: '#b45309', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {myIdCards.length}
+              </span>
+            )}
           </button>
           {creatureIds.length > 0 && (
             <button
@@ -741,11 +761,9 @@ export default function MyZone({
               const used     = isUsed(a.id);
               const isBuy    = !!BUY_COLOR_MAP[a.id];
               const buyColor = BUY_COLOR_MAP[a.id];
+              const img      = ACTION_IMG[a.id];
               if (isBuy) {
-                // Cacher les couleurs que le joueur ne peut pas acheter
                 if (!availableBuyColors.has(buyColor)) return null;
-                const cs = BUY_CIRCLE_STYLE[buyColor] || {};
-                // En mode jeton doré : seulement les couleurs déjà achetées ce jour
                 const buyClickable = (actionMode === "buy_golden" && used) || (canPlayAction && !used);
                 return (
                   <button
@@ -753,10 +771,16 @@ export default function MyZone({
                     onClick={() => handleActionClick(a)}
                     disabled={!buyClickable}
                     title={`Achat ${buyColor}`}
-                    className={`w-5 h-5 rounded-full border-2 transition-all ${cs.bg} ${cs.border} ${
-                      used ? "opacity-25 cursor-default" : buyClickable ? `${cs.active} cursor-pointer shadow-sm` : "opacity-30 cursor-not-allowed"
-                    }`}
-                  />
+                    style={{
+                      padding: 0, background: 'none', border: 'none', borderRadius: 4,
+                      cursor: buyClickable ? 'pointer' : 'not-allowed',
+                      opacity: used ? 0.2 : buyClickable ? 1 : 0.3,
+                      filter: used ? 'grayscale(1)' : 'none',
+                      transition: 'opacity 0.15s, filter 0.15s',
+                    }}
+                  >
+                    <img src={img} alt={`Achat ${buyColor}`} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover', display: 'block' }} />
+                  </button>
                 );
               }
               const clickable = canPlayAction && !used;
@@ -766,10 +790,15 @@ export default function MyZone({
                   onClick={() => handleActionClick(a)}
                   disabled={!clickable && !used}
                   title={a.label}
-                  className={`kmt-action-tile${used ? ' used' : ''}`}
-                  style={!clickable && !used ? { opacity: 0.3, cursor: 'not-allowed' } : {}}
+                  style={{
+                    padding: 0, background: 'none', border: 'none', borderRadius: 4,
+                    cursor: clickable ? 'pointer' : 'not-allowed',
+                    opacity: used ? 0.2 : clickable ? 1 : 0.3,
+                    filter: used ? 'grayscale(1)' : 'none',
+                    transition: 'opacity 0.15s, filter 0.15s',
+                  }}
                 >
-                  {a.label}
+                  <img src={img} alt={a.label} style={{ width: 44, height: 44, borderRadius: 6, objectFit: 'cover', display: 'block' }} />
                 </button>
               );
             })}
@@ -851,14 +880,6 @@ export default function MyZone({
           gameState={gameState}
           onConfirm={params => { onActionActivate("pyramid", params); setLocalModal(null); }}
           onClose={() => setLocalModal(null)}
-        />
-      )}
-
-      {showAllTiles && (
-        <AllTilesModal
-          gameState={gameState}
-          session={session}
-          onClose={() => setShowAllTiles(false)}
         />
       )}
 

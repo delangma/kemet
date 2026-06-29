@@ -1,4 +1,4 @@
-import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidColors } from "../../constants/powerTiles";
+import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidColors, getTileImageUrl } from "../../constants/powerTiles";
 
 const PLAYER_COLOR_TEXT = {
   Rouge: "text-red-400", Bleu: "text-blue-400",
@@ -129,14 +129,25 @@ export default function DraftPhaseModal({ session, gameState, onPick, isTestMode
                             <button
                               key={tile.id}
                               onClick={() => onPick(tile.id)}
-                              className={`text-left p-3.5 rounded-lg border-2 transition-all hover:scale-[1.02] hover:brightness-110 ${style.bg} ${style.border}`}
+                              className={`text-left rounded-lg border-2 transition-all hover:scale-[1.02] hover:brightness-110 overflow-hidden ${style.bg} ${style.border}`}
                             >
-                              <p className={`text-sm font-bold ${style.text}`}>{tile.name}</p>
-                              <div className="flex items-center gap-1.5 mt-1.5">
-                                <span className="text-sm">{typeInfo.icon}</span>
-                                <span className="text-xs text-gray-400">{typeInfo.label}</span>
+                              {getTileImageUrl(tile.id) && (
+                                <div className="w-full bg-gray-950">
+                                  <img
+                                    src={getTileImageUrl(tile.id)}
+                                    alt={tile.name}
+                                    className="w-full object-contain max-h-28"
+                                  />
+                                </div>
+                              )}
+                              <div className="p-3">
+                                <p className={`text-sm font-bold ${style.text}`}>{tile.name}</p>
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <span className="text-sm">{typeInfo.icon}</span>
+                                  <span className="text-xs text-gray-400">{typeInfo.label}</span>
+                                </div>
+                                <p className="text-xs text-green-400 font-semibold mt-1.5">✦ Gratuit</p>
                               </div>
-                              <p className="text-xs text-green-400 font-semibold mt-1.5">✦ Gratuit</p>
                             </button>
                           );
                         })}
