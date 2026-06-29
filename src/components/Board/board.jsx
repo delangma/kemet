@@ -282,15 +282,15 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
 
       {/* Move mode HUD */}
       {isMoveSourcePhase && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-blue-500/60 rounded-lg px-4 py-2 flex items-center gap-3 pointer-events-auto">
-          <span className="text-blue-300 text-sm font-semibold">Cliquez sur une troupe à déplacer</span>
-          <button onClick={onMoveCancel} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+        <div className="absolute bottom-2 md:top-2 md:bottom-auto left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-blue-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto">
+          <span className="text-blue-300 text-xs md:text-sm font-semibold">Cliquez sur une troupe</span>
+          <button onClick={onMoveCancel} className="px-2 py-1 md:px-3 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
             Annuler
           </button>
         </div>
       )}
       {isMoveMovingPhase && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-4 py-2 flex items-center gap-3 pointer-events-auto">
+        <div className="absolute bottom-2 md:top-2 md:bottom-auto left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto">
           {teleportPending ? (
             <>
               <span className="text-purple-300 text-sm font-semibold">
@@ -302,32 +302,32 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
             </>
           ) : confirmEnd ? (
             <>
-              <span className="text-white text-sm font-semibold">Terminer le déplacement ?</span>
-              <button onClick={() => { setConfirmEnd(false); onMoveDone(); }} className="px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded">
+              <span className="text-white text-xs md:text-sm font-semibold">Terminer le déplacement ?</span>
+              <button onClick={() => { setConfirmEnd(false); onMoveDone(); }} className="px-2 md:px-3 py-1 bg-green-700 hover:bg-green-600 text-white text-xs font-bold rounded">
                 Oui
               </button>
-              <button onClick={() => setConfirmEnd(false)} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
+              <button onClick={() => setConfirmEnd(false)} className="px-2 md:px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold rounded">
                 Non
               </button>
             </>
           ) : (
             <>
-              <span className={`text-sm font-semibold ${moveState.pointsRemaining <= 0 ? 'text-orange-300' : 'text-amber-300'}`}>
+              <span className={`text-xs md:text-sm font-semibold ${moveState.pointsRemaining <= 0 ? 'text-orange-300' : 'text-amber-300'}`}>
                 {moveState.pointsRemaining <= 0
-                  ? '⚠ Plus de points de déplacement'
-                  : `Déplacement : ${moveState.pointsRemaining} point(s) restant(s)`}
+                  ? '⚠ 0 pt'
+                  : `${moveState.pointsRemaining} pt`}
               </span>
               {canUndo && (
-                <button onClick={onMoveUndo} className="px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded">
-                  ↩ Annuler
+                <button onClick={onMoveUndo} className="px-2 md:px-3 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs font-bold rounded">
+                  ↩
                 </button>
               )}
               {canTeleport && (
-                <button onClick={onTeleportStart} className="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded">
-                  Téléportation ({teleportCost ?? 2}🪙)
+                <button onClick={onTeleportStart} className="px-2 md:px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs font-bold rounded">
+                  Téléport ({teleportCost ?? 2}🪙)
                 </button>
               )}
-              <button onClick={() => setConfirmEnd(true)} className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded">
+              <button onClick={() => setConfirmEnd(true)} className="px-2 md:px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded">
                 Terminer
               </button>
             </>

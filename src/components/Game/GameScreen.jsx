@@ -2815,19 +2815,19 @@ export default function GameScreen({ session }) {
       </div>
 
       {/* ORDRE + badges joueurs */}
-      <div className="flex items-center gap-1.5 md:gap-2 px-2 md:px-5 flex-1">
-        <span className="text-[10px] font-bold uppercase tracking-[0.3em] shrink-0" style={{ color: '#6B4C1E' }}>ORDRE</span>
-        <span className="shrink-0" style={{ color: '#3a2a0c', fontSize: 14 }}>|</span>
+      <div className="flex items-center gap-1 md:gap-2 px-2 md:px-5 flex-1 min-w-0">
+        <span className="hidden md:inline text-[10px] font-bold uppercase tracking-[0.3em] shrink-0" style={{ color: '#6B4C1E' }}>ORDRE</span>
+        <span className="hidden md:inline shrink-0" style={{ color: '#3a2a0c', fontSize: 14 }}>|</span>
         {currentPlayers.map(p => {
           const isActive = gameState?.phase === "placement"
             ? gameState?.placements?.[p.id]?.confirmed === true
             : gameState?.currentTurnPlayerId === p.id;
           const badges = {
-            Rouge: { bg: '#7f1d1d', hover: '#991b1b', text: '#fca5a5', border: '#dc2626' },
-            Bleu:  { bg: '#1e3a8a', hover: '#1d4ed8', text: '#93c5fd', border: '#3b82f6' },
-            Vert:  { bg: '#14532d', hover: '#166534', text: '#86efac', border: '#22c55e' },
-            Blanc: { bg: '#d1d5db', hover: '#e5e7eb', text: '#111827', border: '#9ca3af' },
-            Noir:  { bg: '#1f2937', hover: '#374151', text: '#d1d5db', border: '#4b5563' },
+            Rouge: { bg: '#7f1d1d', text: '#fca5a5', border: '#dc2626' },
+            Bleu:  { bg: '#1e3a8a', text: '#93c5fd', border: '#3b82f6' },
+            Vert:  { bg: '#14532d', text: '#86efac', border: '#22c55e' },
+            Blanc: { bg: '#d1d5db', text: '#111827', border: '#9ca3af' },
+            Noir:  { bg: '#1f2937', text: '#d1d5db', border: '#4b5563' },
           };
           const b = badges[p.color] || badges.Noir;
           return (
@@ -2835,19 +2835,21 @@ export default function GameScreen({ session }) {
               key={p.id}
               onClick={() => setViewTilesPlayer(p)}
               title={`Voir les tuiles de ${p.name}`}
+              className="px-1.5 md:px-3.5 shrink-0"
               style={{
                 background: b.bg,
                 border: `1px solid ${isActive ? b.border : b.bg}`,
                 color: b.text,
                 boxShadow: isActive ? `0 0 8px ${b.border}66` : 'none',
                 opacity: isActive ? 1 : 0.65,
-                padding: '3px 14px',
+                padding: undefined,
                 borderRadius: 4,
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: 700,
-                letterSpacing: '0.08em',
+                letterSpacing: '0.06em',
                 textTransform: 'uppercase',
                 transition: 'all 0.15s',
+                paddingTop: 2, paddingBottom: 2,
               }}
             >
               {p.name}
@@ -2856,12 +2858,14 @@ export default function GameScreen({ session }) {
         })}
       </div>
 
-      {/* Volume + Radio — masqués sur mobile */}
-      <div className="hidden md:flex items-center gap-3 px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c', minWidth: 150 }}>
+      {/* Volume — desktop uniquement */}
+      <div className="hidden md:flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
         <VolumeControl volume={volume} onChange={setVolume} />
-        <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
-          <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
-        </div>
+      </div>
+
+      {/* Radio — visible partout */}
+      <div className="flex items-center px-2 md:px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+        <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
       </div>
 
       {/* Boutique */}

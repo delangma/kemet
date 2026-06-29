@@ -284,6 +284,12 @@ export default function MyZone({
             <span style={{ color: '#fbbf24' }}>☀</span>
             <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{vpTotal}</span>
           </span>
+          {(state.dawnTokens ?? 0) > 0 && (
+            <span className="flex items-center gap-0.5 text-xs shrink-0">
+              <span style={{ color: '#f97316' }}>🏆</span>
+              <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{state.dawnTokens}</span>
+            </span>
+          )}
           <div className="flex gap-0.5 shrink-0 items-center">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="w-2.5 h-2.5 rounded-full border" style={{ background: i < tokens ? '#C9973A' : '#1a1508', borderColor: i < tokens ? '#8B6014' : '#3a2a0c' }} />
@@ -358,7 +364,16 @@ export default function MyZone({
           )}
           {/* Boutons rapides */}
           <div className="w-px h-4 bg-gray-700 shrink-0" />
-          {onViewMyTiles && <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }} className="shrink-0"><img src="/Boutique.png" alt="Mes tuiles" style={{ height: 28, width: 'auto', objectFit: 'contain', display: 'block' }} /></button>}
+          {onViewMyTiles && (
+            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', display: 'inline-flex' }} className="shrink-0">
+              <img src="/Boutique.png" alt="Mes tuiles" style={{ height: 28, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              {ownedTileIds.length > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -5, background: '#ea580c', color: '#fff', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 13, height: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                  {ownedTileIds.length}
+                </span>
+              )}
+            </button>
+          )}
           <button onClick={() => setShowIdModal(true)} className="shrink-0 relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
             <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 20, height: 28, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
             {myIdCards.length > 0 && (
@@ -611,7 +626,14 @@ export default function MyZone({
         {/* Boutons rapides */}
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
           {onViewMyTiles && (
-            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}><img src="/Boutique.png" alt="Mes tuiles" style={{ height: 36, width: 'auto', objectFit: 'contain', display: 'block' }} /></button>
+            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', display: 'inline-flex' }}>
+              <img src="/Boutique.png" alt="Mes tuiles" style={{ height: 36, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              {ownedTileIds.length > 0 && (
+                <span style={{ position: 'absolute', top: -5, right: -6, background: '#ea580c', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                  {ownedTileIds.length}
+                </span>
+              )}
+            </button>
           )}
 
           <button onClick={() => setShowIdModal(true)} className="relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
