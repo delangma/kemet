@@ -25,6 +25,7 @@ export const PYRAMID_COLORS = ["red", "blue", "white"];
 export const INITIAL_PLAYER_STATE = {
   ank: 7,
   vpPermanent: 0,
+  vpCombat: 0,
   tokens: MAX_TOKENS,
   usedActions: [],
   actionsThisTurn: 0,

@@ -11,7 +11,7 @@ import { PYRAMID_SLOTS } from "../../constants/pyramids";
 import PyramidMarker from "./PyramidMarker";
 import { BOARD_STATIC_IMAGES } from "../../constants/boardStaticImages";
 
-export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm }) {
+export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, renfortsZones = [], onRenfortsClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm }) {
   const { roomCode, playerId } = session;
   const [selectedZone, setSelectedZone] = useState(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -199,6 +199,8 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
     await update(ref(db, '/'), {
       [`rooms/${roomCode}/gameState/boardPriests/${zoneId}/${playerColor}`]: { priestIndex: Number(priestIndex), jpTokenIds: [] },
       [`rooms/${roomCode}/gameState/taSetiPriestPositions/${playerId}/${priestIndex}`]: 'BOARD',
+      [`rooms/${roomCode}/gameState/boardUnits/${zoneId}/${playerColor}`]: (state.boardUnits?.[zoneId]?.[playerColor] || 0) - 1,
+      [`rooms/${roomCode}/gameState/players/${playerId}/unitsReserve`]: (state.players?.[playerId]?.unitsReserve ?? 12) + 1,
     });
   }
 
@@ -347,6 +349,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         const isRetreatZone = retreatZones.includes(zone.id);
         const isVictoryRecruitZone = victoryRecruitZones.includes(zone.id);
         const isTasetiRecruitZone = tasetiRecruitZones.includes(zone.id);
+        const isRenfortsZone = renfortsZones.includes(zone.id);
         const isDestroyUnitZone = destroyUnitZones.includes(zone.id);
         const isPlacementZone = placementZones.includes(zone.id);
         const isPlacementSelected = placementSelected.includes(zone.id);
@@ -365,12 +368,13 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
           && (wallPassActive || existingPlayerUnits + moveCount <= destMax) && !enemyCerbereHere;
         const isTeleportTarget = teleportPending && TELEPORT_TARGETS.has(zone.id) && !enemyCerbereHere;
 
-        if (entries.length === 0 && !isRecruitZone && !isRenforcementZone && !isMoveDestZone && !isTeleportTarget && !isRetreatZone && !isVictoryRecruitZone && !isTasetiRecruitZone && !isDestroyUnitZone && !isPlacementZone) return null;
+        if (entries.length === 0 && !isRecruitZone && !isRenforcementZone && !isMoveDestZone && !isTeleportTarget && !isRetreatZone && !isVictoryRecruitZone && !isTasetiRecruitZone && !isRenfortsZone && !isDestroyUnitZone && !isPlacementZone) return null;
 
         const { left, top } = getZonePosition(zone);
 
         let ringClass = "";
         if (isDestroyUnitZone) ringClass = "outline outline-2 outline-red-400 rounded-full p-0.5 animate-pulse";
+        else if (isRenfortsZone) ringClass = "outline outline-2 outline-emerald-400 rounded-full p-0.5 animate-pulse";
         else if (isTasetiRecruitZone) ringClass = "outline outline-2 outline-amber-400 rounded-full p-0.5 animate-pulse";
         else if (isVictoryRecruitZone) ringClass = "outline outline-2 outline-lime-400 rounded-full p-0.5 animate-pulse";
         else if (isRetreatZone) ringClass = "outline outline-2 outline-orange-400 rounded-full p-0.5 animate-pulse";
@@ -383,10 +387,11 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         else if (isPlacementSelected) ringClass = "outline outline-2 outline-yellow-400 rounded-full p-0.5";
         else if (isPlacementZone) ringClass = "outline outline-2 outline-yellow-400 rounded-full p-0.5 animate-pulse";
 
-        const isClickable = isRecruitZone || isRenforcementZone || isMoveSourceZone || isMoveDestZone || isTeleportTarget || isRetreatZone || isVictoryRecruitZone || isTasetiRecruitZone || isDestroyUnitZone || isPlacementZone;
+        const isClickable = isRecruitZone || isRenforcementZone || isMoveSourceZone || isMoveDestZone || isTeleportTarget || isRetreatZone || isVictoryRecruitZone || isTasetiRecruitZone || isRenfortsZone || isDestroyUnitZone || isPlacementZone;
 
         function handleClick() {
           if (isDestroyUnitZone && onDestroyUnitClick) onDestroyUnitClick(zone.id);
+          else if (isRenfortsZone && onRenfortsClick) onRenfortsClick(zone.id);
           else if (isTasetiRecruitZone && onTasetiRecruitClick) onTasetiRecruitClick(zone.id);
           else if (isVictoryRecruitZone && onVictoryRecruitClick) onVictoryRecruitClick(zone.id);
           else if (isRetreatZone) onRetreatZoneClick(zone.id);

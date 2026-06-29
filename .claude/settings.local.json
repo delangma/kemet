@@ -23,7 +23,11 @@
       "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\match_colors.py\")",
       "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113.py\")",
       "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113_lab.py\")",
-      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113_targeted.py\")"
+      "PowerShell(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-documents-kemet\\\\71f6e5a6-9b80-40f4-b62d-dc90eff41545\\\\scratchpad\\\\fix_113_targeted.py\")",
+      "Bash(grep -rn \"vpPermanent\\\\|60\\\\s*$\\\\|VP.*60\" src --include=\"*.js\" --include=\"*.jsx\")",
+      "Bash(npx --no-install react-scripts build --no-typescript)",
+      "Bash(node_modules/.bin/react-scripts build *)",
+      "Bash(grep -v \"//\\\\|Bleu\\\\|bleu\\\\|NightModal.*Temple\\\\|PlayerTilesModal\")"
     ]
   }
 }

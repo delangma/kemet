@@ -19,13 +19,13 @@ import NightModal from "./NightModal";
 import Board from "../Board/board";
 import SetupPhaseModal from "./SetupPhaseModal";
 import DraftPhaseModal from "./DraftPhaseModal";
-import PlacementPhaseModal from "./PlacementPhaseModal";
 import MoveConfigModal from "./MoveConfigModal";
 import CreatureEquipModal from "./CreatureEquipModal";
 import { POWER_TILES, getPlayerPyramidLevel, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
 import { ZONE_ADJACENCY } from "../../constants/board";
 import { getMovementCreatureBonus, getZoneMaxUnits, CREATURE_POWERS, hasEnemyCerbereInZone } from "../../constants/creaturePowers";
 import TaSetiBoard from "./TaSetiBoard";
+import AllTilesModal from "./AllTilesModal";
 import ActionLogPanel from "./ActionLogPanel";
 import FleeModal from "../Combat/FleeModal";
 import CancelIdModal from "../Combat/CancelIdModal";
@@ -33,14 +33,23 @@ import IdRecoverModal from "../Combat/IdRecoverModal";
 import { BOARD_ZONES } from "../../constants/board";
 import { useSyncedMusic } from "../../hooks/useSyncedMusic";
 import { useVolume } from "../../hooks/useVolume";
+import { useCoinSound } from "../../hooks/useCoinSound";
 import VolumeControl from "../ui/VolumeControl";
 import { aiChooseSetup, aiChooseDraftTile, aiChoosePlacement, aiDecideAction } from "../../ai/aiPlayer";
+import { computeTempVP } from "../../utils/vp";
+import VictoryScreen from "./VictoryScreen";
 
-const GAME_MUSIC = [
-  "/MP3/Ancient Egyptian Music - Valley of the Kings.mp3",
-  "/MP3/Ancient Egyptian Music – Horus.mp3",
-  "/MP3/Ancient Egyptian Music – Ra.mp3",
-];
+const RADIOS = {
+  "Radio Chacal": [
+    "/MP3/Radio Chacal/Ancient Egyptian Music - Valley of the Kings.mp3",
+    "/MP3/Radio Chacal/Ancient Egyptian Music – Horus.mp3",
+    "/MP3/Radio Chacal/Ancient Egyptian Music – Ra.mp3",
+    "/MP3/Radio Chacal/Ancient Egyptian Music – Thoth.mp3",
+  ],
+  "Retro New Wave": [
+    "/MP3/Retro New Wave/New Order - Blue Monday.mp3",
+  ],
+};
 
 const PLAYER_COLOR_BG = {
   Rouge: "bg-red-600", Bleu: "bg-blue-600", Vert: "bg-emerald-600",
@@ -58,6 +67,70 @@ const ACTION_TOAST_STYLE = {
 const PLAYER_DOT_CSS = {
   Rouge: "#ef4444", Bleu: "#3b82f6", Vert: "#22c55e", Blanc: "#e5e7eb", Noir: "#6b7280",
 };
+
+function RadioSelector({ radios, currentRadio, onSelect, onPrev, onNext }) {
+  const [open, setOpen] = useState(false);
+  const radiosWithTracks = Object.keys(radios).filter(name => radios[name].length > 0);
+
+  const navBtnStyle = {
+    background: "rgba(201,151,58,0.15)",
+    border: "1px solid rgba(201,151,58,0.4)",
+    color: "#C9973A", cursor: "pointer",
+    fontSize: 10, fontWeight: "bold", fontFamily: "sans-serif",
+    padding: "3px 7px", borderRadius: 3, lineHeight: 1,
+    outline: "none",
+  };
+
+  return (
+    <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 3 }}>
+      <button onClick={onPrev} title="Piste précédente" style={navBtnStyle}>◄◄</button>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Changer de radio"
+        style={{ ...navBtnStyle, display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", fontSize: 11, whiteSpace: "nowrap" }}
+      >
+        <span>♫</span>
+        <span>{currentRadio || "Radio"}</span>
+      </button>
+      <button onClick={onNext} title="Piste suivante" style={navBtnStyle}>►►</button>
+      {open && (
+        <>
+          {/* Overlay pour fermer au clic extérieur */}
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 49 }}
+            onClick={() => setOpen(false)}
+          />
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0,
+            background: "#160d00", border: "1px solid #C9973A",
+            borderRadius: 6, overflow: "hidden", zIndex: 50, minWidth: 180,
+            boxShadow: "0 0 16px rgba(201,151,58,0.3)",
+          }}>
+            <div style={{ padding: "4px 10px 4px", borderBottom: "1px solid #3a2a0c", color: "#7a5c2a", fontSize: 10, letterSpacing: 1 }}>
+              RADIO
+            </div>
+            {radiosWithTracks.map(name => (
+              <button
+                key={name}
+                onClick={() => { onSelect(name); setOpen(false); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  padding: "7px 12px",
+                  background: name === currentRadio ? "rgba(201,151,58,0.15)" : "transparent",
+                  color: name === currentRadio ? "#C9973A" : "#c4a46a",
+                  border: "none", cursor: "pointer", fontSize: 12,
+                  borderLeft: name === currentRadio ? "2px solid #C9973A" : "2px solid transparent",
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function ActionToast({ notif }) {
   const meta = notif.meta || {};
@@ -115,9 +188,10 @@ function ActionToast({ notif }) {
 export default function GameScreen({ session }) {
   const { roomCode, playerId, allPlayers, isTestMode } = session;
   const [volume, setVolume] = useVolume();
-  useSyncedMusic(GAME_MUSIC, `rooms/${roomCode}/gameMusic`, volume);
+  const [currentRadio, changeRadio, prevTrack, nextTrack] = useSyncedMusic(RADIOS, `rooms/${roomCode}/gameMusic`, volume);
   const [gameState, setGameState] = useState(null);
   const [showTaSeti, setShowTaSeti] = useState(false);
+  const [showBoutique, setShowBoutique] = useState(false);
   const [showCombat, setShowCombat] = useState(false);
   const [combatData, setCombatData] = useState(null);
   const [showDawn, setShowDawn] = useState(false);
@@ -144,6 +218,8 @@ export default function GameScreen({ session }) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [showMobileLog, setShowMobileLog] = useState(false);
   const [placementSelected, setPlacementSelected] = useState([]);
+
+  useCoinSound(gameState, volume);
 
   const effectivePlayerId = isTestMode ? testViewPlayerId : playerId;
   const me = currentPlayers.find(p => p.id === effectivePlayerId) ?? allPlayers.find(p => p.id === effectivePlayerId);
@@ -423,6 +499,13 @@ export default function GameScreen({ session }) {
     else if (pending <= 0 && actionMode === "tasetiRecruit") setActionMode(null);
   }, [gameState?.players?.[effectivePlayerId]?.tasetiRecruitPending]);
 
+  // Renforts (carte ID) : mode placement des 2 unités
+  useEffect(() => {
+    const pending = gameState?.players?.[effectivePlayerId]?.pendingRenforts ?? 0;
+    if (pending > 0 && actionMode !== "renforts") setActionMode("renforts");
+    else if (pending <= 0 && actionMode === "renforts") setActionMode(null);
+  }, [gameState?.players?.[effectivePlayerId]?.pendingRenforts]);
+
   // Pluie de Feu : entre en mode ciblage ennemi
   useEffect(() => {
     const pending = gameState?.players?.[effectivePlayerId]?.pendingDestroyUnit ?? false;
@@ -662,11 +745,8 @@ export default function GameScreen({ session }) {
       const hasAnkReducPyr = (myState.ownedTileIds || []).some(
         id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank"
       );
-      const currentTokens = myState.tokens ?? 5;
       if (!pyr.color) {
         if (!newColor || !params.level) return;
-        const levelsUp = params.level; // depuis 0
-        if (currentTokens < levelsUp) return;
         const rawCost = pyramidCost(0, params.level);
         const cost = Math.max(0, rawCost - (hasReductionPyramide ? params.level : 0) - (hasAnkReducPyr ? 1 : 0));
         if (currentAnk < cost) return;
@@ -675,18 +755,14 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/ownerId`] = effectivePlayerId;
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/controllerId`] = effectivePlayerId;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
-        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = currentTokens - levelsUp;
       } else {
         const newLevel = params.level ?? (pyr.level ?? 0) + 1;
         if (newLevel > 4 || newLevel <= (pyr.level ?? 0)) return;
-        const levelsUp = newLevel - (pyr.level ?? 0);
-        if (currentTokens < levelsUp) return;
         const rawCost = pyramidCost(pyr.level ?? 0, newLevel);
         const cost = Math.max(0, rawCost - (hasReductionPyramide ? 1 : 0) - (hasAnkReducPyr ? 1 : 0));
         if (currentAnk < cost) return;
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = newLevel;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
-        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = currentTokens - levelsUp;
       }
     } else if (actionId === "move1" || actionId === "move2") {
       const { fromZone, toZone, count, creatureGoesWithMove } = params;
@@ -842,6 +918,7 @@ export default function GameScreen({ session }) {
       const jpIds = gameState?.boardPriests?.[fromZoneId]?.[myColor]?.jpTokenIds || [];
       pts += jpIds.filter(id => id === 'JP_capacite_deplacement').length;
     }
+    pts += gameState?.players?.[pid]?.pendingMoveBonus ?? 0;
     return pts;
   }
 
@@ -1055,6 +1132,9 @@ export default function GameScreen({ session }) {
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/usedActions`] = [...usedActions, actionMode];
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = (myState.tokens ?? 5) - 1;
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/actionsThisTurn`] = (myState.actionsThisTurn ?? 0) + 1;
+    }
+    if ((myState.pendingMoveBonus ?? 0) > 0) {
+      fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingMoveBonus`] = null;
     }
     await update(ref(db, "/"), fbUpdates);
 
@@ -1557,7 +1637,7 @@ export default function GameScreen({ session }) {
     if (setupOrder[setupIndex] !== aiId) return;
     const aiPlayer = currentPlayers.find(p => p.id === aiId);
     if (!aiPlayer) return;
-    const choices = aiChooseSetup(aiPlayer);
+    const choices = aiChooseSetup(aiPlayer, gameState, currentPlayers);
     const updates = {};
     choices.forEach(({ slotId, color, level }) => {
       updates[`rooms/${roomCode}/gameState/pyramids/${slotId}`] = { color, level, ownerId: aiId, controllerId: aiId };
@@ -1600,7 +1680,7 @@ export default function GameScreen({ session }) {
     const snap = await get(ref(db, `rooms/${roomCode}/gameState/placements`));
     const currentPlacements = snap.exists() ? snap.val() : {};
     if (currentPlacements[aiId]?.confirmed) return;
-    const zones = aiChoosePlacement(aiPlayer);
+    const zones = aiChoosePlacement(aiPlayer, gameState);
     const allPlacements = { ...currentPlacements, [aiId]: { zones, confirmed: true } };
     const updates = { [`rooms/${roomCode}/gameState/placements/${aiId}`]: { zones, confirmed: true } };
     const allConfirmed = currentPlayers.every(p => allPlacements[p.id]?.confirmed);
@@ -1623,12 +1703,17 @@ export default function GameScreen({ session }) {
     const sorted = [...currentPlayers].sort((a, b) => a.order - b.order);
     const idx = sorted.findIndex(p => p.id === aiId);
     const next = sorted[(idx + 1) % sorted.length];
-    await update(ref(db, `rooms/${roomCode}/gameState`), {
+    const victoryCheck = checkVictoryAtTurnStart(next.id);
+    const aiTurnUpdates = {
       currentTurnPlayerId: next.id,
       [`players/${next.id}/actionsThisTurn`]: 0,
-    });
+    };
+    if (victoryCheck === "immediate") aiTurnUpdates.gameOver = { winnerId: next.id };
+    else if (victoryCheck === "pending") aiTurnUpdates.pendingEndAtNight = true;
+    await update(ref(db, `rooms/${roomCode}/gameState`), aiTurnUpdates);
     await logAction(aiId, `termine son tour → ${next.name} joue`);
 
+    if (victoryCheck === "immediate") return;
     const snap = await get(ref(db, `rooms/${roomCode}/gameState/players`));
     if (snap.exists()) {
       const players = snap.val();
@@ -1746,6 +1831,7 @@ export default function GameScreen({ session }) {
         logMeta = { type: "tile", tileId: tile.id };
         break;
       }
+      case "move2":
       case "move1": {
         // Ta-Seti : avancer un prêtre si possible (même règle que pour le joueur humain)
         const layout = gameState.taSetiLayout;
@@ -1842,8 +1928,14 @@ export default function GameScreen({ session }) {
             baseUpdates[`rooms/${roomCode}/gameState/boardPriests/${targetZoneId}/${aiColor}`] = aiPriestData;
           }
         }
+        if (decision.isTeleport && (decision.teleportCost ?? 0) > 0) {
+          const prevAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = prevAnk - decision.teleportCost;
+        }
         const zoneName = BOARD_ZONES.find(z => z.id === targetZoneId)?.label || targetZoneId;
-        logText = `déplace ${count} unité${count > 1 ? "s" : ""} vers ${zoneName}`;
+        logText = decision.isTeleport
+          ? `se téléporte vers ${zoneName} (${decision.teleportCost ?? 0} Ank)`
+          : `déplace ${count} unité${count > 1 ? "s" : ""} vers ${zoneName}`;
         logMeta = { type: "move" };
         break;
       }
@@ -1915,6 +2007,35 @@ export default function GameScreen({ session }) {
       }
       default:
         return;
+    }
+
+    // Carte ID journée jouée en bonus avec l'action principale
+    if (decision.idCardToPlay) {
+      const card = decision.idCardToPlay;
+      const currentHand = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] ?? (myState.idCards || []);
+      baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] = currentHand.filter(
+        c => c.instanceId !== card.instanceId
+      );
+      const currentDiscard = gameState.idDiscard || [];
+      baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] = [...currentDiscard, card];
+      const eff = card.effect?.type;
+      const val = card.effect?.value ?? 0;
+      if (eff === 'ank') {
+        const currentAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
+        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, currentAnk + val);
+      } else if (eff === 'taxation') {
+        const currentAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
+        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, currentAnk + 1);
+        currentPlayers.filter(p => p.id !== aiId).forEach(p => {
+          const opKey = `rooms/${roomCode}/gameState/players/${p.id}/ank`;
+          const opCurrent = baseUpdates[opKey] ?? (gameState.players?.[p.id]?.ank ?? 0);
+          baseUpdates[opKey] = Math.max(0, opCurrent - 1);
+        });
+      } else if (eff === 'units') {
+        const currentReserve = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? (myState.unitsReserve ?? 0);
+        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] = currentReserve + val;
+      }
+      logText += logText ? ` / joue "${card.name}"` : `joue "${card.name}"`;
     }
 
     await update(ref(db, "/"), baseUpdates);
@@ -2286,6 +2407,24 @@ export default function GameScreen({ session }) {
     }
   }
 
+  function checkVictoryAtTurnStart(nextPlayerId) {
+    if (!gameState) return null;
+    const getScore = pid => ({
+      total: (gameState.players?.[pid]?.vpPermanent ?? 0) + computeTempVP(pid, gameState, currentPlayers),
+      combat: gameState.players?.[pid]?.vpCombat ?? 0,
+    });
+    const next = getScore(nextPlayerId);
+    if (next.total < 10) return null;
+    const isStrictLeader = currentPlayers
+      .filter(p => p.id !== nextPlayerId)
+      .every(p => {
+        const other = getScore(p.id);
+        if (next.total !== other.total) return next.total > other.total;
+        return next.combat > other.combat;
+      });
+    return isStrictLeader ? "immediate" : "pending";
+  }
+
   async function handleEndTurn() {
     if (!gameState) return;
     const myState = gameState.players?.[effectivePlayerId] || {};
@@ -2301,13 +2440,18 @@ export default function GameScreen({ session }) {
     const idx = sorted.findIndex(p => p.id === effectivePlayerId);
     const next = sorted[(idx + 1) % sorted.length];
 
-    await update(ref(db, `rooms/${roomCode}/gameState`), {
+    const victoryCheck = checkVictoryAtTurnStart(next.id);
+    const turnUpdates = {
       currentTurnPlayerId: next.id,
       [`players/${next.id}/actionsThisTurn`]: 0,
       [`players/${effectivePlayerId}/goldenBuyBlockedThisTurn`]: false,
-    });
+    };
+    if (victoryCheck === "immediate") turnUpdates.gameOver = { winnerId: next.id };
+    else if (victoryCheck === "pending") turnUpdates.pendingEndAtNight = true;
+    await update(ref(db, `rooms/${roomCode}/gameState`), turnUpdates);
     await logAction(effectivePlayerId, `a terminé son tour → ${next.name} joue`);
 
+    if (victoryCheck === "immediate") return;
     const allDone = currentPlayers.every(p => (gameState.players?.[p.id]?.tokens ?? 5) === 0);
     if (allDone) setShowNight(true);
   }
@@ -2391,7 +2535,7 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/players/${actorId}/ank`] = Math.min(11, (ps.ank ?? 0) + (effect.value || 0));
         break;
       case 'units':
-        updates[`rooms/${roomCode}/gameState/players/${actorId}/unitsReserve`] = (ps.unitsReserve ?? 0) + (effect.value || 0);
+        updates[`rooms/${roomCode}/gameState/players/${actorId}/pendingRenforts`] = (ps.pendingRenforts ?? 0) + (effect.value || 0);
         break;
       case 'taxation':
         updates[`rooms/${roomCode}/gameState/players/${actorId}/ank`] = Math.min(11, (ps.ank ?? 0) + 1);
@@ -2523,6 +2667,26 @@ export default function GameScreen({ session }) {
     });
   }
 
+  async function handleRenfortsClick(zoneId) {
+    const pending = gameState?.players?.[effectivePlayerId]?.pendingRenforts ?? 0;
+    if (pending <= 0) return;
+    const col = me?.color;
+    const current = gameState?.boardUnits?.[zoneId]?.[col] || 0;
+    if (current >= MAX_UNITS_PER_ZONE) return;
+    const reserve = gameState?.players?.[effectivePlayerId]?.unitsReserve ?? 0;
+    if (reserve <= 0) {
+      await update(ref(db, "/"), {
+        [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingRenforts`]: null,
+      });
+      return;
+    }
+    await update(ref(db, "/"), {
+      [`rooms/${roomCode}/gameState/boardUnits/${zoneId}/${col}`]: current + 1,
+      [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`]: reserve - 1,
+      [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingRenforts`]: pending > 1 ? pending - 1 : null,
+    });
+  }
+
   async function handleDestroyUnitClick(zoneId) {
     if (!gameState?.players?.[effectivePlayerId]?.pendingDestroyUnit) return;
     const col = me?.color;
@@ -2560,6 +2724,16 @@ export default function GameScreen({ session }) {
         z.id.startsWith(`J${myJoinOrderForRecruit}C`) ||
         (gameState?.boardUnits?.[z.id]?.[me?.color] || 0) > 0
       ).map(z => z.id)
+    : [];
+
+  // Zones de renforts (carte Renforts) : cité ou troupe existante, sous le max
+  const renfortsPending = gameState?.players?.[effectivePlayerId]?.pendingRenforts ?? 0;
+  const renfortsZones = (actionMode === "renforts" && myJoinOrderForRecruit && renfortsPending > 0)
+    ? BOARD_ZONES.filter(z => {
+        const current = gameState?.boardUnits?.[z.id]?.[me?.color] || 0;
+        if (current >= MAX_UNITS_PER_ZONE) return false;
+        return z.id.startsWith(`J${myJoinOrderForRecruit}C`) || current > 0;
+      }).map(z => z.id)
     : [];
 
   // Zones de destruction (Pluie de Feu)
@@ -2645,7 +2819,9 @@ export default function GameScreen({ session }) {
         <span className="text-[10px] font-bold uppercase tracking-[0.3em] shrink-0" style={{ color: '#6B4C1E' }}>ORDRE</span>
         <span className="shrink-0" style={{ color: '#3a2a0c', fontSize: 14 }}>|</span>
         {currentPlayers.map(p => {
-          const isActive = gameState?.currentTurnPlayerId === p.id;
+          const isActive = gameState?.phase === "placement"
+            ? gameState?.placements?.[p.id]?.confirmed === true
+            : gameState?.currentTurnPlayerId === p.id;
           const badges = {
             Rouge: { bg: '#7f1d1d', hover: '#991b1b', text: '#fca5a5', border: '#dc2626' },
             Bleu:  { bg: '#1e3a8a', hover: '#1d4ed8', text: '#93c5fd', border: '#3b82f6' },
@@ -2680,9 +2856,23 @@ export default function GameScreen({ session }) {
         })}
       </div>
 
-      {/* Volume — masqué sur mobile */}
-      <div className="hidden md:flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c', minWidth: 150 }}>
+      {/* Volume + Radio — masqués sur mobile */}
+      <div className="hidden md:flex items-center gap-3 px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c', minWidth: 150 }}>
         <VolumeControl volume={volume} onChange={setVolume} />
+        <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
+          <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
+        </div>
+      </div>
+
+      {/* Boutique */}
+      <div className="flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+        <button
+          onClick={() => setShowBoutique(true)}
+          title="Voir toutes les tuiles disponibles"
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          <img src="/Boutique.png" alt="Boutique" style={{ height: 48, width: 'auto', objectFit: 'contain', display: 'block' }} />
+        </button>
       </div>
 
       {/* Ta-Seti miniature (droite) */}
@@ -2710,6 +2900,7 @@ export default function GameScreen({ session }) {
               player={p}
               gameState={gameState}
               currentTurnPlayerId={gameState?.currentTurnPlayerId}
+              isHighlighted={gameState?.phase === "placement" ? gameState?.placements?.[p.id]?.confirmed === true : undefined}
               allPlayers={session.allPlayers}
               compact
             />
@@ -2745,6 +2936,8 @@ export default function GameScreen({ session }) {
 		  onVictoryRecruitClick={handleVictoryRecruitClick}
 		  tasetiRecruitZones={tasetiRecruitZones}
 		  onTasetiRecruitClick={handleTasetiRecruitClick}
+		  renfortsZones={renfortsZones}
+		  onRenfortsClick={handleRenfortsClick}
 		  destroyUnitZones={destroyUnitZones}
 		  onDestroyUnitClick={handleDestroyUnitClick}
 		  placementZones={
@@ -2772,6 +2965,7 @@ export default function GameScreen({ session }) {
               gameState={gameState}
               onActionToggle={handleActionToggle}
               currentTurnPlayerId={gameState?.currentTurnPlayerId}
+              isHighlighted={gameState?.phase === "placement" ? gameState?.placements?.[p.id]?.confirmed === true : undefined}
               allPlayers={session.allPlayers}
             />
           </div>
@@ -2902,15 +3096,6 @@ export default function GameScreen({ session }) {
       />
     )}
 
-    {gameState?.phase === "placement" && (
-      <PlacementPhaseModal
-        session={effectiveSession}
-        gameState={gameState}
-        isTestMode={isTestMode}
-        testPlayers={isTestMode ? currentPlayers : null}
-        onSwitchTestPlayer={id => { setTestViewPlayerId(id); setPlacementSelected([]); setActionMode(null); setMoveState(null); setMoveConfig(null); }}
-      />
-    )}
 
     {/* Modale config déplacement */}
     {moveConfig && (
@@ -2946,6 +3131,14 @@ export default function GameScreen({ session }) {
     )}
 
     {/* Modale Ta-Seti — zoom plein écran */}
+    {showBoutique && gameState && (
+      <AllTilesModal
+        gameState={gameState}
+        session={effectiveSession}
+        onClose={() => setShowBoutique(false)}
+      />
+    )}
+
     {showTaSeti && gameState?.taSetiLayout && (() => {
       const PRIEST_IMGS = { Rouge: 'Pretre_rouge', Bleu: 'Pretre_bleu', Vert: 'Pretre_vert', Blanc: 'Pretre_jaune', Noir: 'Pretre_noir' };
       const PRIEST_H = 120;
@@ -3200,6 +3393,14 @@ export default function GameScreen({ session }) {
       );
     })()}
 
+	{gameState?.gameOver && (
+	  <VictoryScreen
+	    winnerId={gameState.gameOver.winnerId}
+	    allPlayers={currentPlayers}
+	    gameState={gameState}
+	  />
+	)}
+
 	{showDawn && (
 	  <DawnModal
 		onClose={() => setShowDawn(false)}
@@ -3342,6 +3543,14 @@ export default function GameScreen({ session }) {
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-amber-900/95 border border-amber-400 rounded-xl px-6 py-3 shadow-2xl">
         <p className="text-amber-200 font-semibold text-sm">
           Ta-Seti — recrutez {tasetiRecruitPending} unité{tasetiRecruitPending !== 1 ? "s" : ""} (cité ou troupe existante)
+        </p>
+      </div>
+    )}
+
+    {actionMode === "renforts" && renfortsPending > 0 && (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-emerald-900/95 border border-emerald-400 rounded-xl px-6 py-3 shadow-2xl">
+        <p className="text-emerald-200 font-semibold text-sm">
+          Renforts — placez {renfortsPending} unité{renfortsPending !== 1 ? "s" : ""} (cité ou troupe existante)
         </p>
       </div>
     )}

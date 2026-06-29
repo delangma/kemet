@@ -6,6 +6,7 @@ import IdDraftModal from "../Cards/IdDraftModal";
 import IdRefreshModal from "../Cards/IdRefreshModal";
 import PyramidEvolveModal from "./PyramidEvolveModal";
 import PowerTileModal from "./PowerTileModal";
+import AllTilesModal from "./AllTilesModal";
 import CreatureEquipModal from "./CreatureEquipModal";
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
@@ -50,6 +51,7 @@ export default function MyZone({
   const [showCombat, setShowCombat] = useState(false);
   const [showIdModal, setShowIdModal] = useState(false);
   const [localModal, setLocalModal] = useState(null);
+  const [showAllTiles, setShowAllTiles] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const state   = gameState?.players?.[player.id] || {};
@@ -595,6 +597,8 @@ export default function MyZone({
             <button onClick={onViewMyTiles} className="kmt-btn-ghost">📜 Mes tuiles</button>
           )}
 
+          <button onClick={() => setShowAllTiles(true)} className="kmt-btn-ghost">🏪 Boutique</button>
+
           <button onClick={() => setShowIdModal(true)} className="kmt-btn-ghost">
             🃏 Cartes ID {myIdCards.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{myIdCards.length}</span>}
           </button>
@@ -835,9 +839,9 @@ export default function MyZone({
       {showIdModal && (
         <IdCardModal
           cards={myIdCards}
-          playableTimings={["day", "any"]}
+          playableTimings={isMyTurn ? ["day", "any"] : []}
           onClose={() => setShowIdModal(false)}
-          onPlay={handlePlayIdCard}
+          onPlay={isMyTurn ? handlePlayIdCard : undefined}
         />
       )}
 
@@ -847,6 +851,14 @@ export default function MyZone({
           gameState={gameState}
           onConfirm={params => { onActionActivate("pyramid", params); setLocalModal(null); }}
           onClose={() => setLocalModal(null)}
+        />
+      )}
+
+      {showAllTiles && (
+        <AllTilesModal
+          gameState={gameState}
+          session={session}
+          onClose={() => setShowAllTiles(false)}
         />
       )}
 

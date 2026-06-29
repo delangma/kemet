@@ -6,7 +6,7 @@ import { POWER_TILES } from "../../constants/powerTiles";
 import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags } from "../../constants/creaturePowers";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { ZONE_ADJACENCY } from "../../constants/board";
-import { aiChooseCombatCards } from "../../ai/aiPlayer";
+import { aiChooseCombatCards, aiSelectCombatIdCard } from "../../ai/aiPlayer";
 
 export default function CombatModal({ onClose, session, gameState, effectivePlayerId: epId, isTestMode, testPlayers, testViewPlayerId, onSwitchTestPlayer, logAction }) {
   const { roomCode, playerId: sessionPlayerId, allPlayers } = session;
@@ -104,7 +104,9 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       if (combat.choices?.[pid]?.ready) return;
       const aiState = gameState?.players?.[pid] || {};
       const available = aiState.availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
-      const cards = aiChooseCombatCards(available);
+      const opponentId = pid === combat.attacker ? combat.defender : combat.attacker;
+      const opponentAvailable = (gameState?.players?.[opponentId] || {}).availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
+      const cards = aiChooseCombatCards(available, opponentAvailable);
       if (!cards) return;
       setTimeout(() => {
         update(ref(db, `rooms/${roomCode}/combat/choices/${pid}`), {
@@ -118,18 +120,36 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combat?.status, JSON.stringify(combat?.choices)]);
 
-  // ── IA : passe automatiquement en phase "id_phase" ─────────────────────────
+  // ── IA : phase "id_phase" — joue une carte ID si pertinent, sinon passe ────
   useEffect(() => {
     if (!combat || combat.status !== "id_phase") return;
     const currentPlayer = allPlayers.find(p => p.id === combat.currentTurn);
     if (!currentPlayer?.isAI) return;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
+      const pid = combat.currentTurn;
+      const aiIdCards = (gameState?.players?.[pid] || {}).idCards || [];
+      const combatTimingCards = aiIdCards.filter(c => c.timing === "combat" || c.timing === "any");
+      const cardToPlay = aiSelectCombatIdCard(combatTimingCards, combat, gameState, allPlayers, pid);
       const nextTurn = combat.currentTurn === combat.attacker ? combat.defender : combat.attacker;
-      update(ref(db, `rooms/${roomCode}/combat`), {
-        currentTurn: nextTurn,
-        consecutivePasses: (combat.consecutivePasses || 0) + 1,
-      });
-    }, 600);
+      if (cardToPlay) {
+        const existingIdCards = combat.choices?.[pid]?.idCards || [];
+        await update(ref(db, `rooms/${roomCode}/combat/choices/${pid}`), {
+          idCards: [...existingIdCards, cardToPlay],
+        });
+        await update(ref(db, `rooms/${roomCode}/gameState/players/${pid}`), {
+          idCards: aiIdCards.filter(c => c.instanceId !== cardToPlay.instanceId),
+        });
+        await update(ref(db, `rooms/${roomCode}/combat`), {
+          currentTurn: nextTurn,
+          consecutivePasses: 0,
+        });
+      } else {
+        update(ref(db, `rooms/${roomCode}/combat`), {
+          currentTurn: nextTurn,
+          consecutivePasses: (combat.consecutivePasses || 0) + 1,
+        });
+      }
+    }, 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combat?.currentTurn, combat?.status]);
@@ -153,12 +173,38 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const loserPlayer = allPlayers.find(p => p.id === pc.loserId);
     if (!loserPlayer?.isAI) return;
     if (pc.loserUnitsAfter === 0 || pc.loserChoice != null) return;
+    // Attendre que le vainqueur ait proposé une zone (ou qu'il n'y en ait pas)
+    const boardUnits = gameState?.boardUnits || {};
+    const freeZones = (ZONE_ADJACENCY[combat.zoneId] || []).filter(z =>
+      (boardUnits[z]?.[pc.winnerColor] ?? 0) === 0
+    );
+    if (freeZones.length > 0 && pc.retreatZoneId == null) return;
     const t = setTimeout(() => {
       update(ref(db, `rooms/${roomCode}/combat/postCombat`), { loserChoice: "recall" });
     }, 600);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [combat?.status, combat?.postCombat?.loserChoice]);
+  }, [combat?.status, combat?.postCombat?.loserChoice, combat?.postCombat?.retreatZoneId]);
+
+  // ── IA : place le perdant sur une zone adjacente libre ─────────────────────
+  useEffect(() => {
+    if (!combat || combat.status !== "post_combat") return;
+    const pc = combat.postCombat;
+    if (!pc) return;
+    const winnerPlayer = allPlayers.find(p => p.id === pc.winnerId);
+    if (!winnerPlayer?.isAI) return;
+    if (pc.loserUnitsAfter === 0 || pc.retreatZoneId != null) return;
+    const boardUnits = gameState?.boardUnits || {};
+    const freeZones = (ZONE_ADJACENCY[combat.zoneId] || []).filter(z =>
+      (boardUnits[z]?.[pc.winnerColor] ?? 0) === 0
+    );
+    if (freeZones.length === 0) return;
+    const t = setTimeout(() => {
+      update(ref(db, `rooms/${roomCode}/combat/postCombat`), { retreatZoneId: freeZones[0] });
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combat?.status, combat?.postCombat?.retreatZoneId]);
 
   // ── IA : décisions post-combat (vainqueur) ─────────────────────────────────
   useEffect(() => {
@@ -360,6 +406,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       const ps = gameState?.players?.[winnerId] || {};
       const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] ?? (ps.vpPermanent ?? 0);
       updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] = base + 1;
+      const combatBase = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpCombat`] ?? (ps.vpCombat ?? 0);
+      updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpCombat`] = combatBase + 1;
     }
 
     // Victoire Défensive : +1 PV si le défenseur gagne (tuile pouvoir ou jeton JP)
@@ -371,6 +419,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       if (hasVictoireDefensive && defenderUnitsAfter > 0) {
         const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] ?? (defState.vpPermanent ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] = base + 1;
+        const combatBase = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpCombat`] ?? (defState.vpCombat ?? 0);
+        updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpCombat`] = combatBase + 1;
       }
     }
 
@@ -474,6 +524,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
           const ps = gameState?.players?.[winnerId] || {};
           const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] ?? (ps.vpPermanent ?? 0);
           updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] = base + power.onWinBloodBonus.vp;
+          const combatBase = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpCombat`] ?? (ps.vpCombat ?? 0);
+          updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpCombat`] = combatBase + power.onWinBloodBonus.vp;
         }
       }
     }

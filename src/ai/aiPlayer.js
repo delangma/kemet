@@ -1,6 +1,6 @@
 import { POWER_TILES, getPlayerPyramidColors, getPlayerPyramidLevel } from "../constants/powerTiles";
 import { PYRAMID_SLOTS, PYRAMID_COLORS } from "../constants/pyramids";
-import { ZONE_ADJACENCY, BOARD_ZONES } from "../constants/board";
+import { ZONE_ADJACENCY, BOARD_ZONES, TELEPORT_TARGETS } from "../constants/board";
 import { MAX_UNITS_PER_ZONE } from "../constants/game";
 import { COMBAT_CARDS } from "../constants/cards";
 import { getValidPriestDestinations } from "../constants/taSetiGraph";
@@ -41,6 +41,10 @@ export const AI_WEIGHTS = {
   move_priestAdvance:    30,   // peut avancer un prêtre sur Ta-Seti
   move_reinforce:        15,   // cible déjà occupée par mes unités (regroupement)
   move_control2temples:  70,   // ce déplacement permettra de contrôler >= 2 temples
+  move_preferBoth:       25,   // bonus si le type de déplacement complémentaire est déjà utilisé
+  move_earlyPenalty:    -22,   // pénalité par token restant au-dessus de 2 (déplacements tardifs)
+  move_lastToken:        80,   // dernier jeton → forcer le déplacement manquant
+  move_towardAttack:     45,   // bonus si le déplacement met à portée d'attaque un ennemi faible
 
   // ── Attaque ─────────────────────────────────────────────────────────────
   attack_base:           20,   // attaque légale (ratio >= 1:1)
@@ -64,11 +68,20 @@ export const AI_WEIGHTS = {
   pyramid_noTiles:       30,   // aucune tuile possédée de cette couleur
   pyramid_ank8plus:      20,   // ank >= 8
 
+  // ── Cartes ID — phase jour ───────────────────────────────────────────────
+  id_ank_critical:       70,   // jouer gain_ank si ank <= 2
+  id_ank_low:            45,   // jouer gain_ank si ank <= 4
+  id_taxation:           30,   // jouer taxation_divine si ank <= 5
+  id_renforts:           40,   // jouer renforts si réserve faible
+
   // ── Carte combat — sélection ────────────────────────────────────────────
   combatCard_force4:     30,   // force >= 4
   combatCard_force3:     15,   // force = 3
   combatCard_shields2:   20,   // boucliers >= 2
-  combatCard_blood2:     15,   // gouttes de sang >= 2
+  combatCard_blood2:     20,   // gouttes de sang >= 2 (relevé pour usage plus fréquent)
+  combatCard_topForce:   30,   // bonus pour la carte avec la force maximale disponible
+  combatCard_topBlood:   25,   // bonus pour la carte avec le max de sang disponible
+  combatCard_vsBlood:    30,   // préférer boucliers si adversaire a des cartes sang (>= 2)
 
   // ── Carte combat — défausse ─────────────────────────────────────────────
   discard_lowForce:      50,   // force <= 2 (mauvaise carte → défausser)
@@ -89,6 +102,9 @@ export const AI_WEIGHTS = {
   dawn_firstIfAttack:    50,   // veux attaquer avant que l'adversaire se renforce
   dawn_lastIfReactive:   40,   // stratégie réactive → jouer en dernier
   dawn_lastIfLeader:     60,   // je suis leader → jouer en dernier (prudence)
+
+  // ── Téléportation ────────────────────────────────────────────────────────
+  teleport_ankPenalty:  -10,   // pénalité par ank dépensé pour se téléporter
 };
 
 // ─── Moteur de sélection pondérée ────────────────────────────────────────────
@@ -157,6 +173,12 @@ function hasEmptyTempleAdjacent(zoneId, boardUnits) {
 
 function countMyTemples(aiColor, boardUnits) {
   return TEMPLES.filter(t => (boardUnits[t]?.[aiColor] || 0) > 0).length;
+}
+
+function computeAITeleportCost(myState) {
+  const owned = myState.ownedTileIds || [];
+  const has = name => owned.some(id => POWER_TILES.find(t => t.id === id)?.name === name);
+  return Math.max(0, (has("Réduction Téléportation") ? 1 : 2) - (has("Réduction d'ank") ? 1 : 0) - (has("Téléportation facile") ? 1 : 0));
 }
 
 // Capacité de déplacement max théorique :
@@ -237,23 +259,112 @@ function getReachableZonesForMove(fromZoneId, maxPts, boardUnits, aiColor) {
   return reachable;
 }
 
+// ─── Sélection de carte ID jour à jouer en bonus ─────────────────────────────
+// Retourne la meilleure carte ID "day" à jouer gratuitement avec l'action principale.
+// Cartes simples uniquement (effet direct, pas de pending state complex).
+function selectBestDayIdCard(myState, boardUnits, aiColor) {
+  const dayCards = (myState.idCards || []).filter(c => c.timing === "day");
+  if (dayCards.length === 0) return null;
+
+  const ank = myState.ank ?? 7;
+  const reserve = myState.unitsReserve ?? 0;
+  const candidates = [];
+
+  for (const card of dayCards) {
+    switch (card.id) {
+      case "gain_ank":
+        if (ank <= 2) candidates.push({ card, weight: AI_WEIGHTS.id_ank_critical });
+        else if (ank <= 4) candidates.push({ card, weight: AI_WEIGHTS.id_ank_low });
+        break;
+      case "taxation_divine":
+        if (ank <= 5) candidates.push({ card, weight: AI_WEIGHTS.id_taxation });
+        break;
+      case "renforts":
+        if (reserve <= 1) candidates.push({ card, weight: AI_WEIGHTS.id_renforts });
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  return weightedSelect(candidates)?.card ?? null;
+}
+
 // ─── Setup ───────────────────────────────────────────────────────────────────
 // Choisit 1 pyramide niveau 2 + 1 niveau 1 selon joinOrder (déterministe)
-export function aiChooseSetup(aiPlayer) {
+// Règles : Rules_IA.txt § "Choisir couleur de pyramide" + "Choisir niveau initial"
+export function aiChooseSetup(aiPlayer, gameState, allPlayers) {
   const joinOrder = aiPlayer.joinOrder;
   const slots = PYRAMID_SLOTS.filter(s => s.cityId === `J${joinOrder}`);
-  const color1 = PYRAMID_COLORS[(joinOrder - 1) % PYRAMID_COLORS.length];
-  const color2 = PYRAMID_COLORS[joinOrder % PYRAMID_COLORS.length];
+  const pyramids = gameState?.pyramids || {};
+
+  const advPyramids = Object.values(pyramids).filter(p => p.ownerId && p.ownerId !== aiPlayer.id);
+
+  const colorCandidates = PYRAMID_COLORS.map(color => {
+    let weight = 1;
+    const advWithColor = advPyramids.filter(p => p.color === color);
+    const advLevel1    = advWithColor.filter(p => p.level === 1);
+    const advLevel2up  = advWithColor.filter(p => p.level >= 2);
+
+    if (advWithColor.length === 0) {
+      weight += 50; // aucun adversaire n'a cette couleur
+    } else if (advLevel2up.length === 0 && advLevel1.length > 0) {
+      weight += 20; // adversaire en niveau 1 uniquement
+    }
+
+    if (color === "Blanc") {
+      if (advLevel1.length >= 3) weight += 20; // 3 pyramides adverses blanc niv.1
+      if (advWithColor.length >= 2) weight += 10; // 2 pyramides adverses blanc (niveaux mixtes)
+    }
+
+    return { color, weight };
+  });
+
+  // Option A : 3×Niv.1  |  Option B : Niv.2 + Niv.1  (mêmes poids que le choix de niveau)
+  const useOptionA = weightedSelect([
+    { opt: true,  weight: 1 + 10 }, // 3×niveau 1 (rare)
+    { opt: false, weight: 1 + 60 }, // niveau 2 + niveau 1 (préféré)
+  ]).opt;
+
+  if (useOptionA) {
+    const c1 = weightedSelect(colorCandidates);
+    const c2 = weightedSelect(colorCandidates.filter(c => c.color !== c1.color));
+    const c3 = weightedSelect(colorCandidates.filter(c => c.color !== c1.color && c.color !== c2.color));
+    return [
+      { slotId: slots[0].id, color: c1.color, level: 1 },
+      { slotId: slots[1].id, color: c2.color, level: 1 },
+      { slotId: slots[2].id, color: c3.color, level: 1 },
+    ];
+  }
+
+  const c1 = weightedSelect(colorCandidates);
+  const c2 = weightedSelect(colorCandidates.filter(c => c.color !== c1.color));
   return [
-    { slotId: slots[0].id, color: color1, level: 2 },
-    { slotId: slots[1].id, color: color2, level: 1 },
+    { slotId: slots[0].id, color: c1.color, level: 2 },
+    { slotId: slots[1].id, color: c2.color, level: 1 },
   ];
 }
 
 // ─── Placement ───────────────────────────────────────────────────────────────
-// Répartit sur les 2 premières zones de la cité (déterministe)
-export function aiChoosePlacement(aiPlayer) {
-  return [`J${aiPlayer.joinOrder}C1`, `J${aiPlayer.joinOrder}C2`];
+// Règles : Rules_IA.txt § "Placer les unités initiales"
+export function aiChoosePlacement(aiPlayer, gameState) {
+  const n = aiPlayer.joinOrder;
+  const pyramids = gameState?.pyramids || {};
+
+  const zoneCandidates = [1, 2, 3].map(k => {
+    const zoneId = `J${n}C${k}`;
+    const pyramid = pyramids[`J${n}P${k}`];
+    let weight = 1;
+    if (!pyramid)           weight += 20; // pas de pyramide sur l'emplacement
+    else if (pyramid.level === 1) weight += 10; // pyramide niveau 1
+    return { zoneId, weight };
+  });
+
+  const first  = weightedSelect(zoneCandidates);
+  const second = weightedSelect(zoneCandidates.filter(c => c.zoneId !== first.zoneId));
+
+  return [first.zoneId, second.zoneId];
 }
 
 // ─── Draft ───────────────────────────────────────────────────────────────────
@@ -314,6 +425,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
   const boardUnits   = gameState.boardUnits || {};
   const pyramids     = gameState.pyramids || {};
   const availableIds = gameState.availableTileIds || [];
+  const tokensLeft   = myState.tokens ?? 5;
 
   const myZones = getMyZonesSorted(boardUnits, aiColor);
   const leaderColor = getLeaderEnemyColor(aiPlayerId, aiColor, allPlayers, gameState);
@@ -428,55 +540,136 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
     }
   }
 
-  // ── Déplacement ───────────────────────────────────────────────────────────
+  // ── Déplacement (move1 et move2) ─────────────────────────────────────────
+  // move1 et move2 sont fonctionnellement identiques mais utilisent des slots différents.
+  // L'IA doit idéalement utiliser les deux. Pénalité en début de tour, bonus si l'autre est déjà fait.
   const myTemples = countMyTemples(aiColor, boardUnits);
   const aiOrder = aiPlayer?.order ?? 0;
   const isLastToPlay = allPlayers.every(p => p.id === aiPlayerId || (p.order ?? 0) <= aiOrder);
   const hasOnlyOneGroup = myZones.length === 1;
   const maxMovePts = computeMaxMovePoints(aiPlayerId, gameState);
+  const move1Used = usedActions.includes('move1');
+  const move2Used = usedActions.includes('move2');
 
-  for (const fromZoneId of myZones) {
-    const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
-    if (myUnits < 1) continue;
+  // Pénalité à partir du jeton 3 : réserve les jetons 2 et 1 pour les déplacements
+  const extraTokens = Math.max(0, tokensLeft - 2);
+  const moveEarlyPenalty = extraTokens * AI_WEIGHTS.move_earlyPenalty;
+  // Sur le dernier jeton, forcer l'utilisation du déplacement manquant
+  const isLastToken = tokensLeft === 1;
 
-    // Exception unique : dernier joueur + 1 seule troupe + sur un temple
-    // + au moins 1 autre temple vide atteignable → garder 1 unité sur le temple source
-    const sourceIsTemple = TEMPLES.includes(fromZoneId);
-    const reachableEmptyTemples = (sourceIsTemple && isLastToPlay && hasOnlyOneGroup)
-      ? getReachableEmptyTemples(fromZoneId, maxMovePts, boardUnits, aiColor)
-      : [];
-    const canSplitForTemple = reachableEmptyTemples.length > 0;
+  for (const moveType of ['move1', 'move2']) {
+    if (moveType === 'move1' && move1Used) continue;
+    if (moveType === 'move2' && move2Used) continue;
 
-    // BFS : toutes les zones atteignables dans maxMovePts déplacements
-    const reachableZones = getReachableZonesForMove(fromZoneId, maxMovePts, boardUnits, aiColor);
+    // Bonus si le type complémentaire est déjà utilisé (encourage à faire les deux)
+    const complementUsed = moveType === 'move1' ? move2Used : move1Used;
+    const preferBothBonus = complementUsed ? AI_WEIGHTS.move_preferBoth : 0;
+    // Bonus fort sur le dernier jeton pour ne pas le gaspiller sur une autre action
+    const lastTokenBonus = isLastToken ? AI_WEIGHTS.move_lastToken : 0;
 
-    for (const adjZoneId of reachableZones) {
-      const adjUnits = boardUnits[adjZoneId] || {};
-      const existingFriendly = adjUnits[aiColor] || 0;
+    for (const fromZoneId of myZones) {
+      const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
+      if (myUnits < 1) continue;
 
-      // keepBack ne s'applique que si la destination EST un temple vide (exception prise de 2 temples)
-      const destIsEmptyTemple = TEMPLES.includes(adjZoneId) && !Object.values(adjUnits).some(n => n > 0);
-      const keepBack = (canSplitForTemple && destIsEmptyTemple) ? 1 : 0;
+      const sourceIsTemple = TEMPLES.includes(fromZoneId);
+      const reachableEmptyTemples = (sourceIsTemple && isLastToPlay && hasOnlyOneGroup)
+        ? getReachableEmptyTemples(fromZoneId, maxMovePts, boardUnits, aiColor)
+        : [];
+      const canSplitForTemple = reachableEmptyTemples.length > 0;
 
-      const intendedMove = myUnits - keepBack;
-      const canAdd = Math.min(intendedMove, MAX_UNITS_PER_ZONE - existingFriendly);
-      if (canAdd <= 0) continue;
+      const reachableZones = getReachableZonesForMove(fromZoneId, maxMovePts, boardUnits, aiColor);
 
-      const isTemple   = TEMPLES.includes(adjZoneId);
-      const zoneEmpty  = !Object.values(adjUnits).some(n => n > 0);
-      const adjToEmpty = hasEmptyTempleAdjacent(adjZoneId, boardUnits);
-      const newTemple  = isTemple && zoneEmpty ? 1 : 0;
-      const wouldControl2 = (myTemples + newTemple) >= 2;
+      for (const adjZoneId of reachableZones) {
+        const adjUnits = boardUnits[adjZoneId] || {};
+        const existingFriendly = adjUnits[aiColor] || 0;
 
-      let weight = 1;
-      if (isTemple && zoneEmpty) weight += AI_WEIGHTS.move_emptyTemple;
-      if (adjToEmpty)            weight += AI_WEIGHTS.move_adjacentTemple;
-      if (canAdvancePriest)      weight += AI_WEIGHTS.move_priestAdvance;
-      if (existingFriendly > 0)  weight += AI_WEIGHTS.move_reinforce;
-      if (wouldControl2)         weight += AI_WEIGHTS.move_control2temples;
+        const destIsEmptyTemple = TEMPLES.includes(adjZoneId) && !Object.values(adjUnits).some(n => n > 0);
+        const keepBack = (canSplitForTemple && destIsEmptyTemple) ? 1 : 0;
 
-      if (weight > 1) {
-        candidates.push({ type: "move1", sourceZoneId: fromZoneId, targetZoneId: adjZoneId, count: canAdd, weight });
+        const intendedMove = myUnits - keepBack;
+        const canAdd = Math.min(intendedMove, MAX_UNITS_PER_ZONE - existingFriendly);
+        if (canAdd <= 0) continue;
+
+        const isTemple   = TEMPLES.includes(adjZoneId);
+        const zoneEmpty  = !Object.values(adjUnits).some(n => n > 0);
+        const adjToEmpty = hasEmptyTempleAdjacent(adjZoneId, boardUnits);
+        const newTemple  = isTemple && zoneEmpty ? 1 : 0;
+        const wouldControl2 = (myTemples + newTemple) >= 2;
+
+        // Opportunité d'attaque depuis la zone cible (ennemi faible = ratio >= 1.5:1)
+        const unitsAfterMove = existingFriendly + canAdd;
+        const hasAttackOpportunity = (ZONE_ADJACENCY[adjZoneId] || []).some(adj2 => {
+          const enemy2 = getEnemyEntry(boardUnits, adj2, aiColor);
+          return enemy2 && unitsAfterMove >= enemy2.count * 1.5;
+        });
+
+        let weight = 1 + moveEarlyPenalty + preferBothBonus + lastTokenBonus;
+        if (isTemple && zoneEmpty) weight += AI_WEIGHTS.move_emptyTemple;
+        if (adjToEmpty)            weight += AI_WEIGHTS.move_adjacentTemple;
+        if (canAdvancePriest)      weight += AI_WEIGHTS.move_priestAdvance;
+        if (existingFriendly > 0)  weight += AI_WEIGHTS.move_reinforce;
+        if (wouldControl2)         weight += AI_WEIGHTS.move_control2temples;
+        if (hasAttackOpportunity)  weight += AI_WEIGHTS.move_towardAttack;
+
+        if (weight > 0) {
+          candidates.push({ type: moveType, sourceZoneId: fromZoneId, targetZoneId: adjZoneId, count: canAdd, weight });
+        }
+      }
+    }
+  }
+
+  // ── Téléportation vers temple vide inaccessible normalement ──────────────
+  const hasFreeAnyTeleport = myState.pendingFreeAnyTeleport ?? false;
+  const rawTeleportCost = computeAITeleportCost(myState);
+  const effectiveTeleportCost = hasFreeAnyTeleport ? 0 : rawTeleportCost;
+
+  if (ank >= effectiveTeleportCost) {
+    for (const moveType of ['move1', 'move2']) {
+      if (moveType === 'move1' && move1Used) continue;
+      if (moveType === 'move2' && move2Used) continue;
+
+      const complementUsed = moveType === 'move1' ? move2Used : move1Used;
+      const preferBothBonus = complementUsed ? AI_WEIGHTS.move_preferBoth : 0;
+      const lastTokenBonusTele = isLastToken ? AI_WEIGHTS.move_lastToken : 0;
+
+      for (const fromZoneId of myZones) {
+        const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
+        if (myUnits < 1) continue;
+
+        const reachableNormal = new Set(getReachableZonesForMove(fromZoneId, maxMovePts, boardUnits, aiColor));
+
+        for (const teleTarget of TELEPORT_TARGETS) {
+          if (reachableNormal.has(teleTarget)) continue; // déjà accessible sans payer
+          if (!TEMPLES.includes(teleTarget)) continue;   // uniquement les temples
+
+          const adjUnits = boardUnits[teleTarget] || {};
+          const hasEnemy = Object.entries(adjUnits).some(([c, n]) => c !== aiColor && (n || 0) > 0);
+          if (hasEnemy) continue;
+          if (Object.values(adjUnits).some(n => n > 0)) continue; // temple non vide
+
+          const existingFriendly = adjUnits[aiColor] || 0;
+          const canAdd = Math.min(myUnits, MAX_UNITS_PER_ZONE - existingFriendly);
+          if (canAdd <= 0) continue;
+
+          const wouldControl2 = (myTemples + 1) >= 2;
+
+          let weight = 1 + moveEarlyPenalty + preferBothBonus + lastTokenBonusTele;
+          weight += AI_WEIGHTS.move_emptyTemple;
+          if (wouldControl2) weight += AI_WEIGHTS.move_control2temples;
+          weight += effectiveTeleportCost * AI_WEIGHTS.teleport_ankPenalty;
+
+          if (weight > 0) {
+            candidates.push({
+              type: moveType,
+              sourceZoneId: fromZoneId,
+              targetZoneId: teleTarget,
+              count: canAdd,
+              weight,
+              isTeleport: true,
+              teleportCost: effectiveTeleportCost,
+            });
+          }
+        }
       }
     }
   }
@@ -509,27 +702,61 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
     }
   }
 
-  return weightedSelect(candidates) ?? { type: "endTurn" };
+  // ── Sélection de la carte ID à jouer gratuitement avec l'action ──────────
+  const idCardToPlay = selectBestDayIdCard(myState, boardUnits, aiColor);
+
+  const decision = weightedSelect(candidates) ?? { type: "endTurn" };
+  if (decision.type === "endTurn" || !idCardToPlay) return decision;
+  return { ...decision, idCardToPlay };
 }
 
-// ─── Combat : sélection des cartes ───────────────────────────────────────────
-// availableCards : tableau d'IDs de cartes combat disponibles
-export function aiChooseCombatCards(availableCards) {
+// ─── Combat : sélection des cartes combat ────────────────────────────────────
+// availableCards        : IDs des cartes combat disponibles pour l'IA
+// opponentAvailableCards : IDs des cartes combat disponibles pour l'adversaire
+export function aiChooseCombatCards(availableCards, opponentAvailableCards = []) {
   if (availableCards.length < 2) return null;
 
-  // Carte à jouer : préférer force élevée + bonus boucliers/gouttes
+  // Potentiel maximal de l'adversaire (sang et boucliers)
+  const oppCards = opponentAvailableCards.length > 0 ? opponentAvailableCards : [1,2,3,4,5,6,7,8];
+  const opponentMaxBlood   = Math.max(0, ...oppCards.map(id => COMBAT_CARDS.find(c => c.id === id)?.blood   ?? 0));
+  const opponentHasBlood   = opponentMaxBlood >= 2;
+
+  // Force et sang maximaux disponibles pour l'IA
+  const myMaxForce = Math.max(...availableCards.map(id => COMBAT_CARDS.find(c => c.id === id)?.force ?? 0));
+  const myMaxBlood = Math.max(...availableCards.map(id => COMBAT_CARDS.find(c => c.id === id)?.blood ?? 0));
+
+  // Sélection de la carte à jouer :
+  // Par défaut → carte avec la force la plus élevée ou les plus de gouttes de sang.
+  // Contre un adversaire avec des cartes sang → préférer boucliers ou force.
   const playChoices = availableCards.map(id => {
     const card = COMBAT_CARDS.find(c => c.id === id);
+    const force   = card?.force   ?? 0;
+    const blood   = card?.blood   ?? 0;
+    const shields = card?.shields ?? 0;
     let weight = 1;
-    if ((card?.force ?? 0) >= 4)   weight += AI_WEIGHTS.combatCard_force4;
-    else if ((card?.force ?? 0) >= 3) weight += AI_WEIGHTS.combatCard_force3;
-    if ((card?.shields ?? 0) >= 2) weight += AI_WEIGHTS.combatCard_shields2;
-    if ((card?.blood ?? 0) >= 2)   weight += AI_WEIGHTS.combatCard_blood2;
+
+    // Bonus fort pour la carte avec la force maximale disponible
+    if (force === myMaxForce) weight += AI_WEIGHTS.combatCard_topForce;
+    else if (force >= 4)      weight += AI_WEIGHTS.combatCard_force4;
+    else if (force >= 3)      weight += AI_WEIGHTS.combatCard_force3;
+
+    // Bonus pour la carte avec le maximum de sang disponible (attaque secondaire)
+    if (blood === myMaxBlood && myMaxBlood >= 2) weight += AI_WEIGHTS.combatCard_topBlood;
+    else if (blood >= 2)                         weight += AI_WEIGHTS.combatCard_blood2;
+
+    if (opponentHasBlood) {
+      // Adversaire a des cartes sang : préférer force ou boucliers
+      if (shields >= 2) weight += AI_WEIGHTS.combatCard_vsBlood + AI_WEIGHTS.combatCard_shields2;
+      if (blood >= 1)   weight -= 15; // réduire l'attractivité des cartes sang
+    } else {
+      if (shields >= 2) weight += AI_WEIGHTS.combatCard_shields2;
+    }
+
     return { id, weight };
   });
   const combatCardId = weightedSelect(playChoices).id;
 
-  // Carte à défausser : préférer se débarrasser des cartes faibles
+  // Sélection de la carte à défausser : préférer les cartes faibles
   const remaining = availableCards.filter(id => id !== combatCardId);
   const discardChoices = remaining.map(id => {
     const card = COMBAT_CARDS.find(c => c.id === id);
@@ -542,6 +769,110 @@ export function aiChooseCombatCards(availableCards) {
   const discardCardId = weightedSelect(discardChoices).id;
 
   return { combatCard: combatCardId, discardCard: discardCardId };
+}
+
+// ─── Combat : sélection de carte ID à jouer en phase ID ──────────────────────
+// combatIdCards : cartes ID de timing "combat" ou "any" disponibles pour l'IA
+// Retourne la meilleure carte à jouer ou null si passer est préférable.
+export function aiSelectCombatIdCard(combatIdCards, combat, gameState, allPlayers, aiPlayerId) {
+  if (!combatIdCards || combatIdCards.length === 0) return null;
+
+  // Ne jouer qu'une seule carte ID par passage en id_phase pour rester raisonnable
+  const alreadyPlayed = (combat.choices?.[aiPlayerId]?.idCards || []).length;
+  if (alreadyPlayed >= 1) return null;
+
+  const opponentId   = aiPlayerId === combat.attacker ? combat.defender : combat.attacker;
+  const aiColor      = allPlayers.find(p => p.id === aiPlayerId)?.color;
+  const opponentColor = allPlayers.find(p => p.id === opponentId)?.color;
+  const aiState      = gameState?.players?.[aiPlayerId] || {};
+  const opponentState = gameState?.players?.[opponentId] || {};
+  const aiAnk        = aiState.ank ?? 7;
+
+  const zoneUnits    = gameState?.boardUnits?.[combat.zoneId] || {};
+  const myUnits      = zoneUnits[aiColor]      || 0;
+  const opponentUnits = zoneUnits[opponentColor] || 0;
+
+  // Potentiel de l'adversaire (sang et boucliers depuis ses cartes disponibles)
+  const opponentAvailable   = opponentState.availableCombatCards || [1,2,3,4,5,6,7,8];
+  const opponentMaxBlood    = Math.max(0, ...opponentAvailable.map(id => COMBAT_CARDS.find(c => c.id === id)?.blood   ?? 0));
+  const opponentMaxShields  = Math.max(0, ...opponentAvailable.map(id => COMBAT_CARDS.find(c => c.id === id)?.shields ?? 0));
+  const opponentHasBlood    = opponentMaxBlood >= 2;
+  const opponentHasShields  = opponentMaxShields >= 2;
+
+  // Force estimée de chaque camp (unités + carte combat choisie)
+  const myCombatCardId    = combat.choices?.[aiPlayerId]?.combatCard;
+  const myCombatCard      = COMBAT_CARDS.find(c => c.id === myCombatCardId);
+  const myForce           = myUnits + (myCombatCard?.force ?? 0);
+  // Estimation prudente de la force adverse (unités + force médiane des cartes dispo)
+  const oppAvgForce = opponentAvailable.length > 0
+    ? opponentAvailable.reduce((s, id) => s + (COMBAT_CARDS.find(c => c.id === id)?.force ?? 0), 0) / opponentAvailable.length
+    : 3;
+  const opponentEstimatedForce = opponentUnits + oppAvgForce;
+
+  const candidates = [];
+
+  for (const card of combatIdCards) {
+    if (card.id === "la_fuite")      continue; // géré par FleeModal
+    if (card.id === "annulation_id") continue; // géré par CancelIdModal
+
+    const eff  = card.effect?.type;
+    const cost = card.cost ?? 0;
+    if (cost > 0 && aiAnk < cost) continue;
+
+    let weight = 0;
+    switch (eff) {
+      case "force":
+        // Jouer si je suis derrière ou à égalité
+        if (myForce <= opponentEstimatedForce) {
+          weight = 40 + (card.effect?.value ?? 1) * 15;
+        }
+        break;
+      case "shields":
+        // Jouer si l'adversaire a des cartes sang
+        if (opponentHasBlood) {
+          weight = 55 + (card.effect?.value ?? 1) * 20;
+        } else if (myUnits < opponentUnits) {
+          weight = 25;
+        }
+        break;
+      case "blood":
+        // Jouer sang si adversaire n'a pas de boucliers et je suis en position de gagner
+        if (!opponentHasShields && myForce >= opponentEstimatedForce) {
+          weight = 35 + (card.effect?.value ?? 1) * 10;
+        }
+        break;
+      case "ank_if_win":
+        // Butin de guerre si je gagne clairement et ank faible
+        if (myForce > opponentEstimatedForce && aiAnk < 5) weight = 40;
+        break;
+      case "no_damage_if_win":
+        // Aucun saignement si je gagne mais l'adversaire a du sang
+        if (myForce >= opponentEstimatedForce && opponentHasBlood) weight = 50;
+        break;
+      case "units_if_win":
+        // Recrutement victoire si je gagne clairement
+        if (myForce > opponentEstimatedForce + 1) weight = 30;
+        break;
+      default:
+        break;
+    }
+
+    if (weight > 0) candidates.push({ card, weight });
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Seuil minimal : ne jouer que si la raison est suffisamment forte
+  const best = candidates.sort((a, b) => b.weight - a.weight)[0];
+  if (best.weight < 35) return null;
+
+  return weightedSelect(candidates)?.card ?? null;
+}
+
+function canReachEmptyTemple(zoneId, boardUnits) {
+  return (ZONE_ADJACENCY[zoneId] || []).some(
+    adj => TEMPLES.includes(adj) && !Object.values(boardUnits[adj] || {}).some(n => n > 0)
+  );
 }
 
 // ─── Aube : choix de position dans l'ordre de jeu ────────────────────────────

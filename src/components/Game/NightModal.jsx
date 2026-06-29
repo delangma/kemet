@@ -5,6 +5,7 @@ import { dealCards, buildPuDeck, buildJiDeck, buildJpDeck } from "../../utils/de
 import { getJuPositionsForLayout, getJiPositionsForLayout, getJpPositionsForLayout } from "../../constants/taSetiPositions";
 import { POWER_TILES } from "../../constants/powerTiles";
 import { CREATURE_POWERS } from "../../constants/creaturePowers";
+import { computeTempVP } from "../../utils/vp";
 
 const PLAYER_COLOR_TEXT = {
   Rouge: "text-red-400", Bleu: "text-blue-400",
@@ -283,6 +284,26 @@ export default function NightModal({ onClose, session, gameState }) {
 
     updates[`rooms/${roomCode}/gameState/currentTurnPlayerId`] = sortedPlayers[0].id;
     updates[`rooms/${roomCode}/gameState/idDeck`] = deck;
+
+    // Fin de partie différée : si pendingEndAtNight, le joueur avec le plus de PV gagne
+    if (state.pendingEndAtNight) {
+      const getScore = pid => ({
+        total: (state.players?.[pid]?.vpPermanent ?? 0) + (vpBonus[pid] ?? 0) + computeTempVP(pid, state, allPlayers),
+        combat: state.players?.[pid]?.vpCombat ?? 0,
+      });
+      const winner = allPlayers.reduce((best, p) => {
+        const bs = getScore(best.id);
+        const ps = getScore(p.id);
+        if (ps.total !== bs.total) return ps.total > bs.total ? p : best;
+        return ps.combat > bs.combat ? p : best;
+      }, allPlayers[0]);
+      updates[`rooms/${roomCode}/gameState/gameOver`] = { winnerId: winner.id };
+      updates[`rooms/${roomCode}/gameState/pendingEndAtNight`] = null;
+      await update(ref(db, "/"), updates);
+      setDone(true);
+      setLoading(false);
+      return;
+    }
 
     await update(ref(db, "/"), updates);
 

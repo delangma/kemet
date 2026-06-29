@@ -17,15 +17,22 @@ Sélection finale : tirage aléatoire proportionnel aux poids.
 ### Choisir couleur de pyramide
 | Règle | Décision | Poids |
 |-------|----------|-------|
+| Couleur non encore prise par un adversaire en niveau 1 et 2                        | Choisir couleur |  +50  |
+| Couleur prise par un adversaire en niveau 1 uniquement                             | Choisir couleur |  +20  |
+| Couleur blanche et 3 pyramides niveau 1                                            | Choisir couleur |  +20  |
+| Couleur blanche et 2 pyramides niveau 1 et 2                                       | Choisir couleur |  +10  |
 
 ### Choisir niveau initial de pyramide
 | Règle | Décision | Poids |
 |-------|----------|-------|
+| | Niveau 1 |  +10  |
+| | Niveau 2 |  +60  |
 
 ### Placer les unités initiales
 | Règle | Décision | Poids |
 |-------|----------|-------|
-
+|Pas de pyramide sur l'emplacement| Choix emplacement |  +20  |
+|Pyramide niveau 1| Choix emplacement |  +10  |
 ---
 
 ## PHASE DRAFT

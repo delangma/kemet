@@ -16,7 +16,7 @@ const BUY_CIRCLES = {
   buy_black: { bg: '#111111', border: '#C9973A', title: 'Achat Noir'  },
 };
 
-export default function PlayerSummary({ player, gameState, currentTurnPlayerId, allPlayers, compact = false }) {
+export default function PlayerSummary({ player, gameState, currentTurnPlayerId, isHighlighted, allPlayers, compact = false }) {
   const state       = gameState?.players?.[player.id] || {};
   const usedActions = state.usedActions || [];
   const tokens      = state.tokens ?? 5;
@@ -27,7 +27,7 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
   const vpTotal     = vpPermanent + vpTemp;
   const idCards     = state.idCards || [];
   const combatCards = state.availableCombatCards || [1,2,3,4,5,6,7,8];
-  const isActive    = currentTurnPlayerId === player.id;
+  const isActive    = isHighlighted !== undefined ? isHighlighted : currentTurnPlayerId === player.id;
 
   const hdr = HEADER_BG[player.color] || HEADER_BG.Noir;
 

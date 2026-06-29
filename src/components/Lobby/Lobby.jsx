@@ -262,12 +262,21 @@ export default function Lobby({ onGameStart }) {
       playerStates[p.id] = { ...INITIAL_PLAYER_STATE, color: p.color, idCards: hand, availableCombatCards: [1,2,3,4,5,6,7,8], unitsReserve: 2 };
     });
 
-    // Default pyramids: Rouge/1, Bleu/1, Blanc/1 per player
+    // Pyramides : niveau 2 et niveau 1 avec couleurs aléatoires par joueur
+    const PCOLORS = ["Rouge", "Bleu", "Blanc"];
+    function shuffleColors() {
+      const a = [...PCOLORS];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
     const pyramids = {};
     players.forEach(p => {
-      [["Rouge", `J${p.joinOrder}P1`], ["Bleu", `J${p.joinOrder}P2`], ["Noir", `J${p.joinOrder}P3`]].forEach(([color, slotId]) => {
-        pyramids[slotId] = { color, level: 1, ownerId: p.id, controllerId: p.id };
-      });
+      const [c1, c2] = shuffleColors();
+      pyramids[`J${p.joinOrder}P1`] = { color: c1, level: 2, ownerId: p.id, controllerId: p.id };
+      pyramids[`J${p.joinOrder}P2`] = { color: c2, level: 1, ownerId: p.id, controllerId: p.id };
     });
 
     // Draft defaults: one level-1 tile per player (reverse setup order: François, Toinou, Maxime)
