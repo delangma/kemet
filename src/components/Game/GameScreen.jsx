@@ -192,6 +192,7 @@ export default function GameScreen({ session }) {
   const [gameState, setGameState] = useState(null);
   const [showTaSeti, setShowTaSeti] = useState(false);
   const [showBoutique, setShowBoutique] = useState(false);
+  const [showSoundModal, setShowSoundModal] = useState(false);
   const [showCombat, setShowCombat] = useState(false);
   const [combatData, setCombatData] = useState(null);
   const [showDawn, setShowDawn] = useState(false);
@@ -2858,14 +2859,19 @@ export default function GameScreen({ session }) {
         })}
       </div>
 
-      {/* Volume — desktop uniquement */}
-      <div className="hidden md:flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+      {/* Volume + Radio — desktop uniquement */}
+      <div className="hidden md:flex items-center gap-3 px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
         <VolumeControl volume={volume} onChange={setVolume} />
+        <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
+          <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
+        </div>
       </div>
 
-      {/* Radio — visible partout */}
-      <div className="flex items-center px-2 md:px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
-        <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
+      {/* Son — icône mobile uniquement */}
+      <div className="flex md:hidden items-center px-2 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+        <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>
+          {volume === 0 ? '🔇' : '🔊'}
+        </button>
       </div>
 
       {/* Boutique */}
@@ -3141,6 +3147,37 @@ export default function GameScreen({ session }) {
         session={effectiveSession}
         onClose={() => setShowBoutique(false)}
       />
+    )}
+
+    {showSoundModal && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center pb-6 px-4" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setShowSoundModal(false)}>
+        <div className="kmt-panel w-full max-w-sm p-5 space-y-5" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between">
+            <h2 className="kmt-title text-base">Son &amp; Musique</h2>
+            <button onClick={() => setShowSoundModal(false)} className="kmt-close">✕</button>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Volume</p>
+            <VolumeControl volume={volume} onChange={setVolume} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Radio</p>
+            <div className="flex items-center gap-2 mb-3">
+              <button onClick={prevTrack} style={{ background: 'rgba(201,151,58,0.15)', border: '1px solid rgba(201,151,58,0.4)', color: '#C9973A', padding: '6px 12px', borderRadius: 4, fontWeight: 700, cursor: 'pointer' }}>◄◄</button>
+              <span className="flex-1 text-center text-sm font-semibold" style={{ color: '#C9973A' }}>{currentRadio || '—'}</span>
+              <button onClick={nextTrack} style={{ background: 'rgba(201,151,58,0.15)', border: '1px solid rgba(201,151,58,0.4)', color: '#C9973A', padding: '6px 12px', borderRadius: 4, fontWeight: 700, cursor: 'pointer' }}>►►</button>
+            </div>
+            <div className="space-y-1">
+              {Object.keys(RADIOS).filter(name => RADIOS[name].length > 0).map(name => (
+                <button key={name} onClick={() => changeRadio(name)} className="w-full text-left px-3 py-2 rounded text-sm transition-all"
+                  style={{ background: name === currentRadio ? 'rgba(201,151,58,0.15)' : 'transparent', color: name === currentRadio ? '#C9973A' : '#c4a46a', borderLeft: `2px solid ${name === currentRadio ? '#C9973A' : 'transparent'}` }}>
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     )}
 
     {showTaSeti && gameState?.taSetiLayout && (() => {
