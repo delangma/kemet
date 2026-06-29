@@ -2867,32 +2867,36 @@ export default function GameScreen({ session }) {
         </div>
       </div>
 
-      {/* Son — icône mobile uniquement */}
-      <div className="flex md:hidden items-center px-2 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
-        <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>
+      {/* Icônes droite groupées — mobile */}
+      <div className="flex md:hidden items-center shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+        <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: '0 8px', cursor: 'pointer', fontSize: 16, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center' }}>
           {volume === 0 ? '🔇' : '🔊'}
         </button>
+        <button onClick={() => setShowBoutique(true)} title="Voir toutes les tuiles disponibles" style={{ background: 'none', border: 'none', borderLeft: '1px solid #3a2a0c', padding: '0 6px', cursor: 'pointer', height: '100%', display: 'flex', alignItems: 'center' }}>
+          <img src="/Boutique.png" alt="Boutique" style={{ height: 30, width: 'auto', objectFit: 'contain', display: 'block' }} />
+        </button>
+        <div style={{ borderLeft: '1px solid #3a2a0c', padding: '0 6px', height: '100%', display: 'flex', alignItems: 'center', overflow: 'hidden', maxWidth: 60 }}>
+          {gameState?.taSetiLayout ? (
+            <button onClick={() => setShowTaSeti(true)} title="Voir le plateau Ta-Seti" style={{ border: '1px solid #C9973A', borderRadius: 3, background: 'rgba(0,0,0,0.5)', padding: '1px 2px', boxShadow: '0 0 6px rgba(201,151,58,0.4)' }}>
+              <TaSetiBoard layout={gameState.taSetiLayout} height="32px" />
+            </button>
+          ) : (
+            <span style={{ color: '#4a3410', fontSize: 20 }}>𓂀</span>
+          )}
+        </div>
       </div>
 
-      {/* Boutique */}
-      <div className="flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
-        <button
-          onClick={() => setShowBoutique(true)}
-          title="Voir toutes les tuiles disponibles"
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-        >
+      {/* Boutique — desktop */}
+      <div className="hidden md:flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+        <button onClick={() => setShowBoutique(true)} title="Voir toutes les tuiles disponibles" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
           <img src="/Boutique.png" alt="Boutique" style={{ height: 48, width: 'auto', objectFit: 'contain', display: 'block' }} />
         </button>
       </div>
 
-      {/* Ta-Seti miniature (droite) */}
-      <div className="flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+      {/* Ta-Seti miniature — desktop */}
+      <div className="hidden md:flex items-center px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
         {gameState?.taSetiLayout ? (
-          <button
-            onClick={() => setShowTaSeti(true)}
-            title="Voir le plateau Ta-Seti"
-            style={{ border: '1px solid #C9973A', borderRadius: 4, background: 'rgba(0,0,0,0.5)', padding: '2px 4px', boxShadow: '0 0 10px rgba(201,151,58,0.5), 0 0 24px rgba(201,151,58,0.2)' }}
-          >
+          <button onClick={() => setShowTaSeti(true)} title="Voir le plateau Ta-Seti" style={{ border: '1px solid #C9973A', borderRadius: 4, background: 'rgba(0,0,0,0.5)', padding: '2px 4px', boxShadow: '0 0 10px rgba(201,151,58,0.5), 0 0 24px rgba(201,151,58,0.2)' }}>
             <TaSetiBoard layout={gameState.taSetiLayout} height="48px" />
           </button>
         ) : (
