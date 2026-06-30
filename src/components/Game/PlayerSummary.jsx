@@ -56,7 +56,7 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
   const level3Displayed = [
     ...ACTIONS.level3.filter(a => !a.id.startsWith("buy_")),
     ...activeBuyColors.map(c => ({ id: COLOR_TO_BUY_ID[c], label: `Achat ${c}`, locked: false })),
-    ...(missingBuyColors.length > 0 ? [{ id: COLOR_TO_BUY_ID[missingBuyColors[0]], label: `Achat ${missingBuyColors[0]}`, locked: true }] : []),
+    ...(missingBuyColors.length >= 2 ? [{ id: COLOR_TO_BUY_ID[missingBuyColors[0]], label: `Achat ${missingBuyColors[0]}`, locked: true }] : []),
   ];
 
   const LEVEL_ACTIONS = [

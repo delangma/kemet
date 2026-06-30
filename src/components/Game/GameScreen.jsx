@@ -12,8 +12,8 @@ import { JI_CARDS } from "../../constants/jiCards";
 import { PU_CARDS } from "../../constants/puCards";
 import { JP_CARDS } from "../../constants/jpCards";
 import TaSetiTokenModal from "./TaSetiTokenModal";
-import { getValidPriestDestinations, getTraversedINode } from "../../constants/taSetiGraph";
-import { TASETI_I_BONUSES, TASETI_E_BONUSES } from "../../constants/taSetiBonuses";
+import { getValidPriestDestinations, getTraversedINode, getTraversedCNode } from "../../constants/taSetiGraph";
+import { TASETI_I_BONUSES, TASETI_E_BONUSES, TASETI_C_BONUSES } from "../../constants/taSetiBonuses";
 import DawnModal from "../Combat/DawnModal";
 import NightModal from "./NightModal";
 import Board from "../Board/board";
@@ -1876,6 +1876,25 @@ export default function GameScreen({ session }) {
               }
             }
 
+            // Bonus du nœud C traversé (mouvement intra-section 3B)
+            const AI_DAILY_C_NODES = new Set(['C_3_1']);
+            const cNodeAi = getTraversedCNode(pPos[pi], chosenDest, layout);
+            if (cNodeAi) {
+              const cm = cNodeAi.match(/^C_(\d+)_/);
+              if (cm) {
+                const cFk = `${cm[1]}${faces[parseInt(cm[1]) - 1]}`;
+                if (AI_DAILY_C_NODES.has(cNodeAi)) {
+                  const alreadyConsumedC = baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNodeAi}`] ?? gameState?.taSetiDailyBonuses?.[cNodeAi];
+                  if (!alreadyConsumedC) {
+                    (TASETI_C_BONUSES[cFk]?.[cNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
+                    baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNodeAi}`] = true;
+                  }
+                } else {
+                  (TASETI_C_BONUSES[cFk]?.[cNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
+                }
+              }
+            }
+
             // Fin de piste E_4_2 : +1 PV (premier prêtre du jour) puis retour réserve
             if (chosenDest === 'E_4_2') {
               if (!gameState.taSetiE4_2DailyVp) {
@@ -2240,6 +2259,24 @@ export default function GameScreen({ session }) {
           const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
           iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
         }
+      }
+    }
+
+    // Nœud C traversé (mouvement intra-section 3B) → appliquer ses bonus
+    const DAILY_C_NODES = new Set(['C_3_1']);
+    const cNode = getTraversedCNode(oldPos, nodeId, layout);
+    if (cNode) {
+      const cSection = parseInt(cNode.split('_')[1]);
+      const cFaceKey = `${cSection}${faces[cSection - 1]}`;
+      if (DAILY_C_NODES.has(cNode)) {
+        if (!gameState?.taSetiDailyBonuses?.[cNode]) {
+          const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
+          cBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
+          updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNode}`] = true;
+        }
+      } else {
+        const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
+        cBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
       }
     }
 

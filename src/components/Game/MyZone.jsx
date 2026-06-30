@@ -298,6 +298,25 @@ export default function MyZone({
             {hasGrayToken && <div title="Jeton gris" className="w-2.5 h-2.5 rounded-full border" style={{ background: tokens >= 6 ? '#9ca3af' : '#1a1508', borderColor: tokens >= 6 ? '#6b7280' : '#3a2a0c' }} />}
             {hasGoldenToken && <div title="Jeton doré" className="w-2.5 h-2.5 rounded-full border" style={{ background: !goldenTokenUsed ? '#fbbf24' : '#1a1508', borderColor: !goldenTokenUsed ? '#b45309' : '#3a2a0c' }} />}
           </div>
+          <div style={{ width: 1, height: 10, background: '#3a2a0c', margin: '0 2px', flexShrink: 0 }} />
+          {onViewMyTiles && (
+            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+              <img src="/Boutique.png" alt="Mes tuiles" style={{ height: 22, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              {ownedTileIds.length > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -5, background: '#ea580c', color: '#fff', fontSize: 7, fontWeight: 700, borderRadius: '50%', width: 11, height: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                  {ownedTileIds.length}
+                </span>
+              )}
+            </button>
+          )}
+          <button onClick={() => setShowIdModal(true)} className="shrink-0 relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 15, height: 21, objectFit: 'cover', borderRadius: 2, display: 'block' }} />
+            {myIdCards.length > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -5, background: '#b45309', color: '#fff', fontSize: 7, fontWeight: 700, borderRadius: '50%', width: 11, height: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {myIdCards.length}
+              </span>
+            )}
+          </button>
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             {canCancelTurn && (
               <button
@@ -364,24 +383,6 @@ export default function MyZone({
           )}
           {/* Boutons rapides */}
           <div className="w-px h-4 bg-gray-700 shrink-0" />
-          {onViewMyTiles && (
-            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', display: 'inline-flex' }} className="shrink-0">
-              <img src="/Boutique.png" alt="Mes tuiles" style={{ height: 28, width: 'auto', objectFit: 'contain', display: 'block' }} />
-              {ownedTileIds.length > 0 && (
-                <span style={{ position: 'absolute', top: -4, right: -5, background: '#ea580c', color: '#fff', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 13, height: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-                  {ownedTileIds.length}
-                </span>
-              )}
-            </button>
-          )}
-          <button onClick={() => setShowIdModal(true)} className="shrink-0 relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
-            <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 20, height: 28, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
-            {myIdCards.length > 0 && (
-              <span style={{ position: 'absolute', top: -4, right: -5, background: '#b45309', color: '#fff', fontSize: 8, fontWeight: 700, borderRadius: '50%', width: 13, height: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-                {myIdCards.length}
-              </span>
-            )}
-          </button>
           {creatureIds.length > 0 && (
             <button onClick={() => setLocalModal('creatures')} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 border-gray-700 ${canEquipCreature ? 'text-amber-400' : 'text-gray-400'}`}>
               🐉{equippableReserveIds.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[9px] font-bold px-1 rounded-full">{equippableReserveIds.length}</span>}
@@ -449,6 +450,25 @@ export default function MyZone({
           {(hasGrayToken || hasGoldenToken) && <div style={{ width: 1, height: 12, background: '#3a2a0c', margin: '0 2px' }} />}
           {hasGrayToken && <div title="Jeton gris" className="w-3.5 h-3.5 rounded-full border" style={{ background: tokens >= 6 ? '#9ca3af' : '#1a1508', borderColor: tokens >= 6 ? '#6b7280' : '#3a2a0c' }} />}
           {hasGoldenToken && <div title="Jeton doré" className="w-3.5 h-3.5 rounded-full border" style={{ background: !goldenTokenUsed ? '#fbbf24' : '#1a1508', borderColor: !goldenTokenUsed ? '#b45309' : '#3a2a0c' }} />}
+          <div style={{ width: 1, height: 12, background: '#3a2a0c', margin: '0 4px' }} />
+          {onViewMyTiles && (
+            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', display: 'inline-flex' }}>
+              <img src="/Boutique.png" alt="Mes tuiles" style={{ height: 28, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              {ownedTileIds.length > 0 && (
+                <span style={{ position: 'absolute', top: -5, right: -6, background: '#ea580c', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                  {ownedTileIds.length}
+                </span>
+              )}
+            </button>
+          )}
+          <button onClick={() => setShowIdModal(true)} className="relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 20, height: 28, objectFit: 'cover', borderRadius: 3, display: 'block' }} />
+            {myIdCards.length > 0 && (
+              <span style={{ position: 'absolute', top: -5, right: -6, background: '#b45309', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {myIdCards.length}
+              </span>
+            )}
+          </button>
         </div>
         {/* Jeton doré R_4_1 — Déplacement Passe/Muraille */}
         {hasGoldenTokenMove && (
@@ -625,25 +645,6 @@ export default function MyZone({
 
         {/* Boutons rapides */}
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
-          {onViewMyTiles && (
-            <button onClick={onViewMyTiles} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', position: 'relative', display: 'inline-flex' }}>
-              <img src="/Boutique.png" alt="Mes tuiles" style={{ height: 36, width: 'auto', objectFit: 'contain', display: 'block' }} />
-              {ownedTileIds.length > 0 && (
-                <span style={{ position: 'absolute', top: -5, right: -6, background: '#ea580c', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-                  {ownedTileIds.length}
-                </span>
-              )}
-            </button>
-          )}
-
-          <button onClick={() => setShowIdModal(true)} className="relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
-            <img src="/ID_dos.png" alt="Cartes ID" style={{ width: 26, height: 36, objectFit: 'cover', borderRadius: 4, display: 'block' }} />
-            {myIdCards.length > 0 && (
-              <span style={{ position: 'absolute', top: -5, right: -6, background: '#b45309', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 15, height: 15, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-                {myIdCards.length}
-              </span>
-            )}
-          </button>
           {creatureIds.length > 0 && (
             <button
               onClick={() => setLocalModal("creatures")}
@@ -778,7 +779,6 @@ export default function MyZone({
         ].map(({ label, actions }, gi) => (
           <div key={label} className="flex items-center gap-1 shrink-0">
             {gi > 0 && <div className="w-px h-5 mx-1.5" style={{ background: '#3a2a0c' }} />}
-            <span className="mr-1" style={{ color: '#6B4C1E', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.2em', fontWeight: 600 }}>{label}</span>
             {actions.map(a => {
               const used     = isUsed(a.id);
               const isBuy    = !!BUY_COLOR_MAP[a.id];

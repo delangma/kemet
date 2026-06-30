@@ -35,3 +35,12 @@ export const TASETI_I_BONUSES = {
 // Bonus des nœuds E_ (déclenchés en arrivant sur ce nœud)
 // Note : E_4_2 est géré séparément (1er prêtre du jour → +1 PV, retour en réserve)
 export const TASETI_E_BONUSES = {};
+
+// Bonus des nœuds C_ traversés lors de mouvements intra-section (ex: 3B)
+// C_3_1 est quotidien (une seule fois par jour, 1er prêtre), C_3_2 non
+export const TASETI_C_BONUSES = {
+  '3B': {
+    C_3_1: [{ type: 'combatForce', value: 1 }],
+    C_3_2: [],
+  },
+};

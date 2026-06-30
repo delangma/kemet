@@ -1,3 +1,21 @@
+// Connexions latérales intra-section entre emplacements E_ (ex: 3B gauche → droite via C)
+const INTRA_SECTION_E = {
+  '3B': {
+    E_3_2: ['E_3_1', 'E_3_4'],
+    E_3_3: ['E_3_1', 'E_3_4'],
+  },
+};
+
+// Nœud C traversé lors d'un mouvement intra-section (clé = "fromPos_toPos")
+const INTRA_SECTION_C = {
+  '3B': {
+    'E_3_2_E_3_1': 'C_3_1',
+    'E_3_2_E_3_4': 'C_3_2',
+    'E_3_3_E_3_1': 'C_3_1',
+    'E_3_3_E_3_4': 'C_3_2',
+  },
+};
+
 // Connexions E → S par face de section
 const E_TO_S = {
   '1A': {
@@ -29,8 +47,8 @@ const E_TO_S = {
   },
   '3B': {
     E_3_1: ['S_3_1', 'S_3_2'],
-    E_3_2: ['S_3_1', 'S_3_2', 'S_3_3'],
-    E_3_3: ['S_3_2', 'S_3_3'],
+    E_3_2: ['S_3_2'],
+    E_3_3: ['S_3_2'],
     E_3_4: [], // dead-end
   },
   '4A': { E_4_2: [] },
@@ -61,6 +79,20 @@ const SECTION4B_INTERNAL = {
   E_4_3: ['E_4_2'],
   E_4_2: [],
 };
+
+/**
+ * Retourne le nœud C_ traversé lors d'un mouvement intra-section (ex: 3B E_3_2→E_3_1 via C_3_1).
+ * Retourne null si aucun nœud C traversé.
+ */
+export function getTraversedCNode(fromPos, toPos, layout) {
+  if (!fromPos || !toPos) return null;
+  const m = fromPos.match(/^E_(\d+)_/);
+  if (!m) return null;
+  const section = parseInt(m[1]);
+  const faces = Array.isArray(layout) ? layout : Object.values(layout);
+  const faceKey = `${section}${faces[section - 1]}`;
+  return (INTRA_SECTION_C[faceKey] || {})[`${fromPos}_${toPos}`] || null;
+}
 
 /**
  * Retourne le nœud I_ traversé pour aller de fromPos vers toPos.
@@ -167,5 +199,10 @@ export function getValidPriestDestinations(currentPos, layout) {
       }
     }
   });
+
+  // Connexions intra-section (ex: 3B E_3_2/E_3_3 → E_3_1/E_3_4 via C nodes)
+  const intraDests = (INTRA_SECTION_E[faceKey] || {})[currentPos] || [];
+  intraDests.forEach(e => dests.add(e));
+
   return [...dests];
 }
