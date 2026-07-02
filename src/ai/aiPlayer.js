@@ -21,9 +21,10 @@ export const AI_WEIGHTS = {
   // ank >= 11 → prayer ignorée (non candidat)
 
   // ── Achat de tuile ──────────────────────────────────────────────────────
-  buy_creature:          40,   // tuile de type créature
+  buy_creature:          50,   // tuile de type créature
   buy_vpImmediate:       50,   // tuile donne VP immédiat (Point Majeur)
-  buy_combat:            35,   // tuile avec bonus de combat (force, bouclier)
+  buy_combat:            55,   // tuile avec bonus de combat (force, bouclier)
+  buy_noCombatTile:      40,   // aucune tuile combat/créature → priorité à en acheter une
   buy_movement:          25,   // tuile avec bonus de déplacement / téléportation
   buy_level3:            30,   // tuile de niveau 3
   buy_noTileInColor:     25,   // aucune tuile possédée de cette couleur
@@ -47,19 +48,20 @@ export const AI_WEIGHTS = {
   move_towardAttack:     45,   // bonus si le déplacement met à portée d'attaque un ennemi faible
 
   // ── Attaque ─────────────────────────────────────────────────────────────
-  attack_base:           20,   // attaque légale (ratio >= 1:1)
-  attack_ratio2to1:      70,   // ratio attaque >= 2:1
-  attack_ratio1_5to1:    30,   // ratio attaque >= 1.5:1
-  attack_ratio1to1:      20,   // ratio >= 1:1 (sans bonus ratio supérieur)
-  attack_temple:         50,   // cible est un temple (T1, T2, T3, TB)
-  attack_enemyCity:      30,   // cible est une cité ennemie
-  attack_enemyAlone:     40,   // ennemi a 1 seule unité dans la cible
-  attack_myUnits4plus:   20,   // j'ai >= 4 unités attaquantes
-  attack_leaderEnemy:    30,   // adversaire leader au score est dans cette zone
-  attack_myCreature:     20,   // j'ai une créature dans la zone source
-  attack_myStrongCard:   15,   // j'ai une carte combat de force >= 4
-  attack_enemyCreature:  -20,  // ennemi a une créature (risque élevé)
-  attack_adjTemple:      25,   // cible adjacente à un temple vide (enchaîner)
+  attack_base:           40,   // attaque légale (ratio >= 1:1)
+  attack_ratio2to1:     100,   // ratio attaque >= 2:1
+  attack_ratio1_5to1:    65,   // ratio attaque >= 1.5:1
+  attack_ratio1to1:      35,   // ratio >= 1:1 (sans bonus ratio supérieur)
+  attack_temple:         75,   // cible est un temple (T1, T2, T3, TB)
+  attack_enemyCity:      45,   // cible est une cité ennemie
+  attack_enemyAlone:     65,   // ennemi a 1 seule unité dans la cible
+  attack_myUnits4plus:   35,   // j'ai >= 4 unités attaquantes
+  attack_leaderEnemy:    45,   // adversaire leader au score est dans cette zone
+  attack_myCreature:     50,   // j'ai une créature dans la zone source
+  attack_myStrongCard:   25,   // j'ai une carte combat de force >= 4
+  attack_enemyCreature:  -15,  // ennemi a une créature (risque élevé)
+  attack_adjTemple:      35,   // cible adjacente à un temple vide (enchaîner)
+  attack_hasCombatTile:  30,   // possède au moins une tuile combat ou créature
 
   // ── Amélioration de pyramide ─────────────────────────────────────────────
   pyramid_toLevel2:      40,   // niveau cible = 2
@@ -408,7 +410,7 @@ export function aiChooseDraftTile(gameState, aiPlayerId) {
 }
 
 // ─── Phase de jeu (action principale) ────────────────────────────────────────
-export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
+export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = {}) {
   const myState = gameState.players?.[aiPlayerId] || {};
   const aiPlayer = allPlayers.find(p => p.id === aiPlayerId);
   const aiColor = aiPlayer?.color;
@@ -438,6 +440,14 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
 
   const candidates = [];
 
+  // DB ratings (injected from Firebase, default to empty so AI works without them)
+  const { tileRatings = {}, tileCombinations = {} } = ratingsData;
+  const totalTurns = gameState.totalTurns ?? 5;
+  const currentTurn = gameState.turn ?? 1;
+  const gameProgress = Math.max(0, Math.min(1, (currentTurn - 1) / Math.max(1, totalTurns - 1)));
+  // Scale: a rating of 3 → 0 delta (no change vs default), 5 → +50, 1 → -50
+  const DB_SCALE = 25;
+
   // ── Prière ────────────────────────────────────────────────────────────────
   if (ank < 11) {
     let w2 = 1;
@@ -453,6 +463,11 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
   }
 
   // ── Attaque ───────────────────────────────────────────────────────────────
+  const hasCombatTile = ownedTileIds.some(id => {
+    const t = POWER_TILES.find(t2 => t2.id === id);
+    return t?.type === 'combat' || t?.type === 'creature';
+  });
+
   for (const fromZoneId of myZones) {
     const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
     if (myUnits < 2) continue;
@@ -483,6 +498,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
       if (hasStrongCombatCard(myState)) weight += AI_WEIGHTS.attack_myStrongCard;
       if (enemyCreature)     weight += AI_WEIGHTS.attack_enemyCreature;
       if (adjToEmpty)        weight += AI_WEIGHTS.attack_adjTemple;
+      if (hasCombatTile)     weight += AI_WEIGHTS.attack_hasCombatTile;
 
       candidates.push({ type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight });
     }
@@ -512,15 +528,59 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers) {
       const noTileInColor = !ownedTileIds.some(
         id => POWER_TILES.find(t2 => t2.id === id)?.color === tile.color
       );
+      const hasNoCombatTile = !ownedTileIds.some(id => {
+        const t2 = POWER_TILES.find(t3 => t3.id === id);
+        return t2?.type === 'combat' || t2?.type === 'creature';
+      });
+
       let weight = 1;
-      if (tile.type === 'creature')          weight += AI_WEIGHTS.buy_creature;
-      if ((tile.vpOnPurchase ?? 0) > 0)      weight += AI_WEIGHTS.buy_vpImmediate;
-      if (tile.type === 'combat')            weight += AI_WEIGHTS.buy_combat;
-      if (tile.type === 'movement')          weight += AI_WEIGHTS.buy_movement;
-      if (tile.level >= 3)                   weight += AI_WEIGHTS.buy_level3;
-      if (noTileInColor)                     weight += AI_WEIGHTS.buy_noTileInColor;
-      if (ownedTileIds.length < 2)           weight += AI_WEIGHTS.buy_fewTiles;
-      if (ank >= 7)                          weight += AI_WEIGHTS.buy_richEnough;
+      if (tile.type === 'creature')                                      weight += AI_WEIGHTS.buy_creature;
+      if ((tile.vpOnPurchase ?? 0) > 0)                                  weight += AI_WEIGHTS.buy_vpImmediate;
+      if (tile.type === 'combat')                                         weight += AI_WEIGHTS.buy_combat;
+      if (hasNoCombatTile && (tile.type === 'combat' || tile.type === 'creature')) weight += AI_WEIGHTS.buy_noCombatTile;
+      if (tile.type === 'movement')                                       weight += AI_WEIGHTS.buy_movement;
+      if (tile.level >= 3)                                                weight += AI_WEIGHTS.buy_level3;
+      if (noTileInColor)                                                  weight += AI_WEIGHTS.buy_noTileInColor;
+      if (ownedTileIds.length < 2)                                        weight += AI_WEIGHTS.buy_fewTiles;
+      if (ank >= 7)                                                       weight += AI_WEIGHTS.buy_richEnough;
+
+      // ── Score DB : note individuelle ─────────────────────────────────────
+      const tileData = tileRatings[tile.id];
+      if (tileData) {
+        const re = tileData.ratingEarly ?? 3;
+        const rl = tileData.ratingLate ?? 3;
+        const temp = tileData.temporality ?? 3;
+        // tempBlend: 0 = ignore timing, 1 = fully use timing
+        const tempBlend = (temp - 1) / 4;
+        const neutralBase = (re + rl) / 2;
+        const timedBase = re * (1 - gameProgress) + rl * gameProgress;
+        const baseScore = neutralBase + (timedBase - neutralBase) * tempBlend;
+        // delta from neutral 3 → negative penalises bad tiles, positive rewards good tiles
+        weight += (baseScore - 3) * DB_SCALE;
+      }
+
+      // ── Score DB : synergie avec les tuiles déjà possédées ───────────────
+      let totalCombo = 0;
+      let comboCount = 0;
+      for (const ownedId of ownedTileIds) {
+        const comboKey = [tile.id, ownedId].sort().join('-');
+        const combo = tileCombinations[comboKey];
+        if (!combo) continue;
+        const cre = combo.ratingEarly ?? 3;
+        const crl = combo.ratingLate ?? 3;
+        const ctemp = combo.temporality ?? 3;
+        const cbp = combo.buyPriority ?? 3;
+        const cBlend = (ctemp - 1) / 4;
+        const cNeutral = (cre + crl) / 2;
+        const cTimed = cre * (1 - gameProgress) + crl * gameProgress;
+        const comboScore = cNeutral + (cTimed - cNeutral) * cBlend;
+        // buyPriority: 3 = baseline (1×), 5 = urgent (1.67×), 1 = low (0.33×)
+        totalCombo += comboScore * (cbp / 3);
+        comboCount++;
+      }
+      if (comboCount > 0) {
+        weight += ((totalCombo / comboCount) - 3) * DB_SCALE;
+      }
 
       candidates.push({ type: colorToAction[tile.color] || "buy_red", tileId: tile.id, weight });
     }

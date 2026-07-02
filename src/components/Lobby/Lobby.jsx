@@ -242,6 +242,90 @@ export default function Lobby({ onGameStart }) {
     await update(ref(db, "/"), updates);
   }
 
+  async function handleSimulation() {
+    const code = generateRoomCode();
+    const players = [
+      { name: "Anubis",  color: "Bleu",  order: 1, joinOrder: 1, isAI: true },
+      { name: "Râ",      color: "Rouge", order: 2, joinOrder: 2, isAI: true },
+      { name: "Osiris",  color: "Vert",  order: 3, joinOrder: 3, isAI: true },
+    ].map(p => ({ ...p, id: crypto.randomUUID() }));
+
+    const playersMap = {};
+    players.forEach(p => { playersMap[p.id] = p; });
+
+    let deck = buildIdDeck();
+    const playerStates = {};
+    players.forEach(p => {
+      const { hand, remaining } = dealCards(deck, 2);
+      deck = remaining;
+      playerStates[p.id] = { ...INITIAL_PLAYER_STATE, color: p.color, idCards: hand, availableCombatCards: [1,2,3,4,5,6,7,8], unitsReserve: 2 };
+    });
+
+    const PCOLORS = ["Rouge", "Bleu", "Blanc"];
+    function shuffleColors() {
+      const a = [...PCOLORS];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+    const pyramids = {};
+    players.forEach(p => {
+      const [c1, c2] = shuffleColors();
+      pyramids[`J${p.joinOrder}P1`] = { color: c1, level: 2, ownerId: p.id, controllerId: p.id };
+      pyramids[`J${p.joinOrder}P2`] = { color: c2, level: 1, ownerId: p.id, controllerId: p.id };
+    });
+
+    const availableTileIds = POWER_TILES.map(t => t.id);
+    const defaultDraftTiles = ["R_1_1", "B_1_1", "W_1_1"];
+    [...players].reverse().forEach((p, i) => {
+      const tileId = defaultDraftTiles[i];
+      playerStates[p.id].ownedTileIds = [tileId];
+      availableTileIds.splice(availableTileIds.indexOf(tileId), 1);
+    });
+
+    const boardUnits = {};
+    players.forEach(p => {
+      [`J${p.joinOrder}C1`, `J${p.joinOrder}C2`].forEach(zoneId => {
+        boardUnits[zoneId] = { ...(boardUnits[zoneId] || {}), [p.color]: 5 };
+      });
+    });
+
+    const gameState = {
+      players: playerStates,
+      idDeck: deck,
+      idDiscard: [],
+      currentTurnPlayerId: players[0].id,
+      phase: "playing",
+      availableTileIds,
+      pyramids,
+      boardUnits,
+      placements: Object.fromEntries(players.map(p => [
+        p.id,
+        { zones: [`J${p.joinOrder}C1`, `J${p.joinOrder}C2`], confirmed: true },
+      ])),
+      taSetiLayout: [1,2,3,4].map(() => Math.random() < 0.5 ? 'A' : 'B'),
+      simStartedAt: new Date().toISOString(),
+    };
+
+    await set(ref(db, `rooms/${code}`), {
+      code, status: "playing", maxPlayers: 3, hostId: players[0].id,
+      createdAt: Date.now(), players: playersMap, gameState, isSimulation: true,
+    });
+
+    saveSession({ roomCode: code, playerId: players[0].id, playerName: players[0].name, playerColor: players[0].color, isTestMode: true });
+    onGameStart({
+      roomCode: code,
+      playerId: players[0].id,
+      playerName: players[0].name,
+      playerColor: players[0].color,
+      order: players[0].order,
+      allPlayers: players,
+      isTestMode: true,
+    });
+  }
+
   async function handleQuickTest() {
     const code = generateRoomCode();
     const players = [
@@ -362,7 +446,23 @@ export default function Lobby({ onGameStart }) {
 	  setScreen("home");
 	}
 
+  function handleJoinSimulation(room) {
+    const players = Object.values(room.players).sort((a, b) => a.order - b.order);
+    const observer = players[0];
+    saveSession({ roomCode: room.code, playerId: observer.id, playerName: observer.name, playerColor: observer.color, isTestMode: true });
+    onGameStart({
+      roomCode: room.code,
+      playerId: observer.id,
+      playerName: observer.name,
+      playerColor: observer.color,
+      order: observer.order,
+      allPlayers: players,
+      isTestMode: true,
+    });
+  }
+
   const waitingRooms = Object.values(rooms).filter(r => r.status === "waiting");
+  const simulationRooms = Object.values(rooms).filter(r => r.isSimulation && r.status === "playing" && !r.gameState?.gameOver);
 
   return (
     <div
@@ -452,6 +552,33 @@ export default function Lobby({ onGameStart }) {
               })}
             </div>
 
+            {simulationRooms.length > 0 && (
+              <div className="bg-black/35 backdrop-blur-sm border border-indigo-800/55 p-5 rounded-xl w-full flex flex-col gap-3">
+                <h2 className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em]">🤖 Simulations IA en cours</h2>
+                {simulationRooms.map(room => {
+                  const players = Object.values(room.players).sort((a, b) => a.order - b.order);
+                  const elapsed = Math.floor((Date.now() - room.createdAt) / 60000);
+                  return (
+                    <div key={room.code} className="bg-black/25 border border-indigo-800/35 rounded-lg p-3.5 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono font-bold text-indigo-400 text-sm tracking-widest">{room.code}</p>
+                        <p className="text-xs text-white/70 mt-0.5 truncate">
+                          {players.map(p => <span key={p.id} className="mr-2">{p.name} ({p.color})</span>)}
+                        </p>
+                        <p className="text-[10px] text-white/45 mt-0.5">En cours depuis {elapsed} min</p>
+                      </div>
+                      <button
+                        onClick={() => handleJoinSimulation(room)}
+                        className="shrink-0 px-3.5 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-gradient-to-b from-indigo-700 to-indigo-900 hover:from-indigo-600 hover:to-indigo-800 border border-indigo-500/40 text-indigo-100 shadow-md transition-all duration-200"
+                      >
+                        Observer
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <button
               onClick={() => { if (!playerName.trim()) return setError("Entre ton nom."); setScreen("create"); }}
               className="bg-gradient-to-b from-yellow-600 to-yellow-800 hover:from-yellow-500 hover:to-yellow-700 border border-yellow-500/40 text-yellow-100 px-6 py-3.5 rounded-xl font-bold uppercase tracking-[0.2em] text-xs w-full shadow-lg shadow-yellow-950/60 transition-all duration-200"
@@ -464,6 +591,13 @@ export default function Lobby({ onGameStart }) {
               className="bg-gradient-to-b from-gray-700 to-gray-900 hover:from-gray-600 hover:to-gray-800 border border-gray-500/40 text-gray-300 px-6 py-2.5 rounded-xl font-bold uppercase tracking-[0.2em] text-xs w-full shadow-lg transition-all duration-200"
             >
               ⚡ Test rapide — Toinou / Maxime / François
+            </button>
+
+            <button
+              onClick={handleSimulation}
+              className="bg-gradient-to-b from-indigo-900 to-indigo-950 hover:from-indigo-800 hover:to-indigo-900 border border-indigo-600/40 text-indigo-300 px-6 py-2.5 rounded-xl font-bold uppercase tracking-[0.2em] text-xs w-full shadow-lg transition-all duration-200"
+            >
+              🤖 Simulation 3 IAs — Anubis / Râ / Osiris
             </button>
           </div>
         )}

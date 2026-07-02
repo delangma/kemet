@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Lobby from "./components/Lobby/Lobby";
 import GameScreen from "./components/Game/GameScreen";
+import TileRatingAdmin from "./components/Admin/TileRatingAdmin";
 import { CREATURE_NAMES, getCreatureSpriteStyle } from "./constants/creatures";
 
 function CreatureSpriteDebug() {
@@ -56,6 +57,10 @@ function App() {
 
   if (new URLSearchParams(window.location.search).has("creatures")) {
     return <CreatureSpriteDebug />;
+  }
+
+  if (new URLSearchParams(window.location.search).has("ratings")) {
+    return <TileRatingAdmin />;
   }
 
   if (!ready) {

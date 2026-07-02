@@ -216,6 +216,11 @@ export default function GameScreen({ session }) {
   const prevTurnPlayerIdRef = useRef(null);
   const latestActionKeyRef = useRef(null);
   const aiTurnInProgressRef = useRef(false);
+  const tileRatingsRef = useRef({});
+  const tileCombinationsRef = useRef({});
+  const [simMode, setSimMode] = useState(false);
+  const simModeRef = useRef(false);
+  useEffect(() => { simModeRef.current = simMode; }, [simMode]);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [showMobileLog, setShowMobileLog] = useState(false);
   const [placementSelected, setPlacementSelected] = useState([]);
@@ -398,6 +403,78 @@ export default function GameScreen({ session }) {
     });
     return () => unsubscribe();
   }, [roomCode]);
+
+  // Charge les notes de tuiles pour l'IA (lecture unique, mise à jour automatique)
+  useEffect(() => {
+    const unsub1 = onValue(ref(db, 'tileRatings'), snap => {
+      tileRatingsRef.current = snap.exists() ? snap.val() : {};
+    });
+    const unsub2 = onValue(ref(db, 'tileCombinations'), snap => {
+      tileCombinationsRef.current = snap.exists() ? snap.val() : {};
+    });
+    return () => { unsub1(); unsub2(); };
+  }, []);
+
+  const allPlayersAI = currentPlayers.length > 0 && currentPlayers.every(p => p.isAI);
+
+  // Active le mode simulation automatiquement si tous les joueurs sont IA
+  useEffect(() => {
+    if (!allPlayersAI) return;
+    setSimMode(true);
+    simModeRef.current = true;
+  }, [allPlayersAI]);
+
+  // Télécharge le journal quand la partie se termine en mode simulation
+  useEffect(() => {
+    if (!gameState?.gameOver || !allPlayersAI) return;
+    (async () => {
+      const snap = await get(ref(db, `rooms/${roomCode}/actionLog`));
+      const logData = snap.exists() ? snap.val() : {};
+      const entries = Object.entries(logData).sort(([a], [b]) => Number(a) - Number(b));
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+      const timeStr = `${pad(now.getHours())}h${pad(now.getMinutes())}`;
+      const winner = currentPlayers.find(p => p.id === gameState.gameOver.winnerId);
+
+      const lines = [
+        `=== Simulation Kemet — ${dateStr} ${timeStr} ===`,
+        `Joueurs : ${currentPlayers.map(p => `${p.name} (${p.color})`).join(', ')}`,
+        `Vainqueur : ${winner?.name ?? '?'} (${winner?.color ?? '?'})`,
+        '',
+        '--- Journal des actions ---',
+        '',
+        ...entries.map(([, e]) => {
+          const t = new Date(e.time).toLocaleTimeString('fr-FR');
+          return `[${t}] ${e.playerName} : ${e.text}`;
+        }),
+      ].join('\n');
+
+      const blob = new Blob([lines], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kemet_${dateStr}_${timeStr}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.gameOver?.winnerId]);
+
+  // Simulation : déclin automatique de la fuite si le défenseur est une IA
+  useEffect(() => {
+    if (!fleeOffer) return;
+    const defender = currentPlayers.find(p => p.id === fleeOffer.defenderId);
+    if (!defender?.isAI) return;
+    const t = setTimeout(async () => {
+      await update(ref(db, "/"), { [`rooms/${roomCode}/fleeOffer`]: null });
+    }, 300);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleeOffer?.defenderId]);
 
 	// Ouvre/ferme automatiquement la modale combat
 	useEffect(() => {
@@ -1734,12 +1811,73 @@ export default function GameScreen({ session }) {
   }
 
   async function _executeAITurnInner(aiId) {
-    if (!gameState) return;
+    if (!gameState || gameState.gameOver) return;
     const aiPlayer = currentPlayers.find(p => p.id === aiId);
     if (!aiPlayer) return;
     const myState = gameState.players?.[aiId] || {};
     const aiColor = aiPlayer.color;
-    const decision = aiDecideAction(gameState, aiId, currentPlayers);
+
+    // Deploy any creatures already in reserve but not yet assigned (free action)
+    {
+      const ownedIds = myState.ownedTileIds || [];
+      const boardUnitsNow = gameState.boardUnits || {};
+      const existingCA  = gameState.creatureAssignments  || {};
+      const existingCA2 = gameState.creatureAssignments2 || {};
+      const joinOrder = aiPlayer.joinOrder;
+      const assignedIds = new Set([
+        ...Object.values(existingCA).map(c => c[aiColor]).filter(Boolean),
+        ...Object.values(existingCA2).map(c => c[aiColor]).filter(Boolean),
+      ]);
+      const reserveCreatures = ownedIds
+        .map(id => POWER_TILES.find(t => t.id === id))
+        .filter(t => t && t.type === "creature" && !assignedIds.has(t.id));
+      if (reserveCreatures.length > 0) {
+        const deployUpdates = {};
+        const localCA  = { ...existingCA };
+        const localCA2 = { ...existingCA2 };
+        for (const creature of reserveCreatures) {
+          const cp = CREATURE_POWERS[creature.name];
+          if (!cp || cp.reserveOnly) continue;
+          const isChironSlot = (zId) => {
+            const s1id = localCA[zId]?.[aiColor];
+            const s1name = s1id ? POWER_TILES.find(t => t.id === s1id)?.name : null;
+            return !!(s1name && CREATURE_POWERS[s1name]?.allowsSecondCreature && !localCA2[zId]?.[aiColor]);
+          };
+          let zone = null;
+          let slot = "creatureAssignments";
+          if (cp.placeOnAnyZone) {
+            const entry = Object.entries(boardUnitsNow)
+              .filter(([zId, units]) => (units?.[aiColor] || 0) > 0 && !localCA[zId]?.[aiColor])
+              .sort(([, a], [, b]) => (b[aiColor] || 0) - (a[aiColor] || 0))[0];
+            zone = entry?.[0] ?? null;
+          } else {
+            const cityZones = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`));
+            const z1 = cityZones.find(z => (boardUnitsNow[z.id]?.[aiColor] || 0) > 0 && !localCA[z.id]?.[aiColor]);
+            const z2 = cityZones.find(z => (boardUnitsNow[z.id]?.[aiColor] || 0) > 0 && isChironSlot(z.id));
+            if (z1) { zone = z1.id; slot = "creatureAssignments"; }
+            else if (z2) { zone = z2.id; slot = "creatureAssignments2"; }
+          }
+          if (zone) {
+            deployUpdates[`rooms/${roomCode}/gameState/${slot}/${zone}/${aiColor}`] = creature.id;
+            if (slot === "creatureAssignments") {
+              if (!localCA[zone]) localCA[zone] = {};
+              localCA[zone][aiColor] = creature.id;
+            } else {
+              if (!localCA2[zone]) localCA2[zone] = {};
+              localCA2[zone][aiColor] = creature.id;
+            }
+          }
+        }
+        if (Object.keys(deployUpdates).length > 0) {
+          await update(ref(db), deployUpdates);
+        }
+      }
+    }
+
+    const decision = aiDecideAction(gameState, aiId, currentPlayers, {
+      tileRatings: tileRatingsRef.current,
+      tileCombinations: tileCombinationsRef.current,
+    });
 
     if (decision.type === "endTurn") {
       await aiEndTurn(aiId);
@@ -1827,6 +1965,33 @@ export default function GameScreen({ session }) {
         if (ankGain > 0) {
           const baseAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? (ank - effectiveCost);
           baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, baseAnk + ankGain);
+        }
+        if (tile.type === "creature" && creaturePower && !creaturePower.reserveOnly) {
+          const joinOrder = aiPlayer.joinOrder;
+          const existingCA  = gameState.creatureAssignments  || {};
+          const existingCA2 = gameState.creatureAssignments2 || {};
+          const isChironZone = (zId) => {
+            const slot1Id = existingCA[zId]?.[aiColor];
+            const slot1Name = slot1Id ? POWER_TILES.find(t => t.id === slot1Id)?.name : null;
+            return !!(slot1Name && CREATURE_POWERS[slot1Name]?.allowsSecondCreature && !existingCA2[zId]?.[aiColor]);
+          };
+          let assignedZone = null;
+          let assignedSlot = "creatureAssignments";
+          if (creaturePower.placeOnAnyZone) {
+            const entry = Object.entries(boardUnits)
+              .filter(([zId, units]) => (units?.[aiColor] || 0) > 0 && !existingCA[zId]?.[aiColor])
+              .sort(([, a], [, b]) => (b[aiColor] || 0) - (a[aiColor] || 0))[0];
+            assignedZone = entry?.[0] ?? null;
+          } else {
+            const cityZones = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`));
+            const z1 = cityZones.find(z => (boardUnits[z.id]?.[aiColor] || 0) > 0 && !existingCA[z.id]?.[aiColor]);
+            const z2 = cityZones.find(z => (boardUnits[z.id]?.[aiColor] || 0) > 0 && isChironZone(z.id));
+            if (z1) { assignedZone = z1.id; assignedSlot = "creatureAssignments"; }
+            else if (z2) { assignedZone = z2.id; assignedSlot = "creatureAssignments2"; }
+          }
+          if (assignedZone) {
+            baseUpdates[`rooms/${roomCode}/gameState/${assignedSlot}/${assignedZone}/${aiColor}`] = decision.tileId;
+          }
         }
         logText = `acquiert la tuile "${tile.name}" (${tile.color} niv.${tile.level}) pour ${effectiveCost} Ank`;
         logMeta = { type: "tile", tileId: tile.id };
@@ -2074,7 +2239,7 @@ export default function GameScreen({ session }) {
     const currentSetupId = setupOrder[setupIndex];
     const currentSetupPlayer = currentPlayers.find(p => p.id === currentSetupId);
     if (!currentSetupPlayer?.isAI) return;
-    const t = setTimeout(() => executeAISetup(currentSetupId), 1000);
+    const t = setTimeout(() => executeAISetup(currentSetupId), simModeRef.current ? 200 : 1000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase, gameState?.setupIndex]);
@@ -2087,7 +2252,7 @@ export default function GameScreen({ session }) {
     const currentDraftId = draftOrder[draftIndex];
     const currentDraftPlayer = currentPlayers.find(p => p.id === currentDraftId);
     if (!currentDraftPlayer?.isAI) return;
-    const t = setTimeout(() => executeAIDraft(currentDraftId), 1000);
+    const t = setTimeout(() => executeAIDraft(currentDraftId), simModeRef.current ? 200 : 1000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase, gameState?.draftIndex]);
@@ -2102,7 +2267,7 @@ export default function GameScreen({ session }) {
     if (unconfirmedAI.length === 0) return;
     const t = setTimeout(() => {
       unconfirmedAI.forEach(p => executeAIPlacement(p.id));
-    }, 800);
+    }, simModeRef.current ? 200 : 800);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase, JSON.stringify(gameState?.placements)]);
@@ -2121,7 +2286,7 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/pendingIdCard/pendingResponses/${pid}`] = "pass";
       });
       update(ref(db, "/"), updates);
-    }, 500);
+    }, simModeRef.current ? 100 : 500);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(pendingIdCard?.pendingResponses)]);
@@ -2129,10 +2294,11 @@ export default function GameScreen({ session }) {
   // Playing phase IA
   useEffect(() => {
     if (!gameState || gameState.phase !== "playing") return;
+    if (gameState.gameOver) return;
     if (combatData) return;
     const currentTurnPlayer = currentPlayers.find(p => p.id === gameState.currentTurnPlayerId);
     if (!currentTurnPlayer?.isAI) return;
-    const t = setTimeout(() => executeAITurn(currentTurnPlayer.id), 3000);
+    const t = setTimeout(() => executeAITurn(currentTurnPlayer.id), simModeRef.current ? 400 : 3000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.currentTurnPlayerId, gameState?.phase, combatData]);
@@ -2807,6 +2973,15 @@ export default function GameScreen({ session }) {
   >
 
 
+    {/* Bandeau simulation — rappel que l'onglet doit rester ouvert */}
+    {allPlayersAI && !gameState?.gameOver && (
+      <div className="flex items-center gap-2 px-4 py-1 bg-indigo-950/90 border-b border-indigo-700/50 shrink-0 text-indigo-300 text-[10px]">
+        <span>🤖</span>
+        <span>Simulation en cours — <strong>gardez cet onglet ouvert</strong>, les IAs tournent dans ce navigateur.</span>
+        {simMode && <span className="ml-auto font-bold text-indigo-400">⚡ Mode rapide actif</span>}
+      </div>
+    )}
+
     {/* Barre sélecteur de joueur (mode test uniquement) */}
     {isTestMode && (
       <div className="flex items-center gap-2 px-4 py-1.5 bg-yellow-950/80 border-b border-yellow-700/40 shrink-0">
@@ -2833,14 +3008,27 @@ export default function GameScreen({ session }) {
             </button>
           );
         })}
-        {combatData && (
+        <div className="ml-auto flex items-center gap-1">
           <button
-            onClick={() => remove(ref(db, `rooms/${roomCode}/combat`))}
-            className="ml-auto px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/60 hover:bg-red-800 text-red-300 border border-red-700/40"
+            onClick={() => setSimMode(v => !v)}
+            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${
+              simMode
+                ? "bg-amber-600 text-white border-amber-400"
+                : "bg-gray-800/60 text-gray-400 border-gray-600/40 hover:bg-gray-700"
+            }`}
+            title="Mode simulation : accélère les tours IA"
           >
-            ✕ Reset combat
+            ⚡ Sim
           </button>
-        )}
+          {combatData && (
+            <button
+              onClick={() => remove(ref(db, `rooms/${roomCode}/combat`))}
+              className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/60 hover:bg-red-800 text-red-300 border border-red-700/40"
+            >
+              ✕ Reset combat
+            </button>
+          )}
+        </div>
       </div>
     )}
 
@@ -3480,6 +3668,11 @@ export default function GameScreen({ session }) {
 	    winnerId={gameState.gameOver.winnerId}
 	    allPlayers={currentPlayers}
 	    gameState={gameState}
+	    onReturnHome={async () => {
+	      if (allPlayersAI) await remove(ref(db, `rooms/${roomCode}`));
+	      localStorage.removeItem("kemet_session");
+	      window.location.reload();
+	    }}
 	  />
 	)}
 
@@ -3499,6 +3692,7 @@ export default function GameScreen({ session }) {
 		onClose={() => setShowNight(false)}
 		session={effectiveSession}
 		gameState={gameState}
+		autoProcess={allPlayersAI}
 	  />
 	)}
 

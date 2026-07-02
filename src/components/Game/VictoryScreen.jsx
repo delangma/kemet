@@ -8,7 +8,7 @@ const COLOR_STYLE = {
   Noir:  { text: "text-gray-400",    bg: "bg-gray-800/40",    border: "border-gray-500/70"    },
 };
 
-export default function VictoryScreen({ winnerId, allPlayers, gameState }) {
+export default function VictoryScreen({ winnerId, allPlayers, gameState, onReturnHome }) {
   const winner = allPlayers.find(p => p.id === winnerId);
   const ws = COLOR_STYLE[winner?.color] || COLOR_STYLE.Blanc;
 
@@ -71,7 +71,7 @@ export default function VictoryScreen({ winnerId, allPlayers, gameState }) {
         </div>
 
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => onReturnHome ? onReturnHome() : window.location.reload()}
           className="mt-2 px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-colors tracking-wide"
         >
           Retour à l'accueil

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { ref, update, get } from "firebase/database";
 import { dealCards, buildPuDeck, buildJiDeck, buildJpDeck } from "../../utils/deck";
@@ -28,12 +28,28 @@ function TempleRow({ icon, label, controller, bonus, isBlue }) {
   );
 }
 
-export default function NightModal({ onClose, session, gameState }) {
+export default function NightModal({ onClose, session, gameState, autoProcess = false }) {
   const { roomCode, allPlayers } = session;
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const [t3Sacrifice, setT3Sacrifice] = useState(false);
   const [tbSacrifice, setTbSacrifice] = useState(false);
+
+  // Simulation : résoudre la nuit automatiquement (sans sacrifice) quand tous les joueurs sont IA
+  useEffect(() => {
+    if (!autoProcess || done || loading) return;
+    const t = setTimeout(() => handleNightPhase(), 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoProcess, done, loading]);
+
+  // Simulation : fermer automatiquement après résolution
+  useEffect(() => {
+    if (!autoProcess || !done) return;
+    const t = setTimeout(() => onClose(), 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoProcess, done]);
 
   const boardUnits = gameState?.boardUnits || {};
 
