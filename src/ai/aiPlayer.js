@@ -32,9 +32,15 @@ export const AI_WEIGHTS = {
   buy_richEnough:        20,   // ank >= 7
 
   // ── Recrutement ─────────────────────────────────────────────────────────
+  // Une "troupe complète" = une zone avec MAX_UNITS_PER_ZONE unités de ma couleur.
+  // Recruter n'a de sens que pour former/reformer des troupes complètes (0 ou 1
+  // actuellement) ou compléter une troupe entamée — pas au-delà de 2 troupes.
   recruit_bigReserve:    30,   // réserve >= 3
   recruit_fewOnBoard:    40,   // total unités sur plateau < 5
   recruit_richEnough:    20,   // ank >= 3
+  recruit_noCompleteTroop: 50, // aucune troupe complète (5 unités) → priorité pour en former une
+  recruit_oneCompleteTroop: 30,// une seule troupe complète → recruter pour en reformer une 2e
+  recruit_completePartial: 35, // une troupe entamée peut être complétée par ce recrutement
 
   // ── Déplacement ─────────────────────────────────────────────────────────
   move_emptyTemple:      60,   // cible est un temple vide
@@ -46,6 +52,7 @@ export const AI_WEIGHTS = {
   move_earlyPenalty:    -22,   // pénalité par token restant au-dessus de 2 (déplacements tardifs)
   move_lastToken:        80,   // dernier jeton → forcer le déplacement manquant
   move_towardAttack:     45,   // bonus si le déplacement met à portée d'attaque un ennemi faible
+  move_emptyDesert:     -50,   // cible désert vide sans intérêt stratégique → mauvaise destination
 
   // ── Attaque ─────────────────────────────────────────────────────────────
   attack_base:           40,   // attaque légale (ratio >= 1:1)
@@ -442,9 +449,17 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
 
   // DB ratings (injected from Firebase, default to empty so AI works without them)
   const { tileRatings = {}, tileCombinations = {} } = ratingsData;
-  const totalTurns = gameState.totalTurns ?? 5;
-  const currentTurn = gameState.turn ?? 1;
-  const gameProgress = Math.max(0, Math.min(1, (currentTurn - 1) / Math.max(1, totalTurns - 1)));
+  // gameProgress: 0 = début de partie, 1 = fin de partie
+  // Utilise le numéro de tour si disponible (incrémenté chaque nuit), sinon VP max des joueurs
+  const TOTAL_TURNS = 5;
+  const VICTORY_VP = 10;
+  const turnBased = gameState.turn != null
+    ? Math.max(0, Math.min(1, (gameState.turn - 1) / Math.max(1, TOTAL_TURNS - 1)))
+    : null;
+  const vpBased = Math.max(0, Math.min(1,
+    Math.max(...allPlayers.map(p => (gameState.players?.[p.id]?.vpPermanent ?? 0))) / VICTORY_VP
+  ));
+  const gameProgress = turnBased ?? vpBased;
   // Scale: a rating of 3 → 0 delta (no change vs default), 5 → +50, 1 → -50
   const DB_SCALE = 25;
 
@@ -590,12 +605,21 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   if (unitsReserve > 0 && joinOrder && ank >= 1) {
     const cityZoneIds = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`)).map(z => z.id);
     const hasSpace = cityZoneIds.some(zId => (boardUnits[zId]?.[aiColor] || 0) < MAX_UNITS_PER_ZONE);
-    if (hasSpace) {
+    const completeTroops = Object.values(boardUnits).filter(z => (z?.[aiColor] || 0) >= MAX_UNITS_PER_ZONE).length;
+    // Déjà 2 troupes complètes (ou plus) → recruter ne ferait qu'éparpiller des unités inutiles.
+    if (hasSpace && completeTroops < 2) {
       const myTotalOnBoard = Object.values(boardUnits).reduce((s, z) => s + (z?.[aiColor] || 0), 0);
+      const hasPartialTroop = Object.values(boardUnits).some(z => {
+        const n = z?.[aiColor] || 0;
+        return n > 0 && n < MAX_UNITS_PER_ZONE;
+      });
       let weight = 1;
       if (unitsReserve >= 3)    weight += AI_WEIGHTS.recruit_bigReserve;
       if (myTotalOnBoard < 5)   weight += AI_WEIGHTS.recruit_fewOnBoard;
       if (ank >= 3)             weight += AI_WEIGHTS.recruit_richEnough;
+      if (completeTroops === 0) weight += AI_WEIGHTS.recruit_noCompleteTroop;
+      else                      weight += AI_WEIGHTS.recruit_oneCompleteTroop;
+      if (hasPartialTroop)      weight += AI_WEIGHTS.recruit_completePartial;
       candidates.push({ type: "recruit", weight });
     }
   }
@@ -663,13 +687,24 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
           return enemy2 && unitsAfterMove >= enemy2.count * 1.5;
         });
 
-        let weight = 1 + moveEarlyPenalty + preferBothBonus + lastTokenBonus;
+        // Une cible n'a de valeur stratégique que si elle rapproche d'un temple,
+        // permet de renforcer/attaquer, ou fait avancer un prêtre. Un désert vide
+        // sans aucun de ces atouts est une mauvaise destination (cf. règles IA).
+        const hasStrategicValue = (isTemple && zoneEmpty) || adjToEmpty || canAdvancePriest
+          || existingFriendly > 0 || wouldControl2 || hasAttackOpportunity;
+        const isEmptyDesert = zoneEmpty && !isTemple && !hasStrategicValue;
+
+        let weight = 1 + moveEarlyPenalty;
+        // Les bonus "utiliser les deux déplacements" / "dernier jeton" ne doivent pas
+        // forcer l'IA à se rendre sur une destination sans intérêt.
+        if (!isEmptyDesert) weight += preferBothBonus + lastTokenBonus;
         if (isTemple && zoneEmpty) weight += AI_WEIGHTS.move_emptyTemple;
         if (adjToEmpty)            weight += AI_WEIGHTS.move_adjacentTemple;
         if (canAdvancePriest)      weight += AI_WEIGHTS.move_priestAdvance;
         if (existingFriendly > 0)  weight += AI_WEIGHTS.move_reinforce;
         if (wouldControl2)         weight += AI_WEIGHTS.move_control2temples;
         if (hasAttackOpportunity)  weight += AI_WEIGHTS.move_towardAttack;
+        if (isEmptyDesert)         weight += AI_WEIGHTS.move_emptyDesert;
 
         if (weight > 0) {
           candidates.push({ type: moveType, sourceZoneId: fromZoneId, targetZoneId: adjZoneId, count: canAdd, weight });

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { ref, onValue, update, remove, set } from "firebase/database";
-import { COMBAT_CARDS } from "../../constants/cards";
+import { COMBAT_CARDS, getPlayerCombatDeck } from "../../constants/cards";
 import { POWER_TILES } from "../../constants/powerTiles";
 import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags } from "../../constants/creaturePowers";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
@@ -115,6 +115,9 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
           idCards: [],
           ready: true,
         });
+        const cardDesc = (id) => { const c = COMBAT_CARDS.find(c => c.id === id); return c ? `#${id}[F${c.force}/${c.blood}sang/${c.shields}bou]` : `#${id}`; };
+        const role = pid === combat.attacker ? "ATT" : "DEF";
+        logAction?.(pid, `COMBAT (${role}) choisit carte:${cardDesc(cards.combatCard)} défausse:${cardDesc(cards.discardCard)} — dispo:${available.length} cartes — en ${combat.zoneId}`);
       }, 800);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,11 +146,19 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
           currentTurn: nextTurn,
           consecutivePasses: 0,
         });
+        const role = pid === combat.attacker ? "ATT" : "DEF";
+        const effDesc = cardToPlay.effect?.type === 'force' ? `+${cardToPlay.effect.value ?? 1} force`
+          : cardToPlay.effect?.type === 'shields' ? `+${cardToPlay.effect.value ?? 1} boucliers`
+          : cardToPlay.effect?.type === 'blood' ? `+${cardToPlay.effect.value ?? 1} sang`
+          : cardToPlay.effect?.type ?? "effet";
+        logAction?.(pid, `CARTE ID combat (${role}) joue "${cardToPlay.name}" [${effDesc}] en ${combat.zoneId}`);
       } else {
         update(ref(db, `rooms/${roomCode}/combat`), {
           currentTurn: nextTurn,
           consecutivePasses: (combat.consecutivePasses || 0) + 1,
         });
+        const role = pid === combat.attacker ? "ATT" : "DEF";
+        logAction?.(pid, `CARTE ID combat (${role}) passe (${combatTimingCards.length} cartes dispo) en ${combat.zoneId}`);
       }
     }, 800);
     return () => clearTimeout(t);
@@ -544,7 +555,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       const ps = gameState?.players?.[pid] || {};
       const available = ps.availableCombatCards || [1,2,3,4,5,6,7,8];
       let next = available.filter(id => id !== choice.combatCard && id !== choice.discardCard);
-      if (next.length < 2) next = [1,2,3,4,5,6,7,8];
+      if (next.length < 2) next = getPlayerCombatDeck(ps);
       updates[`rooms/${roomCode}/gameState/players/${pid}/availableCombatCards`] = next;
     });
 
@@ -572,7 +583,34 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
 
     const winnerName = allPlayers.find(p => p.id === winnerId)?.name || "?";
     const loserName  = allPlayers.find(p => p.id === loserId)?.name  || "?";
-    logAction?.(winnerId, `remporte le combat contre ${loserName} en ${combat.zoneId} (${winnerUnitsAfter} surv. vs ${loserUnitsAfter})`);
+    const cardDesc = (id) => { const c = COMBAT_CARDS.find(c => c.id === id); return c ? `#${id}[F${c.force}/${c.blood}s/${c.shields}b]` : `#${id}`; };
+    const attCard = cardDesc(combat.choices?.[combat.attacker]?.combatCard);
+    const defCard = cardDesc(combat.choices?.[combat.defender]?.combatCard);
+    const attIdPlayed = (combat.choices?.[combat.attacker]?.idCards || []).map(c => c.name).join(", ");
+    const defIdPlayed = (combat.choices?.[combat.defender]?.idCards || []).map(c => c.name).join(", ");
+    const attName = allPlayers.find(p => p.id === combat.attacker)?.name || "?";
+    const defName = allPlayers.find(p => p.id === combat.defender)?.name || "?";
+    // Reconstituer gains depuis updates
+    const getAnkGain = (pid) => {
+      const prev = gameState?.players?.[pid]?.ank ?? 0;
+      const next = updates[`rooms/${roomCode}/gameState/players/${pid}/ank`];
+      return next !== undefined ? next - prev : 0;
+    };
+    const getVpGain = (pid) => {
+      const prev = gameState?.players?.[pid]?.vpPermanent ?? 0;
+      const next = updates[`rooms/${roomCode}/gameState/players/${pid}/vpPermanent`];
+      return next !== undefined ? next - prev : 0;
+    };
+    const buildGains = (pid) => {
+      const parts = [];
+      const vp = getVpGain(pid); if (vp > 0) parts.push(`+${vp}PV`);
+      const ank = getAnkGain(pid); if (ank !== 0) parts.push(`${ank > 0 ? "+" : ""}${ank}Ank`);
+      const unitsR = updates[`rooms/${roomCode}/gameState/players/${pid}/unitsReserve`];
+      const prevR = gameState?.players?.[pid]?.unitsReserve ?? 0;
+      if (unitsR !== undefined && unitsR !== prevR) parts.push(`${unitsR - prevR > 0 ? "+" : ""}${unitsR - prevR}u.réserve`);
+      return parts.length ? ` [${parts.join(" ")}]` : "";
+    };
+    logAction?.(winnerId, `RÉSULTAT ${combat.zoneId} — ${winnerName} GAGNE${buildGains(winnerId)} (${winnerUnitsAfter} surv.) vs ${loserName}${buildGains(loserId)} (${loserUnitsAfter} surv.) | ${attName}:${attCard}${attIdPlayed ? "+" + attIdPlayed : ""} vs ${defName}:${defCard}${defIdPlayed ? "+" + defIdPlayed : ""} | sang ATT:${attackerDamage} DEF:${defenderDamage}`);
     } catch (err) {
       console.error("handleApplyResults error:", err);
     }
@@ -658,12 +696,16 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const loserName  = allPlayers.find(p => p.id === pc.loserId)?.name  || "?";
     const winnerName = allPlayers.find(p => p.id === pc.winnerId)?.name || "?";
     if (pc.loserChoice === "stay" && pc.retreatZoneId) {
-      logAction?.(pc.loserId, `se replie en ${pc.retreatZoneId}`);
+      logAction?.(pc.loserId, `POST-COMBAT repli en ${pc.retreatZoneId} [${pc.loserUnitsAfter} u.]`);
     } else if (pc.loserUnitsAfter > 0) {
-      logAction?.(pc.loserId, `se rappatrie (+${pc.loserUnitsAfter} Ank)`);
+      const ls = gameState?.players?.[pc.loserId] || {};
+      const ankAfterL = Math.min(11, (ls.ank ?? 0) + pc.loserUnitsAfter);
+      logAction?.(pc.loserId, `POST-COMBAT rappel [+${pc.loserUnitsAfter} Ank → ${ankAfterL}, +${pc.loserUnitsAfter} réserve]`);
     }
     if (pc.winnerRecall === true && pc.winnerUnitsAfter > 0) {
-      logAction?.(pc.winnerId, `se rappatrie (+${pc.winnerUnitsAfter} Ank)`);
+      const ws = gameState?.players?.[pc.winnerId] || {};
+      const ankAfterW = Math.min(11, (ws.ank ?? 0) + pc.winnerUnitsAfter);
+      logAction?.(pc.winnerId, `POST-COMBAT rappel vainqueur [+${pc.winnerUnitsAfter} Ank → ${ankAfterW}, +${pc.winnerUnitsAfter} réserve]`);
     }
 
     setSelectedCombat(null);

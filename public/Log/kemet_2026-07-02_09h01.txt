@@ -1,0 +1,280 @@
+=== Simulation Kemet — 2026-07-02 09h01 ===
+Joueurs : Anubis (Bleu), Râ (Rouge), Osiris (Vert)
+Vainqueur : Osiris (Vert)
+
+--- Journal des actions ---
+
+[08:58:05] Anubis : PYRAMIDE Blanc niv.1→2 [coût:2 Ank, 7→5] [ank:7 pv:0 u:10 tuiles:1 jeton:5]
+[08:58:06] Anubis : FIN DE TOUR [ank:7 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank] → Râ joue
+[08:58:07] Râ : ACHAT "Force en attaque" [Rouge niv.1 permanent] — coût:1 Ank (7→6) [ank:7 pv:0 u:10 tuiles:1 jeton:5]
+[08:58:08] Râ : FIN DE TOUR [ank:7 pv:0 unités:10 réserve:2] tuiles:[Force en défense] → Osiris joue
+[08:58:09] Osiris : ACHAT "Force en défense" [Bleu niv.1 permanent] — coût:1 Ank (7→6) [ank:7 pv:0 u:10 tuiles:1 jeton:5]
+[08:58:10] Osiris : FIN DE TOUR [ank:7 pv:0 unités:10 réserve:2] tuiles:[Déplacement] → Anubis joue
+[08:58:11] Anubis : ACHAT "Bouclier" [Bleu niv.2 permanent] — coût:2 Ank (5→3) [ank:5 pv:0 u:10 tuiles:1 jeton:4]
+[08:58:12] Anubis : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank] → Râ joue
+[08:58:13] Râ : PYRAMIDE Rouge niv.1→2 [coût:2 Ank, 6→4] [ank:6 pv:0 u:10 tuiles:2 jeton:4]
+[08:58:14] Râ : FIN DE TOUR [ank:6 pv:0 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque] → Osiris joue
+[08:58:15] Osiris : DÉPLACEMENT Cité J3 - T1 → Temple 1 [5 u.] [ank:6 pv:0 u:10 tuiles:2 jeton:4]
+[08:58:16] Osiris : FIN DE TOUR [ank:6 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense] → Anubis joue
+[08:58:16] Anubis : TÉLÉPORT Cité J1 - T1 → Temple Bleu [5 u., coût:2 Ank] [ank:3 pv:0 u:10 tuiles:2 jeton:3]
+[08:58:18] Anubis : FIN DE TOUR [ank:3 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier] → Râ joue
+[08:58:18] Râ : TÉLÉPORT Cité J2 - T2 → Temple 3 [5 u., coût:2 Ank] [ank:4 pv:0 u:10 tuiles:2 jeton:3] + CARTE ID "Gain de 2 Ank" [+2 Ank]
+[08:58:20] Râ : FIN DE TOUR [ank:4 pv:0 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque] → Osiris joue
+[08:58:20] Osiris : TÉLÉPORT Temple 1 → Temple 2 [5 u., coût:2 Ank] [ank:7 pv:0 u:10 tuiles:2 jeton:3]
+[08:58:22] Osiris : FIN DE TOUR [ank:7 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense] → Anubis joue
+[08:58:22] Anubis : PRIÈRE niv.2 : +3 Ank (2→5) [bonus tuile x1] [ank:2 pv:0 u:10 tuiles:2 jeton:2]
+[08:58:24] Anubis : FIN DE TOUR [ank:2 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier] → Râ joue
+[08:58:24] Râ : RECRUTEMENT : +2 unités (J2C2:+2) [ank:5→3, réserve:2→0] [ank:5 pv:0 u:10 tuiles:2 jeton:2]
+[08:58:26] Râ : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque] → Osiris joue
+[08:58:26] Osiris : ACHAT "Force en attaque" [Rouge niv.1 permanent] — coût:1 Ank (5→4) [ank:5 pv:0 u:10 tuiles:2 jeton:2]
+[08:58:28] Osiris : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense] → Anubis joue
+[08:58:28] Anubis : TÉLÉPORT Cité J1 - T2 → Temple 1 [5 u., coût:2 Ank] [ank:5 pv:0 u:10 tuiles:2 jeton:1]
+[08:58:30] Anubis : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier] → Râ joue
+[08:58:30] Râ : DÉPLACEMENT Cité J2 - T1 → Cité J2 - T2 [3 u.] [ank:3 pv:0 u:12 tuiles:2 jeton:1]
+[08:58:32] Râ : FIN DE TOUR [ank:3 pv:0 unités:12 réserve:0] tuiles:[Force en défense, Force en attaque] → Osiris joue
+[08:58:32] Osiris : PYRAMIDE Bleu niv.2→3 [coût:3 Ank, 4→1] [ank:4 pv:0 u:10 tuiles:3 jeton:1]
+[08:58:34] Osiris : FIN DE TOUR [ank:4 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense, Force en attaque] → Anubis joue
+[08:58:34] Anubis : FIN DE TOUR [ank:3 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier] → Râ joue
+[08:58:34] Râ : FIN DE TOUR [ank:3 pv:0 unités:12 réserve:0] tuiles:[Force en défense, Force en attaque] → Osiris joue
+[08:58:34] Anubis : NUIT — +4 Ank, +1 carte ID [ank:7 pv:0]
+[08:58:34] Râ : NUIT — +2 Ank, +1 carte ID [ank:5 pv:0]
+[08:58:34] Osiris : NUIT — +5 Ank, +1 carte ID [ank:6 pv:0]
+[08:58:35] Anubis : ACHAT "Chiron" [Blanc niv.2 creature] — coût:2 Ank (7→5) [ank:7 pv:0 u:10 tuiles:2 jeton:5]
+[08:58:35] Anubis : AUBE cartes — joue:#8[F1/1s/3b] défausse:#6[F2/2s/1b] (8 dispo)
+[08:58:35] Osiris : AUBE cartes — joue:#4[F3/0s/1b] défausse:#8[F1/1s/3b] (8 dispo)
+[08:58:36] Anubis : FIN DE TOUR [ank:7 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier] → Râ joue
+[08:58:37] Râ : ACHAT "Cerbère" [Rouge niv.2 creature] — coût:2 Ank (5→3) / déployée en J2C2 [ank:5 pv:0 u:12 tuiles:2 jeton:5]
+[08:58:38] Râ : FIN DE TOUR [ank:5 pv:0 unités:12 réserve:0] tuiles:[Force en défense, Force en attaque] → Osiris joue
+[08:58:39] Osiris : ACHAT "Serpent" [Bleu niv.2 creature] — coût:2 Ank (6→4) / déployée en J3C2 [ank:6 pv:0 u:10 tuiles:3 jeton:5]
+[08:58:40] Osiris : FIN DE TOUR [ank:6 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense, Force en attaque] → Anubis joue
+[08:58:41] Anubis : DÉPLACEMENT Temple 1 → Désert J1-J2 [5 u.] [ank:5 pv:0 u:10 tuiles:3 jeton:4]
+[08:58:42] Anubis : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron] → Râ joue
+[08:58:43] Râ : TÉLÉPORT Cité J2 - T1 → Temple 1 [2 u., coût:2 Ank] [ank:3 pv:0 u:12 tuiles:3 jeton:4]
+[08:58:44] Râ : FIN DE TOUR [ank:3 pv:0 unités:12 réserve:0] tuiles:[Force en défense, Force en attaque, Cerbère] → Osiris joue
+[08:58:45] Osiris : DÉPLACEMENT Temple 2 → Désert J1 [5 u.] [ank:4 pv:0 u:10 tuiles:4 jeton:4]
+[08:58:46] Osiris : FIN DE TOUR [ank:4 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent] → Anubis joue
+[08:58:47] Anubis : TÉLÉPORT Désert J1-J2 → Temple 2 [5 u., coût:2 Ank] [ank:5 pv:0 u:10 tuiles:3 jeton:3]
+[08:58:48] Anubis : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron] → Râ joue
+[08:58:48] Râ : PRIÈRE niv.2 : +2 Ank (1→3) [ank:1 pv:0 u:12 tuiles:3 jeton:3]
+[08:58:50] Râ : FIN DE TOUR [ank:1 pv:0 unités:12 réserve:0] tuiles:[Force en défense, Force en attaque, Cerbère] → Osiris joue
+[08:58:50] Osiris : DÉPLACEMENT Désert J1 → Désert J3 [5 u.] [ank:4 pv:0 u:10 tuiles:4 jeton:3]
+[08:58:52] Osiris : FIN DE TOUR [ank:4 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent] → Anubis joue
+[08:58:52] Anubis : PRIÈRE niv.2 : +3 Ank (3→6) [bonus tuile x1] [ank:3 pv:0 u:10 tuiles:3 jeton:2]
+[08:58:54] Anubis : FIN DE TOUR [ank:3 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron] → Râ joue
+[08:58:54] Râ : DÉPLACEMENT Temple 1 → Désert J2-J3 [2 u.] [ank:3 pv:0 u:12 tuiles:3 jeton:2]
+[08:58:56] Râ : FIN DE TOUR [ank:3 pv:0 unités:12 réserve:0] tuiles:[Force en défense, Force en attaque, Cerbère] → Osiris joue
+[08:58:56] Osiris : ATTAQUE Désert J3 → Désert J2-J3 [4 vs 2 (ratio 2.0:1), vs Râ] [ank:4 pv:0 u:10 tuiles:4 jeton:2]
+[08:58:57] Osiris : COMBAT (ATT) choisit carte:#1[F5/0sang/0bou] défausse:#7[F1/3sang/0bou] — dispo:8 cartes — en D23
+[08:58:57] Râ : COMBAT (DEF) choisit carte:#2[F4/1sang/0bou] défausse:#7[F1/3sang/0bou] — dispo:8 cartes — en D23
+[08:58:58] Osiris : FIN DE TOUR [ank:4 pv:0 unités:10 réserve:2] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent] → Anubis joue
+[08:58:58] Osiris : CARTE ID combat (ATT) joue "Aucun Saignement" [no_damage_if_win] en D23
+[08:58:59] Râ : CARTE ID combat (DEF) joue "Renfort Divin Majeur" [+2 force] en D23
+[08:59:00] Osiris : CARTE ID combat (ATT) passe (1 cartes dispo) en D23
+[08:59:00] Râ : CARTE ID combat (DEF) passe (1 cartes dispo) en D23
+[08:59:01] Osiris : RÉSULTAT D23 — Osiris GAGNE [+1PV +2u.réserve] (2 surv.) vs Râ (2 surv.) | Osiris:#1[F5/0s/0b]+Aucun Saignement vs Râ:#2[F4/1s/0b]+Renfort Divin Majeur | sang ATT:0 DEF:0
+[08:59:04] Râ : POST-COMBAT rappel [+2 Ank → 5, +2 réserve]
+[08:59:04] Anubis : PYRAMIDE Bleu niv.2→3 [coût:3 Ank, 6→3] [ank:6 pv:0 u:10 tuiles:3 jeton:1]
+[08:59:06] Anubis : FIN DE TOUR [ank:6 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron] → Râ joue
+[08:59:06] Râ : ACHAT "Kraken" [Bleu niv.2 creature] — coût:2 Ank (5→3) [ank:5 pv:1 u:10 tuiles:3 jeton:1]
+[08:59:08] Râ : FIN DE TOUR [ank:5 pv:1 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque, Cerbère] → Osiris joue
+[08:59:08] Osiris : PRIÈRE niv.2 : +2 Ank (4→6) [ank:4 pv:1 u:8 tuiles:4 jeton:1]
+[08:59:10] Osiris : FIN DE TOUR [ank:4 pv:1 unités:8 réserve:4] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent] → Anubis joue
+[08:59:10] Anubis : FIN DE TOUR [ank:3 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron] → Râ joue
+[08:59:11] Râ : FIN DE TOUR [ank:3 pv:1 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque, Cerbère, Kraken] → Osiris joue
+[08:59:11] Anubis : NUIT — +5 Ank, +1 carte ID [ank:8 pv:0]
+[08:59:11] Râ : NUIT — +2 Ank, +1 carte ID [ank:5 pv:1]
+[08:59:11] Osiris : NUIT — +2 Ank, +1 carte ID [ank:8 pv:1]
+[08:59:11] Anubis : ACHAT "Cout Pouvoir -1" [Blanc niv.1 permanent] — coût:1 Ank (8→7) [ank:8 pv:0 u:10 tuiles:3 jeton:5]
+[08:59:12] Anubis : AUBE cartes — joue:#3[F3/2s/0b] défausse:#7[F1/3s/0b] (8 dispo)
+[08:59:12] Râ : AUBE cartes — joue:#4[F3/0s/1b] défausse:#8[F1/1s/3b] (6 dispo)
+[08:59:12] Osiris : AUBE cartes — joue:#5[F2/0s/2b] défausse:#8[F1/1s/3b] (6 dispo)
+[08:59:13] Anubis : FIN DE TOUR [ank:8 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron] → Râ joue
+[08:59:14] Râ : TÉLÉPORT Cité J2 - T2 → Temple 1 [5 u., coût:2 Ank] [ank:5 pv:1 u:10 tuiles:3 jeton:5]
+[08:59:16] Râ : FIN DE TOUR [ank:5 pv:1 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[08:59:17] Osiris : ACHAT "Point Bleu Majeur" [Bleu niv.3 vp] — coût:3 Ank (8→5) / +1 PV [ank:8 pv:1 u:8 tuiles:4 jeton:5]
+[08:59:19] Osiris : FIN DE TOUR [ank:8 pv:1 unités:8 réserve:4] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent] → Anubis joue
+[08:59:20] Anubis : ACHAT "Bouliste" [Bleu niv.3 creature] — coût:2 Ank (7→5) [ank:7 pv:0 u:10 tuiles:4 jeton:4]
+[08:59:22] Anubis : FIN DE TOUR [ank:7 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1] → Râ joue
+[08:59:23] Râ : PYRAMIDE Rouge niv.2→3 [coût:3 Ank, 4→1] [ank:4 pv:1 u:10 tuiles:3 jeton:4]
+[08:59:25] Râ : FIN DE TOUR [ank:4 pv:1 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[08:59:26] Osiris : RECRUTEMENT : +4 unités (J3C1:+4) [ank:5→1, réserve:4→0] [ank:5 pv:2 u:8 tuiles:5 jeton:4]
+[08:59:28] Osiris : FIN DE TOUR [ank:5 pv:2 unités:8 réserve:4] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[08:59:29] Anubis : DÉPLACEMENT Temple 2 → Désert T2 [5 u.] [ank:5 pv:0 u:10 tuiles:5 jeton:3]
+[08:59:31] Anubis : FIN DE TOUR [ank:5 pv:0 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste] → Râ joue
+[08:59:32] Râ : DÉPLACEMENT Temple 1 → Désert J2 [5 u.] [ank:1 pv:1 u:10 tuiles:3 jeton:3]
+[08:59:34] Râ : FIN DE TOUR [ank:1 pv:1 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[08:59:35] Osiris : DÉPLACEMENT Désert J3 → Temple 1 [1 u.] [ank:1 pv:2 u:12 tuiles:5 jeton:3]
+[08:59:37] Osiris : FIN DE TOUR [ank:1 pv:2 unités:12 réserve:0] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[08:59:38] Anubis : RECRUTEMENT : +2 unités (J1C1:+2) [ank:5→3, réserve:2→0] [ank:5 pv:1 u:10 tuiles:5 jeton:2]
+[08:59:40] Anubis : FIN DE TOUR [ank:5 pv:1 unités:10 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste] → Râ joue
+[08:59:41] Râ : ATTAQUE Désert J2 → Temple 1 [4 vs 1 (ratio 4.0:1), vs Osiris] [ank:1 pv:1 u:10 tuiles:3 jeton:2]
+[08:59:42] Râ : COMBAT (ATT) choisit carte:#1[F5/0sang/0bou] défausse:#5[F2/0sang/2bou] — dispo:6 cartes — en T1
+[08:59:42] Osiris : COMBAT (DEF) choisit carte:#8[F1/1sang/3bou] défausse:#5[F2/0sang/2bou] — dispo:6 cartes — en T1
+[08:59:43] Râ : CARTE ID combat (ATT) passe (1 cartes dispo) en T1
+[08:59:43] Râ : FIN DE TOUR [ank:1 pv:1 unités:10 réserve:2] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[08:59:44] Osiris : CARTE ID combat (DEF) passe (1 cartes dispo) en T1
+[08:59:46] Râ : RÉSULTAT T1 — Râ GAGNE [+1PV +2u.réserve] (2 surv.) vs Osiris (1 surv.) | Râ:#1[F5/0s/0b] vs Osiris:#8[F1/1s/3b] | sang ATT:0 DEF:0
+[08:59:48] Osiris : POST-COMBAT rappel [+1 Ank → 3, +1 réserve]
+[08:59:48] Osiris : DÉPLACEMENT Cité J3 - T2 → Désert J2-J3 [3 u. [+créature]] [ank:3 pv:2 u:11 tuiles:5 jeton:2]
+[08:59:50] Osiris : FIN DE TOUR [ank:3 pv:2 unités:11 réserve:1] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[08:59:50] Anubis : DÉPLACEMENT Désert T2 → Temple 2 [5 u.] [ank:3 pv:1 u:12 tuiles:5 jeton:1] + CARTE ID "Renforts" [+2 unité(s) réserve]
+[08:59:52] Anubis : FIN DE TOUR [ank:3 pv:1 unités:12 réserve:0] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste] → Râ joue
+[08:59:52] Râ : PRIÈRE niv.2 : +2 Ank (1→3) [ank:1 pv:2 u:8 tuiles:3 jeton:1]
+[08:59:54] Râ : FIN DE TOUR [ank:1 pv:2 unités:8 réserve:4] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[08:59:54] Osiris : ATTAQUE Désert J2-J3 → Désert J2 [4 vs 1 (ratio 4.0:1), vs Râ] [ank:3 pv:2 u:11 tuiles:5 jeton:1]
+[08:59:55] Osiris : COMBAT (ATT) choisit carte:#3[F3/2sang/0bou] défausse:#6[F2/2sang/1bou] — dispo:4 cartes — en DJ2
+[08:59:55] Râ : COMBAT (DEF) choisit carte:#3[F3/2sang/0bou] défausse:#8[F1/1sang/3bou] — dispo:4 cartes — en DJ2
+[08:59:56] Osiris : FIN DE TOUR [ank:3 pv:2 unités:11 réserve:1] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[08:59:56] Osiris : CARTE ID combat (ATT) passe (1 cartes dispo) en DJ2
+[08:59:57] Anubis : NUIT — +5 Ank, +1 carte ID [ank:9 pv:1]
+[08:59:57] Râ : NUIT — +4 Ank, +1 PV, +1 carte ID [ank:7 pv:3]
+[08:59:57] Osiris : NUIT — +2 Ank, +1 carte ID [ank:5 pv:2]
+[08:59:57] Râ : CARTE ID combat (DEF) passe (1 cartes dispo) en DJ2
+[08:59:58] Râ : AUBE cartes — joue:#4[F3/0s/1b] défausse:#8[F1/1s/3b] (4 dispo)
+[08:59:58] Osiris : AUBE cartes — joue:#3[F3/2s/0b] défausse:#6[F2/2s/1b] (4 dispo)
+[08:59:58] Osiris : RÉSULTAT DJ2 — Osiris GAGNE [+1PV +2u.réserve] (2 surv.) vs Râ [+2u.réserve] (0 surv.) | Osiris:#3[F3/2s/0b] vs Râ:#3[F3/2s/0b] | sang ATT:2 DEF:2
+[09:00:00] Anubis : ACHAT "Préscience" [Bleu niv.3 permanent] — coût:2 Ank (9→7) [ank:9 pv:1 u:12 tuiles:5 jeton:5]
+[09:00:01] Anubis : FIN DE TOUR [ank:9 pv:1 unités:12 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste] → Râ joue
+[09:00:02] Râ : DÉPLACEMENT Temple 1 → Désert J3 [2 u.] [ank:7 pv:3 u:7 tuiles:3 jeton:5]
+[09:00:03] Râ : FIN DE TOUR [ank:7 pv:3 unités:7 réserve:6] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[09:00:04] Osiris : ATTAQUE Cité J3 - T1 → Désert J3 [3 vs 2 (ratio 1.5:1), vs Râ] [ank:5 pv:3 u:9 tuiles:5 jeton:5]
+[09:00:05] Osiris : COMBAT (ATT) choisit carte:#4[F3/0sang/1bou] défausse:#2[F4/1sang/0bou] — dispo:2 cartes — en DJ3
+[09:00:05] Râ : COMBAT (DEF) choisit carte:#6[F2/2sang/1bou] défausse:#4[F3/0sang/1bou] — dispo:2 cartes — en DJ3
+[09:00:05] Osiris : FIN DE TOUR [ank:5 pv:3 unités:9 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:05] Osiris : CARTE ID combat (ATT) joue "Protection Divine" [+1 boucliers] en DJ3
+[09:00:06] Râ : CARTE ID combat (DEF) passe (2 cartes dispo) en DJ3
+[09:00:07] Osiris : CARTE ID combat (ATT) passe (1 cartes dispo) en DJ3
+[09:00:08] Osiris : RÉSULTAT DJ3 — Osiris GAGNE [+1PV] (3 surv.) vs Râ (2 surv.) | Osiris:#4[F3/0s/1b]+Protection Divine vs Râ:#6[F2/2s/1b] | sang ATT:0 DEF:0
+[09:00:10] Râ : POST-COMBAT rappel [+2 Ank → 11, +2 réserve]
+[09:00:11] Anubis : TÉLÉPORT Temple 2 → Temple 1 [5 u., coût:2 Ank] [ank:7 pv:1 u:12 tuiles:6 jeton:4]
+[09:00:12] Anubis : FIN DE TOUR [ank:7 pv:1 unités:12 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience] → Râ joue
+[09:00:13] Râ : PYRAMIDE Rouge niv.3→4 [coût:4 Ank, 11→7] [ank:11 pv:3 u:5 tuiles:3 jeton:4]
+[09:00:14] Râ : FIN DE TOUR [ank:11 pv:3 unités:5 réserve:8] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[09:00:15] Osiris : RECRUTEMENT : +3 unités (J3C1:+3) [ank:5→2, réserve:3→0] [ank:5 pv:4 u:9 tuiles:5 jeton:4]
+[09:00:16] Osiris : FIN DE TOUR [ank:5 pv:4 unités:9 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:16] Anubis : ATTAQUE Temple 1 → Désert J2 [4 vs 2 (ratio 2.0:1), vs Osiris] [ank:5 pv:1 u:12 tuiles:6 jeton:3]
+[09:00:17] Anubis : COMBAT (ATT) choisit carte:#7[F1/3sang/0bou] défausse:#8[F1/1sang/3bou] — dispo:8 cartes — en DJ2
+[09:00:17] Osiris : COMBAT (DEF) choisit carte:#3[F3/2sang/0bou] défausse:#7[F1/3sang/0bou] — dispo:8 cartes — en DJ2
+[09:00:18] Anubis : FIN DE TOUR [ank:5 pv:1 unités:12 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience] → Râ joue
+[09:00:18] Anubis : CARTE ID combat (ATT) passe (4 cartes dispo) en DJ2
+[09:00:19] Osiris : CARTE ID combat (DEF) passe (1 cartes dispo) en DJ2
+[09:00:20] Osiris : RÉSULTAT DJ2 — Osiris GAGNE [+3u.réserve] (0 surv.) vs Anubis [+1u.réserve] (3 surv.) | Anubis:#7[F1/3s/0b] vs Osiris:#3[F3/2s/0b] | sang ATT:1 DEF:3
+[09:00:22] Anubis : POST-COMBAT rappel [+3 Ank → 8, +3 réserve]
+[09:00:23] Râ : ACHAT "Jeton gris" [Rouge niv.4 token] — coût:4 Ank (7→3) [ank:7 pv:3 u:5 tuiles:3 jeton:3]
+[09:00:24] Râ : FIN DE TOUR [ank:7 pv:3 unités:5 réserve:8] tuiles:[Force en défense, Force en attaque, Kraken] → Osiris joue
+[09:00:25] Osiris : DÉPLACEMENT Désert J2-J3 → Temple 2 [1 u.] [ank:2 pv:4 u:10 tuiles:5 jeton:3]
+[09:00:26] Osiris : FIN DE TOUR [ank:2 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:26] Anubis : DÉPLACEMENT Cité J1 - T1 → Cité J1 - T2 [2 u. [+créature]] [ank:8 pv:1 u:8 tuiles:6 jeton:2]
+[09:00:28] Anubis : FIN DE TOUR [ank:8 pv:1 unités:8 réserve:6] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience] → Râ joue
+[09:00:28] Râ : RECRUTEMENT : +3 unités (J2C1:+3) [ank:3→0, réserve:8→5] [ank:3 pv:3 u:5 tuiles:4 jeton:2]
+[09:00:30] Râ : FIN DE TOUR [ank:3 pv:3 unités:5 réserve:8] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:00:30] Osiris : DÉPLACEMENT Désert J3 → Cité J3 - T2 [3 u.] [ank:2 pv:4 u:10 tuiles:5 jeton:2]
+[09:00:32] Osiris : FIN DE TOUR [ank:2 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:32] Anubis : RECRUTEMENT : +6 unités (J1C1:+5, J1C2:+1) [ank:8→2, réserve:6→0] [ank:8 pv:1 u:8 tuiles:6 jeton:1]
+[09:00:34] Anubis : FIN DE TOUR [ank:8 pv:1 unités:8 réserve:6] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience] → Râ joue
+[09:00:34] Râ : DÉPLACEMENT Cité J2 - T1 → Cité J2 - T3 [3 u.] [ank:0 pv:3 u:8 tuiles:4 jeton:1]
+[09:00:36] Râ : FIN DE TOUR [ank:0 pv:3 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:00:36] Osiris : PYRAMIDE Rouge niv.1→2 [coût:2 Ank, 3→1] [ank:3 pv:4 u:10 tuiles:5 jeton:1]
+[09:00:38] Osiris : FIN DE TOUR [ank:3 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:38] Anubis : FIN DE TOUR [ank:2 pv:1 unités:14 réserve:0] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience] → Râ joue
+[09:00:39] Râ : FIN DE TOUR [ank:0 pv:3 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:00:39] Anubis : NUIT — +4 Ank, +1 carte ID [ank:6 pv:1]
+[09:00:39] Râ : NUIT — +2 Ank, +1 carte ID [ank:2 pv:3]
+[09:00:39] Osiris : NUIT — +5 Ank, +1 carte ID [ank:6 pv:4]
+[09:00:39] Anubis : ACHAT "Éléphant" [Bleu niv.2 creature] — coût:1 Ank (6→5) / déployée en J1C2 [ank:6 pv:1 u:14 tuiles:6 jeton:5] + CARTE ID "Renforts" [+2 unité(s) réserve]
+[09:00:40] Anubis : AUBE cartes — joue:#3[F3/2s/0b] défausse:#6[F2/2s/1b] (6 dispo)
+[09:00:40] Râ : AUBE cartes — joue:#3[F3/2s/0b] défausse:#5[F2/0s/2b] (8 dispo)
+[09:00:40] Osiris : AUBE cartes — joue:#1[F5/0s/0b] défausse:#5[F2/0s/2b] (6 dispo)
+[09:00:41] Anubis : FIN DE TOUR [ank:6 pv:1 unités:14 réserve:0] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience] → Râ joue
+[09:00:41] Râ : PRIÈRE niv.2 : +2 Ank (2→4) [ank:2 pv:3 u:8 tuiles:4 jeton:6]
+[09:00:43] Râ : FIN DE TOUR [ank:2 pv:3 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:00:43] Osiris : DÉPLACEMENT Cité J3 - T2 → Désert J1 [5 u. [+créature]] [ank:6 pv:4 u:10 tuiles:5 jeton:5]
+[09:00:45] Osiris : FIN DE TOUR [ank:6 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:45] Anubis : DÉPLACEMENT Temple Bleu → Désert TB-T3 [5 u.] [ank:5 pv:1 u:14 tuiles:7 jeton:4]
+[09:00:47] Anubis : FIN DE TOUR [ank:5 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant] → Râ joue
+[09:00:47] Râ : TÉLÉPORT Temple 3 → Temple Bleu [5 u., coût:2 Ank] [ank:4 pv:3 u:8 tuiles:4 jeton:5]
+[09:00:48] Râ : FIN DE TOUR [ank:4 pv:3 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:00:49] Osiris : TÉLÉPORT Désert J1 → Temple 3 [5 u., coût:2 Ank] [ank:6 pv:4 u:10 tuiles:5 jeton:4]
+[09:00:50] Osiris : FIN DE TOUR [ank:6 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:51] Anubis : PRIÈRE niv.3 : +4 Ank (5→9) [bonus tuile x1] [ank:5 pv:1 u:14 tuiles:7 jeton:3]
+[09:00:52] Anubis : FIN DE TOUR [ank:5 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant] → Râ joue
+[09:00:53] Râ : PRIÈRE niv.2 : +2 Ank (2→4) [ank:2 pv:4 u:8 tuiles:4 jeton:4]
+[09:00:54] Râ : FIN DE TOUR [ank:2 pv:4 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:00:55] Osiris : PRIÈRE niv.3 : +3 Ank (4→7) [ank:4 pv:4 u:10 tuiles:5 jeton:3]
+[09:00:56] Osiris : FIN DE TOUR [ank:4 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:00:57] Anubis : ACHAT "+1 carte ID" [Blanc niv.2 permanent] — coût:1 Ank (9→8) [ank:9 pv:1 u:14 tuiles:7 jeton:2]
+[09:00:58] Anubis : FIN DE TOUR [ank:9 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant] → Râ joue
+[09:00:59] Râ : DÉPLACEMENT Cité J2 - T3 → Désert J2 [3 u.] [ank:4 pv:4 u:8 tuiles:4 jeton:3]
+[09:01:00] Râ : FIN DE TOUR [ank:4 pv:4 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:01:01] Osiris : PYRAMIDE Rouge niv.2→3 [coût:3 Ank, 7→4] [ank:7 pv:4 u:10 tuiles:5 jeton:2]
+[09:01:02] Osiris : FIN DE TOUR [ank:7 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:01:03] Anubis : DÉPLACEMENT Cité J1 - T2 → Désert J1 [3 u. [+créature]] [ank:8 pv:1 u:14 tuiles:8 jeton:1]
+[09:01:04] Anubis : FIN DE TOUR [ank:8 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID] → Râ joue
+[09:01:05] Râ : ACHAT "Force par ID" [Rouge niv.3 permanent] — coût:3 Ank (5→2) [ank:5 pv:4 u:8 tuiles:4 jeton:2]
+[09:01:06] Râ : FIN DE TOUR [ank:5 pv:4 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris] → Osiris joue
+[09:01:07] Osiris : RECRUTEMENT : +3 unités (J3C1:+1, J3C2:+2) [ank:4→1, réserve:3→0] [ank:4 pv:4 u:10 tuiles:5 jeton:1]
+[09:01:08] Osiris : FIN DE TOUR [ank:4 pv:4 unités:10 réserve:3] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:01:08] Anubis : FIN DE TOUR [ank:8 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID] → Râ joue
+[09:01:09] Râ : ATTAQUE Désert J2 → Temple 1 [2 vs 1 (ratio 2.0:1), vs Anubis] [ank:2 pv:4 u:8 tuiles:5 jeton:1]
+[09:01:10] Râ : COMBAT (ATT) choisit carte:#5[F2/0sang/2bou] défausse:#7[F1/3sang/0bou] — dispo:8 cartes — en T1
+[09:01:10] Anubis : COMBAT (DEF) choisit carte:#2[F4/1sang/0bou] défausse:#6[F2/2sang/1bou] — dispo:6 cartes — en T1
+[09:01:10] Râ : FIN DE TOUR [ank:2 pv:4 unités:8 réserve:5] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris, Force par ID] → Osiris joue
+[09:01:11] Râ : CARTE ID combat (ATT) joue "Protection Divine" [+1 boucliers] en T1
+[09:01:11] Anubis : NUIT — +4 Ank, +2 cartes ID [ank:11 pv:1]
+[09:01:11] Râ : NUIT — +2 Ank, +1 carte ID [ank:4 pv:4]
+[09:01:11] Osiris : NUIT — +5 Ank, +1 PV, +1 carte ID [ank:6 pv:5]
+[09:01:11] Anubis : CARTE ID combat (DEF) joue "Protection Divine" [+1 boucliers] en T1
+[09:01:12] Anubis : AUBE cartes — joue:#3[F3/2s/0b] défausse:#6[F2/2s/1b] (6 dispo)
+[09:01:12] Râ : AUBE cartes — joue:#1[F5/0s/0b] défausse:#8[F1/1s/3b] (8 dispo)
+[09:01:12] Osiris : AUBE cartes — joue:#8[F1/1s/3b] défausse:#5[F2/0s/2b] (6 dispo)
+[09:01:12] Râ : CARTE ID combat (ATT) passe (3 cartes dispo) en T1
+[09:01:13] Anubis : CARTE ID combat (DEF) passe (4 cartes dispo) en T1
+[09:01:14] Anubis : RÉSULTAT T1 — Anubis GAGNE (1 surv.) vs Râ (2 surv.) | Râ:#5[F2/0s/2b]+Protection Divine vs Anubis:#2[F4/1s/0b]+Protection Divine | sang ATT:0 DEF:0
+[09:01:16] Râ : POST-COMBAT rappel [+2 Ank → 6, +2 réserve]
+[09:01:17] Anubis : PYRAMIDE Bleu niv.3→4 [coût:4 Ank, 11→7] [ank:11 pv:1 u:14 tuiles:8 jeton:5]
+[09:01:18] Anubis : FIN DE TOUR [ank:11 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID] → Râ joue
+[09:01:19] Râ : ACHAT "Scarabée" [Rouge niv.3 creature] — coût:3 Ank (6→3) [ank:6 pv:4 u:6 tuiles:5 jeton:6]
+[09:01:20] Râ : FIN DE TOUR [ank:6 pv:4 unités:6 réserve:7] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris, Force par ID] → Osiris joue
+[09:01:21] Osiris : ACHAT "Force" [Rouge niv.3 permanent] — coût:3 Ank (6→3) [ank:6 pv:5 u:13 tuiles:5 jeton:5]
+[09:01:22] Osiris : FIN DE TOUR [ank:6 pv:5 unités:13 réserve:0] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur] → Anubis joue
+[09:01:23] Anubis : ACHAT "Sphinx" [Bleu niv.4 creature] — coût:3 Ank (7→4) / +1 PV [ank:7 pv:1 u:14 tuiles:8 jeton:4]
+[09:01:24] Anubis : FIN DE TOUR [ank:7 pv:1 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID] → Râ joue
+[09:01:25] Râ : PYRAMIDE Bleu niv.2→3 [coût:3 Ank, 3→0] [ank:3 pv:4 u:6 tuiles:6 jeton:5]
+[09:01:26] Râ : FIN DE TOUR [ank:3 pv:4 unités:6 réserve:7] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris, Force par ID, Scarabée] → Osiris joue
+[09:01:26] Osiris : DÉPLACEMENT Cité J3 - T2 → Désert T2 [2 u. [+créature]] [ank:3 pv:5 u:13 tuiles:6 jeton:4]
+[09:01:28] Osiris : FIN DE TOUR [ank:3 pv:5 unités:13 réserve:0] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur, Force] → Anubis joue
+[09:01:28] Anubis : DÉPLACEMENT Cité J1 - T1 → Désert J1 [2 u. [+créature]] [ank:4 pv:2 u:14 tuiles:9 jeton:3]
+[09:01:30] Anubis : FIN DE TOUR [ank:4 pv:2 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID, Sphinx] → Râ joue
+[09:01:30] Râ : PRIÈRE niv.2 : +2 Ank (0→2) [ank:0 pv:4 u:6 tuiles:6 jeton:4]
+[09:01:32] Râ : FIN DE TOUR [ank:0 pv:4 unités:6 réserve:7] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris, Force par ID, Scarabée] → Osiris joue
+[09:01:32] Osiris : DÉPLACEMENT Cité J3 - T1 → Désert T2 [3 u.] [ank:3 pv:5 u:13 tuiles:6 jeton:3]
+[09:01:34] Osiris : FIN DE TOUR [ank:3 pv:5 unités:13 réserve:0] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur, Force] → Anubis joue
+[09:01:34] Anubis : DÉPLACEMENT Désert J1 → Cité J1 - T3 [5 u.] [ank:4 pv:3 u:14 tuiles:9 jeton:2]
+[09:01:36] Anubis : FIN DE TOUR [ank:4 pv:3 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID, Sphinx] → Râ joue
+[09:01:36] Râ : PRIÈRE niv.2 : +2 Ank (2→4) [ank:2 pv:4 u:6 tuiles:6 jeton:3]
+[09:01:38] Râ : FIN DE TOUR [ank:2 pv:4 unités:6 réserve:7] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris, Force par ID, Scarabée] → Osiris joue
+[09:01:38] Osiris : ATTAQUE Désert T2 → Désert J2 [4 vs 1 (ratio 4.0:1), vs Râ] [ank:3 pv:5 u:13 tuiles:6 jeton:2]
+[09:01:39] Osiris : COMBAT (ATT) choisit carte:#5[F2/0sang/2bou] défausse:#8[F1/1sang/3bou] — dispo:6 cartes — en DJ2
+[09:01:39] Râ : COMBAT (DEF) choisit carte:#2[F4/1sang/0bou] défausse:#6[F2/2sang/1bou] — dispo:6 cartes — en DJ2
+[09:01:40] Osiris : FIN DE TOUR [ank:3 pv:5 unités:13 réserve:0] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur, Force] → Anubis joue
+[09:01:40] Osiris : CARTE ID combat (ATT) passe (1 cartes dispo) en DJ2
+[09:01:41] Râ : CARTE ID combat (DEF) passe (3 cartes dispo) en DJ2
+[09:01:42] Osiris : RÉSULTAT DJ2 — Osiris GAGNE [+1PV] (4 surv.) vs Râ (1 surv.) | Osiris:#5[F2/0s/2b] vs Râ:#2[F4/1s/0b] | sang ATT:0 DEF:0
+[09:01:44] Râ : POST-COMBAT rappel [+1 Ank → 5, +1 réserve]
+[09:01:44] Anubis : PRIÈRE niv.3 : +4 Ank (5→9) [bonus tuile x1] [ank:5 pv:3 u:14 tuiles:9 jeton:1]
+[09:01:46] Anubis : FIN DE TOUR [ank:5 pv:3 unités:14 réserve:2] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID, Sphinx] → Râ joue
+[09:01:46] Râ : RECRUTEMENT : +5 unités (J2C1:+5) [ank:5→0, réserve:8→3] [ank:5 pv:4 u:5 tuiles:6 jeton:2]
+[09:01:48] Râ : FIN DE TOUR [ank:5 pv:4 unités:5 réserve:8] tuiles:[Force en défense, Force en attaque, Kraken, Jeton gris, Force par ID, Scarabée] → Osiris joue
+[09:01:48] Osiris : ATTAQUE Désert J2 → Temple 1 [3 vs 1 (ratio 3.0:1), vs Anubis] [ank:3 pv:6 u:13 tuiles:6 jeton:1]
+[09:01:49] Osiris : COMBAT (ATT) choisit carte:#1[F5/0sang/0bou] défausse:#6[F2/2sang/1bou] — dispo:4 cartes — en T1
+[09:01:49] Anubis : COMBAT (DEF) choisit carte:#1[F5/0sang/0bou] défausse:#5[F2/0sang/2bou] — dispo:4 cartes — en T1
+[09:01:50] Osiris : FIN DE TOUR [ank:3 pv:6 unités:13 réserve:0] tuiles:[Déplacement, Force en défense, Force en attaque, Serpent, Point Bleu Majeur, Force] → Anubis joue
+[09:01:50] Osiris : CARTE ID combat (ATT) passe (1 cartes dispo) en T1
+[09:01:51] Anubis : CARTE ID combat (DEF) joue "Renfort Divin Majeur" [+2 force] en T1
+[09:01:52] Osiris : CARTE ID combat (ATT) passe (1 cartes dispo) en T1
+[09:01:52] Anubis : CARTE ID combat (DEF) passe (3 cartes dispo) en T1
+[09:01:53] Osiris : RÉSULTAT T1 — Osiris GAGNE [+1PV +2u.réserve] (1 surv.) vs Anubis [+1u.réserve] (0 surv.) | Osiris:#1[F5/0s/0b] vs Anubis:#1[F5/0s/0b]+Renfort Divin Majeur | sang ATT:0 DEF:0
+[09:01:55] Anubis : FIN DE TOUR [ank:9 pv:3 unités:13 réserve:3] tuiles:[Priere +1 ank, Bouclier, Chiron, Cout Pouvoir -1, Bouliste, Préscience, Éléphant, +1 carte ID, Sphinx] → Râ joue
+[09:01:56] Râ : ATTAQUE Cité J2 - T1 → Désert J2 [4 vs 1 (ratio 4.0:1), vs Osiris] [ank:0 pv:4 u:10 tuiles:6 jeton:1]
+[09:01:57] Râ : COMBAT (ATT) choisit carte:#3[F3/2sang/0bou] défausse:#8[F1/1sang/3bou] — dispo:4 cartes — en DJ2
+[09:01:57] Osiris : COMBAT (DEF) choisit carte:#2[F4/1sang/0bou] défausse:#4[F3/0sang/1bou] — dispo:2 cartes — en DJ2

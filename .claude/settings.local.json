@@ -27,7 +27,10 @@
       "Bash(grep -rn \"vpPermanent\\\\|60\\\\s*$\\\\|VP.*60\" src --include=\"*.js\" --include=\"*.jsx\")",
       "Bash(npx --no-install react-scripts build --no-typescript)",
       "Bash(node_modules/.bin/react-scripts build *)",
-      "Bash(grep -v \"//\\\\|Bleu\\\\|bleu\\\\|NightModal.*Temple\\\\|PlayerTilesModal\")"
+      "Bash(grep -v \"//\\\\|Bleu\\\\|bleu\\\\|NightModal.*Temple\\\\|PlayerTilesModal\")",
+      "Bash(node -e ' *)",
+      "Bash(grep -n \"Combat_\\\\|force}\\\\${\" \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Combat\\\\CombatModal.jsx\")",
+      "Bash(awk -F: '$1>=900 && $1<=1060')"
     ]
   }
 }

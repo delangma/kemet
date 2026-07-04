@@ -28,7 +28,7 @@ function TempleRow({ icon, label, controller, bonus, isBlue }) {
   );
 }
 
-export default function NightModal({ onClose, session, gameState, autoProcess = false }) {
+export default function NightModal({ onClose, session, gameState, autoProcess = false, logAction }) {
   const { roomCode, allPlayers } = session;
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -300,6 +300,7 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
 
     updates[`rooms/${roomCode}/gameState/currentTurnPlayerId`] = sortedPlayers[0].id;
     updates[`rooms/${roomCode}/gameState/idDeck`] = deck;
+    updates[`rooms/${roomCode}/gameState/turn`] = (state.turn ?? 0) + 1;
 
     // Fin de partie différée : si pendingEndAtNight, le joueur avec le plus de PV gagne
     if (state.pendingEndAtNight) {
@@ -322,6 +323,25 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
     }
 
     await update(ref(db, "/"), updates);
+
+    // Log résumé de nuit par joueur
+    if (logAction) {
+      for (const p of allPlayers) {
+        const ps = state.players?.[p.id] || {};
+        const parts = [];
+        const ankGain = ankBonus[p.id] ?? 0;
+        if (ankGain > 0) parts.push(`+${ankGain} Ank`);
+        const vpGain = vpBonus[p.id] ?? 0;
+        if (vpGain > 0) parts.push(`+${vpGain} PV`);
+        const newCards = (updates[`rooms/${roomCode}/gameState/players/${p.id}/idCards`] ?? []).length - (ps.idCards ?? []).length;
+        if (newCards > 0) parts.push(`+${newCards} carte${newCards > 1 ? "s" : ""} ID`);
+        const ankAfter = updates[`rooms/${roomCode}/gameState/players/${p.id}/ank`] ?? (ps.ank ?? 0);
+        const vpAfter = (ps.vpPermanent ?? 0) + vpGain;
+        if (parts.length > 0) {
+          await logAction(p.id, `NUIT — ${parts.join(", ")} [ank:${ankAfter} pv:${vpAfter}]`);
+        }
+      }
+    }
 
     // Lance l'Aube automatiquement pour tous les clients via Firebase
     const dawnChoices = {};

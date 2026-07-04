@@ -8,7 +8,17 @@ export const COMBAT_CARDS = [
   { id: 6, force: 2, blood: 2, shields: 1, effect: null },
   { id: 7, force: 1, blood: 3, shields: 0, effect: null },
   { id: 8, force: 1, blood: 1, shields: 3, effect: null },
+  // Cartes spéciales obtenues via les tuiles "Carte Sang 3*3" / "Carte Bouclier 3*3" :
+  // à l'achat, le joueur remplace définitivement une carte de son deck perso par celle-ci.
+  { id: 9,  force: 3, blood: 3, shields: 0, effect: null },
+  { id: 10, force: 3, blood: 0, shields: 3, effect: null },
 ];
+
+// Deck de cartes combat personnel d'un joueur (8 cartes de base, éventuellement
+// modifié par un échange définitif via une tuile "Carte Sang/Bouclier 3*3").
+export function getPlayerCombatDeck(playerState) {
+  return playerState?.baseCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
+}
 
 // Cartes Intervention Divine — pioche commune
 export const ID_CARDS = [

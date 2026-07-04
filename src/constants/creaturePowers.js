@@ -21,8 +21,9 @@ export const POWER_TILE_COMBAT_BONUSES = {
   "Bouclier":            { shields: 1 },
   "Defense Sang Noir":   { defenseForce: 1, defenseBlood: 1 },
   "Furie Bestiale":      { force: 1, blood: 1 },
-  "Carte Sang 3*3":      { blood: 3 },
-  "Carte Bouclier 3*3":  { shields: 3 },
+  // "Carte Sang 3*3" / "Carte Bouclier 3*3" : pas de bonus permanent — à l'achat,
+  // le joueur remplace une carte de son deck combat par la carte spéciale correspondante
+  // (voir combatCardSwapNewId dans powerTiles.js et le mécanisme dans MyZone.jsx).
 };
 
 // Bonus de combat des jetons JP (prêtres Ta-Seti dans une troupe).

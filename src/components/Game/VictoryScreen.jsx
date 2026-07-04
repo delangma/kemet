@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { computeTempVP } from "../../utils/vp";
 
 const COLOR_STYLE = {
@@ -8,9 +9,15 @@ const COLOR_STYLE = {
   Noir:  { text: "text-gray-400",    bg: "bg-gray-800/40",    border: "border-gray-500/70"    },
 };
 
-export default function VictoryScreen({ winnerId, allPlayers, gameState, onReturnHome }) {
+export default function VictoryScreen({ winnerId, allPlayers, gameState, onReturnHome, volume = 0.6 }) {
   const winner = allPlayers.find(p => p.id === winnerId);
   const ws = COLOR_STYLE[winner?.color] || COLOR_STYLE.Blanc;
+
+  useEffect(() => {
+    const audio = new Audio("/MP3_sound_effect/Victory%20sound.mp3");
+    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.play().catch(() => {});
+  }, []);
 
   const scores = allPlayers
     .map(p => {

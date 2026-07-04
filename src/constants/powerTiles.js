@@ -8,7 +8,7 @@ export const POWER_TILES = [
   { id: "R_2_2", name: "Passe muraille",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
   { id: "R_2_3", name: "Goutte de sang",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
   { id: "R_2_4", name: "Avancée sur taseti",    color: "Rouge", level: 2, cost: 2, type: "permanent", taSetiAdvanceOnPurchase: 1, taSetiAdvancePerNight: 1 },
-  { id: "R_2_5", name: "Carte Sang 3*3",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
+  { id: "R_2_5", name: "Carte Sang 3*3",        color: "Rouge", level: 2, cost: 2, type: "permanent", combatCardSwapNewId: 9 },
   { id: "R_2_6", name: "Téléportation facile",        color: "Rouge", level: 2, cost: 2, type: "permanent" },
   { id: "R_2_7", name: "Cerbère",        color: "Rouge", level: 2, cost: 2, type: "creature" },
   { id: "R_2_1", name: "Phoenix",        color: "Rouge", level: 2, cost: 2, type: "creature" },
@@ -34,7 +34,7 @@ export const POWER_TILES = [
   { id: "B_2_1", name: "Éléphant",                  color: "Bleu", level: 2, cost: 2, type: "creature" },
   { id: "B_2_2", name: "Kraken",                    color: "Bleu", level: 2, cost: 2, type: "creature" },
   { id: "B_2_3", name: "Bouclier",                  color: "Bleu", level: 2, cost: 2, type: "permanent" },
-  { id: "B_2_4", name: "Carte Bouclier 3*3",        color: "Bleu", level: 2, cost: 2, type: "permanent" },
+  { id: "B_2_4", name: "Carte Bouclier 3*3",        color: "Bleu", level: 2, cost: 2, type: "permanent", combatCardSwapNewId: 10 },
   { id: "B_2_5", name: "Serpent",                   color: "Bleu", level: 2, cost: 2, type: "creature" },
   // Bleu Niveau 3
   { id: "B_3_1", name: "Préscience",                color: "Bleu", level: 3, cost: 3, type: "permanent" },

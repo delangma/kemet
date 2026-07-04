@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { ACTIONS } from "../../constants/game";
-import { COMBAT_CARDS as CARDS } from "../../constants/cards";
+import { COMBAT_CARDS as CARDS, getPlayerCombatDeck } from "../../constants/cards";
 import IdCardModal from "../Cards/IdCardModal";
+import CombatCardsModal from "../Cards/CombatCardsModal";
+import CombatCardSwapModal from "../Cards/CombatCardSwapModal";
 import IdDraftModal from "../Cards/IdDraftModal";
 import IdRefreshModal from "../Cards/IdRefreshModal";
 import PyramidEvolveModal from "./PyramidEvolveModal";
@@ -62,6 +64,7 @@ export default function MyZone({
 }) {
   const [showCombat, setShowCombat] = useState(false);
   const [showIdModal, setShowIdModal] = useState(false);
+  const [showCombatCardsModal, setShowCombatCardsModal] = useState(false);
   const [localModal, setLocalModal] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -71,6 +74,7 @@ export default function MyZone({
   const actionsThisTurn = state.actionsThisTurn ?? 0;
   const pyramids = state.pyramids || { red: 0, blue: 0, white: 0 };
   const myIdCards = state.idCards || [];
+  const myCombatCards = state.availableCombatCards || [1,2,3,4,5,6,7,8];
   const ownedTileIds = state.ownedTileIds || [];
 
   const vpPermanent = state.vpPermanent ?? 0;
@@ -164,6 +168,8 @@ export default function MyZone({
   const hasIdDraft = Array.isArray(idDraftPending) && idDraftPending.length > 0;
   // Draft ID BI_2 (refresh)
   const idRefreshPending = state.idRefreshPending ?? false;
+  // Carte Sang/Bouclier 3*3 : échange de carte combat en attente
+  const pendingCombatCardSwap = state.pendingCombatCardSwap ?? null;
   // Jetons JU (PU cards) en main
   const juTokenHand = state.juTokenHand || [];
   const canUseJuToken = isMyTurn && !actionMode;
@@ -250,6 +256,28 @@ export default function MyZone({
     await onInfoEvent?.();
   }
 
+  async function handleCombatCardSwapConfirm(oldCardId) {
+    const snapshot = await get(ref(db, `rooms/${session.roomCode}/gameState`));
+    if (!snapshot.exists()) return;
+    const s = snapshot.val();
+    const ps = s.players?.[player.id] || {};
+    const newCardId = ps.pendingCombatCardSwap;
+    if (!newCardId) return;
+    const baseDeck = getPlayerCombatDeck(ps);
+    const newBaseDeck = baseDeck.map(id => id === oldCardId ? newCardId : id);
+    const updates = {
+      [`rooms/${session.roomCode}/gameState/players/${player.id}/baseCombatCards`]: newBaseDeck,
+      [`rooms/${session.roomCode}/gameState/players/${player.id}/pendingCombatCardSwap`]: null,
+    };
+    const avail = ps.availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
+    if (avail.includes(oldCardId)) {
+      updates[`rooms/${session.roomCode}/gameState/players/${player.id}/availableCombatCards`] =
+        avail.map(id => id === oldCardId ? newCardId : id);
+    }
+    await update(ref(db, "/"), updates);
+    setLocalModal(null);
+  }
+
 
 
   // ── Render ──────────────────────────────────────────────────────────
@@ -317,6 +345,14 @@ export default function MyZone({
               </span>
             )}
           </button>
+          <button onClick={() => setShowCombatCardsModal(true)} className="shrink-0 relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            <img src="/Combat_410.png" alt="Cartes combat" style={{ width: 24, height: 16, objectFit: 'contain', borderRadius: 2, display: 'block' }} />
+            {myCombatCards.length > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -5, background: '#7f1d1d', color: '#fff', fontSize: 7, fontWeight: 700, borderRadius: '50%', width: 11, height: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {myCombatCards.length}
+              </span>
+            )}
+          </button>
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
             {canCancelTurn && (
               <button
@@ -380,6 +416,9 @@ export default function MyZone({
           )}
           {idRefreshPending && (
             <button onClick={() => setLocalModal('id_refresh')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-teal-700/80 text-teal-100 border-teal-500">🔄 Draft ID</button>
+          )}
+          {pendingCombatCardSwap && (
+            <button onClick={() => setLocalModal('combat_card_swap')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-rose-700/80 text-rose-100 border-rose-500 animate-pulse">🔄 Carte combat</button>
           )}
           {/* Boutons rapides */}
           <div className="w-px h-4 bg-gray-700 shrink-0" />
@@ -466,6 +505,14 @@ export default function MyZone({
             {myIdCards.length > 0 && (
               <span style={{ position: 'absolute', top: -5, right: -6, background: '#b45309', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
                 {myIdCards.length}
+              </span>
+            )}
+          </button>
+          <button onClick={() => setShowCombatCardsModal(true)} className="relative" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            <img src="/Combat_410.png" alt="Cartes combat" style={{ width: 32, height: 21, objectFit: 'contain', borderRadius: 3, display: 'block' }} />
+            {myCombatCards.length > 0 && (
+              <span style={{ position: 'absolute', top: -5, right: -6, background: '#7f1d1d', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {myCombatCards.length}
               </span>
             )}
           </button>
@@ -638,6 +685,14 @@ export default function MyZone({
             className="text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 bg-teal-700/80 hover:bg-teal-600 text-teal-100 border-teal-500"
           >
             🔄 Draft ID
+          </button>
+        )}
+        {pendingCombatCardSwap && (
+          <button
+            onClick={() => setLocalModal("combat_card_swap")}
+            className="text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 bg-rose-700/80 hover:bg-rose-600 text-rose-100 border-rose-500 animate-pulse"
+          >
+            🔄 Carte combat
           </button>
         )}
 
@@ -896,6 +951,13 @@ export default function MyZone({
         />
       )}
 
+      {showCombatCardsModal && (
+        <CombatCardsModal
+          cardIds={myCombatCards}
+          onClose={() => setShowCombatCardsModal(false)}
+        />
+      )}
+
       {localModal === "pyramid" && (
         <PyramidEvolveModal
           player={player}
@@ -938,6 +1000,15 @@ export default function MyZone({
         <IdRefreshModal
           currentCards={myIdCards}
           onConfirm={handleIdRefresh}
+          onClose={() => setLocalModal(null)}
+        />
+      )}
+
+      {localModal === "combat_card_swap" && pendingCombatCardSwap && (
+        <CombatCardSwapModal
+          deckIds={getPlayerCombatDeck(state)}
+          newCardId={pendingCombatCardSwap}
+          onConfirm={handleCombatCardSwapConfirm}
           onClose={() => setLocalModal(null)}
         />
       )}

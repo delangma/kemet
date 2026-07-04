@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { ref, onValue, update, remove, set, get } from "firebase/database";
-import { COMBAT_CARDS } from "../../constants/cards";
+import { COMBAT_CARDS, getPlayerCombatDeck } from "../../constants/cards";
 import { aiChooseCombatCards, aiChooseDawnPosition } from "../../ai/aiPlayer";
 
 const TEST_BADGES = {
@@ -12,7 +12,7 @@ const TEST_BADGES = {
   Noir:  { on: "bg-gray-600 text-white border-yellow-400", off: "bg-gray-900/50 text-gray-400 border-transparent hover:bg-gray-800/60" },
 };
 
-export default function DawnModal({ onClose, session, gameState, isTestMode, testPlayers, onSwitchTestPlayer }) {
+export default function DawnModal({ onClose, session, gameState, isTestMode, testPlayers, onSwitchTestPlayer, logAction }) {
   const { roomCode, playerId, allPlayers } = session;
   const [dawn, setDawn] = useState(null);
   const [selectedCombat, setSelectedCombat] = useState(null);
@@ -118,6 +118,8 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
           ready: true,
           tokensConfirmed: false,
         });
+        const cardDesc = (id) => { const c = COMBAT_CARDS.find(c => c.id === id); return c ? `#${id}[F${c.force}/${c.blood}s/${c.shields}b]` : `#${id}`; };
+        logAction?.(p.id, `AUBE cartes — joue:${cardDesc(cards.combatCard)} défausse:${cardDesc(cards.discardCard)} (${available.length} dispo)`);
       }, 800);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,6 +135,7 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
     const available = [1, 2, 3, 4, 5].slice(0, allPlayers.length).filter(pos => !taken.includes(pos));
     if (available.length === 0) return;
     const chosen = aiChooseDawnPosition(gameState, currentPlayer.id, allPlayers, taken, available);
+    logAction?.(currentPlayer.id, `AUBE position : choisit pos.${chosen} (disponibles:[${available.join(",")}])`);
     const t = setTimeout(async () => {
       const snapshot = await get(ref(db, `rooms/${roomCode}/dawn`));
       if (!snapshot.exists()) return;
@@ -158,7 +161,7 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
           const playerState = gameState?.players?.[p.id] || {};
           const avail = playerState.availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
           let newAvail = avail.filter(id => id !== choice?.combatCard && id !== choice?.discardCard);
-          if (newAvail.length < 2) newAvail = [1, 2, 3, 4, 5, 6, 7, 8];
+          if (newAvail.length < 2) newAvail = getPlayerCombatDeck(playerState);
           updates[`rooms/${roomCode}/gameState/players/${p.id}/availableCombatCards`] = newAvail;
         });
         await update(ref(db, "/"), updates);
@@ -281,7 +284,7 @@ async function handleChoosePosition(position) {
         const playerState = gameState?.players?.[p.id] || {};
         const available = playerState.availableCombatCards || [1,2,3,4,5,6,7,8];
         let newAvailable = available.filter(id => id !== choice?.combatCard && id !== choice?.discardCard);
-        if (newAvailable.length < 2) newAvailable = [1,2,3,4,5,6,7,8];
+        if (newAvailable.length < 2) newAvailable = getPlayerCombatDeck(playerState);
         finalUpdates[`rooms/${roomCode}/gameState/players/${p.id}/availableCombatCards`] = newAvailable;
       });
 
