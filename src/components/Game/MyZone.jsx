@@ -170,9 +170,23 @@ export default function MyZone({
   const idRefreshPending = state.idRefreshPending ?? false;
   // Carte Sang/Bouclier 3*3 : échange de carte combat en attente
   const pendingCombatCardSwap = state.pendingCombatCardSwap ?? null;
-  // Jetons JU (PU cards) en main
+  // Jetons JU (PU cards) en main — disponibilité selon le type :
+  // - Carte ID : à son tour, hors action
+  // - Sceau Divin : à n'importe quel moment hors combat (la modale de combat bloque de toute façon)
+  // - Points / Combat Simple : uniquement au démarrage d'un combat (via la modale de combat)
   const juTokenHand = state.juTokenHand || [];
   const canUseJuToken = isMyTurn && !actionMode;
+  const canUseJuTokenFor = cardId => {
+    if (cardId === 'PU_sceau_divin') return !actionMode;
+    if (cardId === 'PU_ID') return canUseJuToken;
+    return false; // PU_points / PU_combat_simple : jouables dans la modale de combat
+  };
+  const JU_TOKEN_HINT = {
+    PU_ID: "Pioche 2 cartes ID — se joue à votre tour",
+    PU_points: "Se joue au démarrage d'un combat : +1 PV si victoire avec survivants, -1 PV si défaite",
+    PU_combat_simple: "Se joue au démarrage d'un combat : seules les unités et les cartes combat comptent",
+    PU_sceau_divin: "Annule une tuile pouvoir adverse jusqu'au prochain tour — hors combat ou au démarrage d'un combat",
+  };
   const currentTurnPlayer = session.allPlayers?.find(p => p.id === currentTurnPlayerId);
 
   function handleActionClick(action) {
@@ -407,8 +421,9 @@ export default function MyZone({
           )}
           {juTokenHand.map((token, idx) => {
             const puCard = PU_CARDS.find(c => c.id === token.cardId);
+            const enabled = canUseJuTokenFor(token.cardId);
             return (
-              <button key={`m-${token.nodeId}-${idx}`} onClick={() => canUseJuToken && onUseJuToken?.(token.nodeId, token.cardId)} disabled={!canUseJuToken} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUseJuToken ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🪬 {puCard?.label ?? token.cardId}</button>
+              <button key={`m-${token.nodeId}-${idx}`} onClick={() => enabled && onUseJuToken?.(token.nodeId, token.cardId)} disabled={!enabled} title={JU_TOKEN_HINT[token.cardId] ?? ""} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${enabled ? 'bg-yellow-700/80 text-yellow-100 border-yellow-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🪬 {puCard?.label ?? token.cardId}</button>
             );
           })}
           {hasIdDraft && (
@@ -651,16 +666,18 @@ export default function MyZone({
             🌙 Avancée Ta-Seti ({taSetiNightAdvancePending})
           </button>
         )}
-        {/* Jetons JU (PU) : utilisables à tout moment pendant son tour */}
+        {/* Jetons JU (PU) : disponibilité selon le type (voir canUseJuTokenFor) */}
         {juTokenHand.map((token, idx) => {
           const puCard = PU_CARDS.find(c => c.id === token.cardId);
+          const enabled = canUseJuTokenFor(token.cardId);
           return (
             <button
               key={`${token.nodeId}-${idx}`}
-              onClick={() => canUseJuToken && onUseJuToken?.(token.nodeId, token.cardId)}
-              disabled={!canUseJuToken}
+              onClick={() => enabled && onUseJuToken?.(token.nodeId, token.cardId)}
+              disabled={!enabled}
+              title={JU_TOKEN_HINT[token.cardId] ?? ""}
               className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
-                canUseJuToken
+                enabled
                   ? "bg-yellow-700/80 hover:bg-yellow-600 text-yellow-100 border-yellow-500"
                   : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
               }`}

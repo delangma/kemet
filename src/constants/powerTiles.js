@@ -143,6 +143,11 @@ export function getTileImageUrl(id) {
   return TILE_IMAGES[id] ?? null;
 }
 
+// Jeton gris (une tuile par couleur, noms hétérogènes) — un seul par joueur
+export function isGrayTokenTile(tile) {
+  return (tile?.name ?? "").toLowerCase().startsWith("jeton gris");
+}
+
 export function getPlayerPyramidLevel(playerId, color, pyramids) {
   let max = 0;
   for (const pyr of Object.values(pyramids || {})) {

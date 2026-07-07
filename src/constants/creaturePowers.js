@@ -1,3 +1,4 @@
+
 import { RIVER_ZONES } from "./board";
 
 // Pouvoirs des créatures. Ajoutez ici au fur et à mesure.
@@ -62,9 +63,10 @@ export function getJpTokenFlags(boardPriests, zoneId, color) {
   };
 }
 
-export function getPowerTileCombatBonus(ownedTileIds, isAttacker, powerTiles) {
+export function getPowerTileCombatBonus(ownedTileIds, isAttacker, powerTiles, disabledTileIds = {}) {
   let force = 0, shields = 0, blood = 0, unblockableBlood = 0;
   for (const id of (ownedTileIds || [])) {
+    if (disabledTileIds[id]) continue; // Sceau Divin : tuile annulée
     const tile = powerTiles.find(t => t.id === id);
     if (!tile) continue;
     const bonus = POWER_TILE_COMBAT_BONUSES[tile.name];
@@ -148,15 +150,22 @@ export const CREATURE_POWERS = {
     allowsSecondCreature: true,
   },
   "Kraken": {
+    // Ne s'équipe pas sur une troupe : +1 force sur tous les territoires en
+    // contact avec la rivière (annulable par un Serpent adverse).
     reserveOnly: true,
     riverBonus: true,
   },
   "Cerbère": {
+    // Créature défensive : équipée obligatoirement à l'achat sur une troupe sans
+    // créature (n'importe quelle zone), immobile jusqu'à la nuit, bloque l'entrée
+    // ennemie, retourne à la boutique la nuit ou si la troupe disparaît.
     immovable: true,
     blockEnemyEntry: true,
     minUnitsInZone: 1,
     placeOnAnyZone: true,
+    mustEquipOnPurchase: true,
     returnToMarketOnNight: true,
+    returnToMarketWhenTroopGone: true,
   },
   "Phoenix": {
     combatForce: 1,
@@ -177,14 +186,16 @@ export const CREATURE_POWERS = {
  *   force    = bonus total de force pour ce joueur dans ce combat
  *   nullified = true si la créature de ce joueur est annulée (par un Serpent adverse)
  */
-export function getCombatCreatureBonus(playerId, enemyPlayerId, zoneId, creatureAssignments, players, powerTiles, creatureAssignments2 = {}) {
+export function getCombatCreatureBonus(playerId, enemyPlayerId, zoneId, creatureAssignments, players, powerTiles, creatureAssignments2 = {}, disabledTileIds = {}) {
   const myColor    = players?.[playerId]?.color;
   const enemyColor = players?.[enemyPlayerId]?.color;
 
-  const myTileId    = creatureAssignments?.[zoneId]?.[myColor];
-  const myTileId2   = creatureAssignments2?.[zoneId]?.[myColor];
-  const enemyTileId  = creatureAssignments?.[zoneId]?.[enemyColor];
-  const enemyTileId2 = creatureAssignments2?.[zoneId]?.[enemyColor];
+  // Sceau Divin : une tuile annulée est traitée comme absente
+  const active = id => (id && disabledTileIds[id]) ? null : id;
+  const myTileId    = active(creatureAssignments?.[zoneId]?.[myColor]);
+  const myTileId2   = active(creatureAssignments2?.[zoneId]?.[myColor]);
+  const enemyTileId  = active(creatureAssignments?.[zoneId]?.[enemyColor]);
+  const enemyTileId2 = active(creatureAssignments2?.[zoneId]?.[enemyColor]);
 
   const myCreatureName    = myTileId    ? powerTiles.find(t => t.id === myTileId)?.name    : null;
   const myCreatureName2   = myTileId2   ? powerTiles.find(t => t.id === myTileId2)?.name   : null;
@@ -204,10 +215,11 @@ export function getCombatCreatureBonus(playerId, enemyPlayerId, zoneId, creature
     allBloodNullifiedByEnemy
   );
 
-  // Kraken : +1 force si le joueur possède la tuile Kraken et combat en zone fleuve (non annulable)
-  const myOwnedTileIds = players?.[playerId]?.ownedTileIds || [];
+  // Kraken : +1 force si le joueur possède la tuile Kraken et combat en zone fleuve.
+  // Le Serpent adverse annule aussi ce bonus (comme toute créature adverse).
+  const myOwnedTileIds = (players?.[playerId]?.ownedTileIds || []).filter(id => !disabledTileIds[id]);
   const ownsKraken = myOwnedTileIds.some(id => powerTiles.find(t => t.id === id)?.name === "Kraken");
-  const krakenBonus = (ownsKraken && RIVER_ZONES.has(zoneId)) ? 1 : 0;
+  const krakenBonus = (ownsKraken && RIVER_ZONES.has(zoneId) && !nullified) ? 1 : 0;
 
   const force   = (nullified ? 0 : ((myPower?.combatForce   ?? 0) + (myPower2?.combatForce   ?? 0))) + krakenBonus;
   const shields = (nullified || shieldsNullifiedByEnemy) ? 0 : ((myPower?.combatShields ?? 0) + (myPower2?.combatShields ?? 0));
@@ -290,11 +302,23 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
   const creatureAssignments2 = gameState?.creatureAssignments2 || {};
   const boardUnits           = gameState?.boardUnits           || {};
 
-  const bonusA = getCombatCreatureBonus(attacker, defender, zoneId, creatureAssignments, players, powerTiles, creatureAssignments2);
-  const bonusD = getCombatCreatureBonus(defender, attacker, zoneId, creatureAssignments, players, powerTiles, creatureAssignments2);
+  // Sceau Divin : tuiles adverses annulées jusqu'au prochain tour
+  const disabledTileIds = gameState?.disabledTileIds || {};
+  // Jeton Combat Simple : seules les unités et les cartes combat comptent —
+  // créatures, tuiles pouvoir, cartes ID, blessure divine, bonus Ta-Seti et JP ignorés.
+  const simple = !!combat.simpleCombat;
 
-  const tilesBonusA = getPowerTileCombatBonus(players[attacker]?.ownedTileIds, true,  powerTiles);
-  const tilesBonusD = getPowerTileCombatBonus(players[defender]?.ownedTileIds, false, powerTiles);
+  const zeroCreatureBonus = {
+    force: 0, shields: 0, blood: 0, nullified: false, shieldsNullifiedByEnemy: false,
+    creatureBloodNullifiedByEnemy: false, allBloodNullifiedByEnemy: false,
+    myCreatureName: null, myCreatureName2: null, enemyCreatureName: null, krakenBonus: 0,
+  };
+  const bonusA = simple ? zeroCreatureBonus : getCombatCreatureBonus(attacker, defender, zoneId, creatureAssignments, players, powerTiles, creatureAssignments2, disabledTileIds);
+  const bonusD = simple ? zeroCreatureBonus : getCombatCreatureBonus(defender, attacker, zoneId, creatureAssignments, players, powerTiles, creatureAssignments2, disabledTileIds);
+
+  const zeroTilesBonus = { force: 0, shields: 0, blood: 0, unblockableBlood: 0 };
+  const tilesBonusA = simple ? zeroTilesBonus : getPowerTileCombatBonus(players[attacker]?.ownedTileIds, true,  powerTiles, disabledTileIds);
+  const tilesBonusD = simple ? zeroTilesBonus : getPowerTileCombatBonus(players[defender]?.ownedTileIds, false, powerTiles, disabledTileIds);
 
   const cardA = combatCards.find(c => c.id === choices?.[attacker]?.combatCard) || null;
   const cardD = combatCards.find(c => c.id === choices?.[defender]?.combatCard) || null;
@@ -312,8 +336,9 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
     return { force, blood, shields };
   }
 
-  const idA = idBonus(attacker);
-  const idD = idBonus(defender);
+  const zeroIdBonus = { force: 0, blood: 0, shields: 0 };
+  const idA = simple ? zeroIdBonus : idBonus(attacker);
+  const idD = simple ? zeroIdBonus : idBonus(defender);
 
   // Unités présentes dans la zone de combat
   const colorA = players?.[attacker]?.color;
@@ -322,23 +347,24 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
   const unitsD = boardUnits[zoneId]?.[colorD] || 0;
 
   // Blessure Divine : cartes de main défaussées après révélation → +1 force/carte
-  const blessureA = choices?.[attacker]?.blessureCards ?? 0;
-  const blessureD = choices?.[defender]?.blessureCards ?? 0;
+  const blessureA = simple ? 0 : (choices?.[attacker]?.blessureCards ?? 0);
+  const blessureD = simple ? 0 : (choices?.[defender]?.blessureCards ?? 0);
 
   // Bonus Ta-Seti (stockés dans le state joueur, consommés après combat)
-  const tasetiForceA   = players[attacker]?.tasetiForce   ?? 0;
-  const tasetiForceD   = players[defender]?.tasetiForce   ?? 0;
-  const tasetiBloodA   = players[attacker]?.tasetiBlood   ?? 0;
-  const tasetiBloodD   = players[defender]?.tasetiBlood   ?? 0;
-  const tasetiShieldsA = players[attacker]?.tasetiShields ?? 0;
-  const tasetiShieldsD = players[defender]?.tasetiShields ?? 0;
+  const tasetiForceA   = simple ? 0 : (players[attacker]?.tasetiForce   ?? 0);
+  const tasetiForceD   = simple ? 0 : (players[defender]?.tasetiForce   ?? 0);
+  const tasetiBloodA   = simple ? 0 : (players[attacker]?.tasetiBlood   ?? 0);
+  const tasetiBloodD   = simple ? 0 : (players[defender]?.tasetiBlood   ?? 0);
+  const tasetiShieldsA = simple ? 0 : (players[attacker]?.tasetiShields ?? 0);
+  const tasetiShieldsD = simple ? 0 : (players[defender]?.tasetiShields ?? 0);
 
   // Bonus jetons JP (prêtres embarqués dans la troupe)
   const boardPriests = gameState?.boardPriests || {};
-  const jpA = getJpTokenCombatBonus(boardPriests, zoneId, colorA, true);
-  const jpD = getJpTokenCombatBonus(boardPriests, zoneId, colorD, false);
-  const jpFlagsA = getJpTokenFlags(boardPriests, zoneId, colorA);
-  const jpFlagsD = getJpTokenFlags(boardPriests, zoneId, colorD);
+  const zeroJp = { force: 0, blood: 0, shields: 0 };
+  const jpA = simple ? zeroJp : getJpTokenCombatBonus(boardPriests, zoneId, colorA, true);
+  const jpD = simple ? zeroJp : getJpTokenCombatBonus(boardPriests, zoneId, colorD, false);
+  const jpFlagsA = simple ? {} : getJpTokenFlags(boardPriests, zoneId, colorA);
+  const jpFlagsD = simple ? {} : getJpTokenFlags(boardPriests, zoneId, colorD);
 
   // Force totale = unités + carte + créatures + cartes ID + tuiles permanentes + blessure divine + Ta-Seti + JP
   const forceA = unitsA + (cardA?.force ?? 0) + bonusA.force + idA.force + tilesBonusA.force + blessureA + tasetiForceA + jpA.force;
@@ -357,9 +383,9 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
   const shieldsA = bonusA.shieldsNullifiedByEnemy ? 0 : (cardA?.shields ?? 0) + bonusA.shields + idA.shields + tilesBonusA.shields + tasetiShieldsA + jpA.shields;
   const shieldsD = bonusD.shieldsNullifiedByEnemy ? 0 : (cardD?.shields ?? 0) + bonusD.shields + idD.shields + tilesBonusD.shields + tasetiShieldsD + jpD.shields;
 
-  // "Aucun Saignement" : aucune perte si le joueur QUI joue la carte gagne
-  const noBloodA = winnerId === attacker && (choices?.[attacker]?.idCards || []).some(c => c?.effect?.type === 'no_damage_if_win');
-  const noBloodD = winnerId === defender && (choices?.[defender]?.idCards || []).some(c => c?.effect?.type === 'no_damage_if_win');
+  // "Aucun Saignement" : aucune perte si le joueur QUI joue la carte gagne (ignoré en combat simple)
+  const noBloodA = !simple && winnerId === attacker && (choices?.[attacker]?.idCards || []).some(c => c?.effect?.type === 'no_damage_if_win');
+  const noBloodD = !simple && winnerId === defender && (choices?.[defender]?.idCards || []).some(c => c?.effect?.type === 'no_damage_if_win');
 
   // Sang inévitable (sang noir) : bypass boucliers et cartes "aucun saignement"
   const unblockableBloodA = tilesBonusA.unblockableBlood ?? 0;
@@ -386,5 +412,6 @@ export function getCombatResult(combat, gameState, powerTiles, combatCards = [])
     winnerBonus, loserBonus: winnerId === attacker ? bonusD : bonusA,
     colorA, colorD,
     jpFlagsA, jpFlagsD,
+    simpleCombat: simple,
   };
 }

@@ -2,7 +2,9 @@ import { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { ref, onValue } from "firebase/database";
 import { POWER_TILES } from "../../constants/powerTiles";
-import { initTileRatingsDB, setTileRating, setComboField } from "../../utils/tileRatings";
+import { initTileRatingsDB, setTileRating, setComboField, resetTileRating, resetCombo, getAllCombinations, isExcludedComboPair } from "../../utils/tileRatings";
+
+const TOTAL_COMBOS = getAllCombinations().length;
 
 const COLORS = ["Rouge", "Bleu", "Blanc", "Noir"];
 const COLOR_STYLE = {
@@ -50,6 +52,12 @@ export default function TileRatingAdmin() {
   const [selectedTile, setSelectedTile] = useState(null);
   const [filterColor, setFilterColor] = useState("all");
   const [filterLevel, setFilterLevel] = useState("all");
+  const [filterRated, setFilterRated] = useState("all");         // tuiles : all | rated | default
+  const [filterComboRated, setFilterComboRated] = useState("all"); // combos : all | rated | default
+
+  // Absence de flag : tuiles historiques toutes renseignées, combos toutes par défaut
+  const isTileRated  = stored => stored?.rated ?? true;
+  const isComboRated = combo  => combo?.rated ?? false;
 
   useEffect(() => {
     const unsub1 = onValue(ref(db, "tileRatings"), snap => {
@@ -66,26 +74,34 @@ export default function TileRatingAdmin() {
     setInitStatus(null);
     try {
       const result = await initTileRatingsDB(db);
-      setInitStatus(`✓ ${result.tilesAdded} tuiles et ${result.combosAdded} combinaisons ajoutées.`);
+      setInitStatus(`✓ ${result.tilesAdded} tuiles et ${result.combosAdded} combinaisons ajoutées, ${result.combosRemoved} combinaisons même nom supprimées.`);
     } catch (e) {
       setInitStatus(`Erreur : ${e.message}`);
     }
     setInitializing(false);
   }
 
-  // Combinaisons du tile sélectionné
+  // Combinaisons du tile sélectionné (paires impossibles exclues : même nom, deux Points Majeurs)
   const combosForSelected = selectedTile
-    ? Object.values(comboRatings).filter(c => c.id1 === selectedTile || c.id2 === selectedTile)
+    ? Object.values(comboRatings).filter(c => {
+        if (c.id1 !== selectedTile && c.id2 !== selectedTile) return false;
+        if (isExcludedComboPair(POWER_TILES.find(t => t.id === c.id1), POWER_TILES.find(t => t.id === c.id2))) return false;
+        if (filterComboRated === "rated" && !isComboRated(c)) return false;
+        if (filterComboRated === "default" && isComboRated(c)) return false;
+        return true;
+      })
     : [];
 
   const filteredTiles = POWER_TILES.filter(t => {
     if (filterColor !== "all" && t.color !== filterColor) return false;
     if (filterLevel !== "all" && t.level !== parseInt(filterLevel)) return false;
+    if (filterRated === "rated" && !isTileRated(tileRatings[t.id])) return false;
+    if (filterRated === "default" && isTileRated(tileRatings[t.id])) return false;
     return true;
   });
 
-  const totalRatedTiles = Object.values(tileRatings).filter(t => t.ratingEarly !== null && t.ratingEarly !== undefined).length;
-  const totalRatedCombos = Object.values(comboRatings).filter(c => c.rating !== null && c.rating !== undefined).length;
+  const totalRatedTiles = POWER_TILES.filter(t => isTileRated(tileRatings[t.id])).length;
+  const totalRatedCombos = Object.values(comboRatings).filter(isComboRated).length;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0806", color: "#e5d5b0", fontFamily: "sans-serif" }}>
@@ -95,7 +111,7 @@ export default function TileRatingAdmin() {
           𓂀 KEMET — Notation des tuiles
         </h1>
         <span style={{ fontSize: 12, color: "#6B4C1E" }}>
-          {totalRatedTiles}/{POWER_TILES.length} tuiles notées · {totalRatedCombos}/2926 combos notés
+          {totalRatedTiles}/{POWER_TILES.length} tuiles notées · {totalRatedCombos}/{TOTAL_COMBOS} combos notés
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           <button
@@ -113,7 +129,7 @@ export default function TileRatingAdmin() {
       <div style={{ display: "flex", borderBottom: "1px solid #3a2a0c", background: "#120d06" }}>
         {[
           { key: "tiles", label: `Tuiles (${POWER_TILES.length})` },
-          { key: "combos", label: `Combinaisons (2926)` },
+          { key: "combos", label: `Combinaisons (${TOTAL_COMBOS})` },
         ].map(t => (
           <button
             key={t.key}
@@ -151,6 +167,15 @@ export default function TileRatingAdmin() {
               <option value="all">Tous niveaux</option>
               {[1, 2, 3, 4].map(l => <option key={l} value={l}>Niveau {l}</option>)}
             </select>
+            <select
+              value={filterRated}
+              onChange={e => setFilterRated(e.target.value)}
+              style={{ padding: "5px 10px", background: "#1a1008", border: "1px solid #3a2a0c", color: "#e5d5b0", borderRadius: 4, fontSize: 13 }}
+            >
+              <option value="all">Renseignées et par défaut</option>
+              <option value="rated">Renseignées</option>
+              <option value="default">Par défaut</option>
+            </select>
           </div>
 
           {/* Grille par couleur */}
@@ -178,7 +203,18 @@ export default function TileRatingAdmin() {
                             display: "flex", flexDirection: "column", gap: 6,
                           }}
                         >
-                          <span style={{ color: cs.text, fontWeight: 600, fontSize: 13 }}>{tile.name}</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ color: cs.text, fontWeight: 600, fontSize: 13 }}>{tile.name}</span>
+                            {isTileRated(stored) && (
+                              <button
+                                onClick={() => resetTileRating(db, tile.id)}
+                                title="Remettre au paramétrage par défaut"
+                                style={{ fontSize: 10, padding: "2px 7px", borderRadius: 3, cursor: "pointer", background: "#1a1008", border: "1px solid #3a2a0c", color: "#6B4C1E" }}
+                              >
+                                ↺ Défaut
+                              </button>
+                            )}
+                          </div>
                           <div style={{ color: "#6B4C1E", fontSize: 11, marginBottom: 4 }}>
                             Niv.{tile.level} · {tile.cost}🪙 · {tile.type} · {tile.id}
                           </div>
@@ -219,6 +255,17 @@ export default function TileRatingAdmin() {
       {/* ── Tab Combinaisons ── */}
       {tab === "combos" && (
         <div style={{ padding: 24 }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+            <select
+              value={filterComboRated}
+              onChange={e => setFilterComboRated(e.target.value)}
+              style={{ padding: "5px 10px", background: "#1a1008", border: "1px solid #3a2a0c", color: "#e5d5b0", borderRadius: 4, fontSize: 13 }}
+            >
+              <option value="all">Renseignées et par défaut</option>
+              <option value="rated">Renseignées</option>
+              <option value="default">Par défaut</option>
+            </select>
+          </div>
           <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
             {/* Colonne de sélection de tuile */}
             <div style={{ width: 220, flexShrink: 0 }}>
@@ -229,9 +276,13 @@ export default function TileRatingAdmin() {
                 {POWER_TILES.map(tile => {
                   const cs = COLOR_STYLE[tile.color];
                   const isSelected = selectedTile === tile.id;
-                  const ratedCount = Object.values(comboRatings).filter(
-                    c => (c.id1 === tile.id || c.id2 === tile.id) && c.rating !== null
-                  ).length;
+                  // Combos de la tuile (paires impossibles exclues) : renseignées vs par défaut
+                  const combosOfTile = Object.values(comboRatings).filter(c => {
+                    if (c.id1 !== tile.id && c.id2 !== tile.id) return false;
+                    return !isExcludedComboPair(POWER_TILES.find(t => t.id === c.id1), POWER_TILES.find(t => t.id === c.id2));
+                  });
+                  const ratedCount = combosOfTile.filter(isComboRated).length;
+                  const defaultCount = combosOfTile.length - ratedCount;
                   return (
                     <button
                       key={tile.id}
@@ -245,9 +296,14 @@ export default function TileRatingAdmin() {
                       }}
                     >
                       <span style={{ fontWeight: isSelected ? 700 : 400 }}>{tile.name}</span>
-                      {ratedCount > 0 && (
-                        <span style={{ fontSize: 10, color: "#f59e0b" }}>{ratedCount}</span>
-                      )}
+                      <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {ratedCount > 0 && (
+                          <span style={{ fontSize: 10, color: "#f59e0b" }} title="Combos renseignées">{ratedCount}</span>
+                        )}
+                        {defaultCount > 0 && (
+                          <span style={{ fontSize: 10, color: "#6b7280" }} title="Combos par défaut">{defaultCount}</span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -333,22 +389,22 @@ export default function TileRatingAdmin() {
                                 </div>
                               </div>
                             </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                              {[
-                                { field: "ratingEarly",  label: "Début" },
-                                { field: "ratingLate",   label: "Fin" },
-                                { field: "temporality",  label: "Temporalité" },
-                                { field: "buyPriority",  label: "Priorité" },
-                              ].map(({ field, label }) => (
-                                <div key={field} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <span style={{ color: "#6B4C1E", fontSize: 10, width: 70, flexShrink: 0 }}>{label}</span>
-                                  <StarRating
-                                    value={combo[field] ?? null}
-                                    onChange={r => setComboField(db, combo.id1, combo.id2, field, r)}
-                                  />
-                                </div>
-                              ))}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ color: "#6B4C1E", fontSize: 10, width: 70, flexShrink: 0 }}>Note</span>
+                              <StarRating
+                                value={combo.rating ?? null}
+                                onChange={r => setComboField(db, combo.id1, combo.id2, "rating", r)}
+                              />
                             </div>
+                            {isComboRated(combo) && (
+                              <button
+                                onClick={() => resetCombo(db, combo.id1, combo.id2)}
+                                title="Remettre au paramétrage par défaut (et ses paires équivalentes)"
+                                style={{ alignSelf: "flex-end", fontSize: 10, padding: "2px 7px", borderRadius: 3, cursor: "pointer", background: "#1a1008", border: "1px solid #3a2a0c", color: "#6B4C1E" }}
+                              >
+                                ↺ Défaut
+                              </button>
+                            )}
                           </div>
                         );
                       });

@@ -1,9 +1,12 @@
-import { POWER_TILES, getPlayerPyramidColors, getPlayerPyramidLevel } from "../constants/powerTiles";
+import { POWER_TILES, getPlayerPyramidColors, getPlayerPyramidLevel, isGrayTokenTile } from "../constants/powerTiles";
 import { PYRAMID_SLOTS, PYRAMID_COLORS } from "../constants/pyramids";
 import { ZONE_ADJACENCY, BOARD_ZONES, TELEPORT_TARGETS } from "../constants/board";
 import { MAX_UNITS_PER_ZONE } from "../constants/game";
 import { COMBAT_CARDS } from "../constants/cards";
+import { CREATURE_POWERS } from "../constants/creaturePowers";
 import { getValidPriestDestinations } from "../constants/taSetiGraph";
+import { TASETI_E_BONUSES } from "../constants/taSetiBonuses";
+import { E_TO_TOKENS } from "../constants/taSetiPositions";
 
 const TEMPLES = ["T1", "T2", "T3", "TB"];
 
@@ -30,6 +33,14 @@ export const AI_WEIGHTS = {
   buy_noTileInColor:     25,   // aucune tuile possédée de cette couleur
   buy_fewTiles:          20,   // moins de 2 tuiles au total
   buy_richEnough:        20,   // ank >= 7
+
+  // ── Achat — notes DB (page ?ratings) ────────────────────────────────────
+  buy_dbTileScale:       25,   // par point d'écart à 3 de la note individuelle (note 5 → +50, note 1 → -50)
+  buy_dbComboScale:      20,   // par point d'écart à 3, par combo avec une tuile possédée (cumulés)
+  buy_dbComboCap:        60,   // borne du cumul des synergies possédées (±)
+  buy_dbPotentialScale:   8,   // par point >3 d'une combo avec une tuile encore achetable (synergie future)
+  buy_dbPotentialCap:    24,   // borne du bonus de synergie future
+  buy_dbPriorityFactor: 0.4,   // atténuation du potentiel si la tuile n'est pas à acheter en premier (priorityTile)
 
   // ── Recrutement ─────────────────────────────────────────────────────────
   // Une "troupe complète" = une zone avec MAX_UNITS_PER_ZONE unités de ma couleur.
@@ -114,6 +125,11 @@ export const AI_WEIGHTS = {
 
   // ── Téléportation ────────────────────────────────────────────────────────
   teleport_ankPenalty:  -10,   // pénalité par ank dépensé pour se téléporter
+
+  // ── Planification (plans multi-coups, révisés à chaque tour) ─────────────
+  plan_stepMalus:        12,   // malus par coup supplémentaire du plan (risque que la cible disparaisse)
+  plan_bias:             15,   // bonus de détermination accordé au meilleur plan multi-coups
+  plan_easyAttackRatio: 1.5,   // ratio à partir duquel une victoire est "facile" → attaque immédiate
 };
 
 // ─── Moteur de sélection pondérée ────────────────────────────────────────────
@@ -167,6 +183,85 @@ function getCreatureInZone(zoneId, color, gameState) {
     gameState?.creatureAssignments2?.[zoneId]?.[color] ||
     null
   );
+}
+
+function getCreaturePowerById(tileId) {
+  const name = tileId ? POWER_TILES.find(t => t.id === tileId)?.name : null;
+  return name ? CREATURE_POWERS[name] : null;
+}
+
+// Valeur estimée (en poids IA) d'un bonus Ta-Seti
+function tasetiBonusValue(b) {
+  switch (b?.type) {
+    case 'ank':           return (b.value ?? 1) * 8;
+    case 'vp':            return (b.value ?? 1) * 45;
+    case 'tasetiRecruit': return (b.value ?? 1) * 10;
+    case 'destroyUnit':   return 25;
+    case 'idCard':        return (b.value ?? 1) * 15;
+    case 'moveBonus':     return 8;
+    case 'combatForce':
+    case 'combatBlood':
+    case 'combatShields': return (b.value ?? 1) * 8;
+    default:              return 5;
+  }
+}
+
+// Valeur du meilleur pas de prêtre disponible : chaque action de déplacement
+// avance aussi un prêtre sur Ta-Seti, cette valeur s'ajoute donc aux candidats
+// de déplacement (bonus des nœuds E_, jetons présents, fin de piste +1 PV).
+function estimateTasetiMoveValue(gameState, aiPlayerId) {
+  const layout = gameState?.taSetiLayout;
+  if (!layout) return 0;
+  const faces = Array.isArray(layout) ? layout : Object.values(layout);
+  const raw = gameState.taSetiPriestPositions?.[aiPlayerId] || {};
+  const positions = [raw['0'] ?? '', raw['1'] ?? '', raw['2'] ?? ''];
+  let best = 0;
+  for (const pos of positions) {
+    for (const dest of getValidPriestDestinations(pos, layout)) {
+      let v = 4; // progression de base
+      const em = dest.match(/^E_(\d+)_/);
+      if (em) {
+        const fk = `${em[1]}${faces[parseInt(em[1]) - 1]}`;
+        (TASETI_E_BONUSES[fk]?.[dest] ?? []).forEach(b => { v += tasetiBonusValue(b); });
+        (E_TO_TOKENS[fk]?.[dest] ?? []).forEach(tid => {
+          const hasToken = (tid.startsWith('JI') && gameState.jiAssignment?.[tid]) ||
+                           (tid.startsWith('JU') && gameState.puAssignment?.[tid]) ||
+                           (tid.startsWith('JP') && gameState.jpAssignment?.[tid]);
+          if (hasToken) v += 12;
+        });
+      }
+      if (dest === 'E_4_2' && !gameState.taSetiE4_2DailyVp) v += 45; // fin de piste : +1 PV
+      best = Math.max(best, v);
+    }
+  }
+  return best;
+}
+
+// Ta-Seti : décide si l'IA prend les jetons d'un emplacement E_ (le prêtre
+// retourne alors en réserve) ou les laisse pour continuer à avancer.
+// Choix pondéré : valeur des jetons vs progression abandonnée (les sections
+// profondes rapprochent de la fin de piste et de son +1 PV).
+export function aiDecideTakeTokens(tokenCardIds, section) {
+  if (tokenCardIds.length === 0) return false;
+  if (tokenCardIds.includes('PU_points')) return true; // +1 PV direct : toujours pris
+  let value = 0;
+  for (const cardId of tokenCardIds) {
+    if (cardId === 'PU_ID' || cardId === 'JI_ID') value += 55; // pioche de carte ID
+    else value += 40;                                          // bonus +1 (combat, déplacement…)
+  }
+  const progressCost = 30 + (section ?? 1) * 10; // section 1 → 40 … section 4 → 70
+  return Math.random() * (value + progressCost) < value;
+}
+
+// Cerbère : cible d'équipement — une troupe faible (1-2 unités) sans créature sur
+// un temple, à sécuriser. Retourne l'id de zone ou null si aucune cible valable.
+export function aiFindCerbereTarget(aiColor, boardUnits, creatureAssignments) {
+  const targets = TEMPLES.filter(zId => {
+    const n = boardUnits?.[zId]?.[aiColor] || 0;
+    return n >= 1 && n <= 2 && !creatureAssignments?.[zId]?.[aiColor];
+  });
+  targets.sort((a, b) => (boardUnits[a]?.[aiColor] || 0) - (boardUnits[b]?.[aiColor] || 0));
+  return targets[0] ?? null;
 }
 
 function hasStrongCombatCard(playerState) {
@@ -460,21 +555,24 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     Math.max(...allPlayers.map(p => (gameState.players?.[p.id]?.vpPermanent ?? 0))) / VICTORY_VP
   ));
   const gameProgress = turnBased ?? vpBased;
-  // Scale: a rating of 3 → 0 delta (no change vs default), 5 → +50, 1 → -50
-  const DB_SCALE = 25;
 
   // ── Prière ────────────────────────────────────────────────────────────────
+  // Chaque case d'action ne s'utilise qu'une fois par jour
   if (ank < 11) {
-    let w2 = 1;
-    if (ank <= 2) w2 += AI_WEIGHTS.prayer_urgentAnk;
-    if (ank <= 5) w2 += AI_WEIGHTS.prayer_lowAnk;
-    candidates.push({ type: "prayer2", weight: w2 });
+    if (!usedActions.includes('prayer2')) {
+      let w2 = 1;
+      if (ank <= 2) w2 += AI_WEIGHTS.prayer_urgentAnk;
+      if (ank <= 5) w2 += AI_WEIGHTS.prayer_lowAnk;
+      candidates.push({ type: "prayer2", weight: w2 });
+    }
 
-    let w3 = 1;
-    if (ank >= 7) w3 += AI_WEIGHTS.prayer_highAnk_niv3;
-    if (ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank"))
-      w3 += AI_WEIGHTS.prayer_tile_niv3;
-    candidates.push({ type: "prayer3", weight: w3 });
+    if (!usedActions.includes('prayer3')) {
+      let w3 = 1;
+      if (ank >= 7) w3 += AI_WEIGHTS.prayer_highAnk_niv3;
+      if (ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank"))
+        w3 += AI_WEIGHTS.prayer_tile_niv3;
+      candidates.push({ type: "prayer3", weight: w3 });
+    }
   }
 
   // ── Attaque ───────────────────────────────────────────────────────────────
@@ -482,6 +580,8 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     const t = POWER_TILES.find(t2 => t2.id === id);
     return t?.type === 'combat' || t?.type === 'creature';
   });
+  // Victoire facile détectée → attaque immédiate, sans passer par le tirage
+  let bestEasyAttack = null;
 
   for (const fromZoneId of myZones) {
     const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
@@ -498,6 +598,8 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const isCity    = /^J\d+C\d+$/.test(adjZoneId) && !adjZoneId.startsWith(`J${joinOrder}`);
       const myCreature    = getCreatureInZone(fromZoneId, aiColor, gameState);
       const enemyCreature = getCreatureInZone(adjZoneId, enemy.color, gameState);
+      // Zone protégée par une créature bloquante (Kraken, Cerbère) → inattaquable
+      if (getCreaturePowerById(enemyCreature)?.blockEnemyEntry) continue;
       const adjToEmpty    = hasEmptyTempleAdjacent(adjZoneId, boardUnits);
 
       let weight = 1 + AI_WEIGHTS.attack_base;
@@ -516,30 +618,47 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       if (hasCombatTile)     weight += AI_WEIGHTS.attack_hasCombatTile;
 
       candidates.push({ type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight });
+
+      // Victoire facile : gros ratio sans créature adverse (ou ratio écrasant) —
+      // à jouer immédiatement plutôt que de reporter l'attaque.
+      const easyWin = (ratio >= 2 && !enemyCreature) ||
+        (ratio >= AI_WEIGHTS.plan_easyAttackRatio && (myCreature || hasCombatTile) && !enemyCreature) ||
+        ratio >= 3;
+      if (easyWin && (!bestEasyAttack || weight > bestEasyAttack.weight)) {
+        bestEasyAttack = { type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight };
+      }
     }
   }
 
   // ── Achat de tuile ────────────────────────────────────────────────────────
-  if (ank >= 5) {
-    const myColors = getPlayerPyramidColors(aiPlayerId, pyramids);
-    const hasCoutReduc = ownedTileIds.some(
-      id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1"
-    );
-    const colorToAction = { Rouge: "buy_red", Bleu: "buy_blue", Blanc: "buy_white", Noir: "buy_black" };
+  const myColors = getPlayerPyramidColors(aiPlayerId, pyramids);
+  const hasCoutReduc = ownedTileIds.some(
+    id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1"
+  );
+  const colorToAction = { Rouge: "buy_red", Bleu: "buy_blue", Blanc: "buy_white", Noir: "buy_black" };
+  const effectiveTileCost = t => Math.max(0, t.cost - (hasCoutReduc ? 1 : 0));
 
-    const buyable = POWER_TILES.filter(t => {
-      if (!availableIds.includes(t.id)) return false;
-      const ownedNames = ownedTileIds.map(id => POWER_TILES.find(x => x.id === id)?.name).filter(Boolean);
-      if (ownedNames.includes(t.name)) return false;
-      if (!myColors.includes(t.color)) return false;
-      if (usedActions.includes(colorToAction[t.color])) return false;
-      if (getPlayerPyramidLevel(aiPlayerId, t.color, pyramids) < t.level) return false;
-      if (t.secondaryColor && getPlayerPyramidLevel(aiPlayerId, t.secondaryColor, pyramids) < t.secondaryLevel) return false;
-      const cost = Math.max(0, t.cost - (hasCoutReduc ? 1 : 0));
-      return ank >= cost;
-    });
+  // Filtres d'éligibilité indépendants du niveau de pyramide et de l'ank —
+  // réutilisés par la planification (une tuile "désirée" doit rester légale).
+  function isTileEligible(t) {
+    if (!availableIds.includes(t.id)) return false;
+    const ownedNames = ownedTileIds.map(id => POWER_TILES.find(x => x.id === id)?.name).filter(Boolean);
+    if (ownedNames.includes(t.name)) return false;
+    if (!myColors.includes(t.color)) return false;
+    if (usedActions.includes(colorToAction[t.color])) return false;
+    // Cerbère : uniquement pour sécuriser une troupe faible sans créature sur un temple
+    const power = t.type === 'creature' ? CREATURE_POWERS[t.name] : null;
+    if (power?.mustEquipOnPurchase &&
+        !aiFindCerbereTarget(aiColor, boardUnits, gameState.creatureAssignments || {})) return false;
+    // Un seul "Point Majeur" (type vp) par joueur
+    if (t.type === 'vp' && ownedTileIds.some(id => POWER_TILES.find(x => x.id === id)?.type === 'vp')) return false;
+    // Un seul "Jeton gris" par joueur
+    if (isGrayTokenTile(t) && ownedTileIds.some(id => isGrayTokenTile(POWER_TILES.find(x => x.id === id)))) return false;
+    return true;
+  }
 
-    for (const tile of buyable) {
+  // Score d'une tuile (heuristiques + notes DB) — partagé entre achat immédiat et plans
+  function scoreBuyTile(tile) {
       const noTileInColor = !ownedTileIds.some(
         id => POWER_TILES.find(t2 => t2.id === id)?.color === tile.color
       );
@@ -559,7 +678,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       if (ownedTileIds.length < 2)                                        weight += AI_WEIGHTS.buy_fewTiles;
       if (ank >= 7)                                                       weight += AI_WEIGHTS.buy_richEnough;
 
-      // ── Score DB : note individuelle ─────────────────────────────────────
+      // ── Score DB : note individuelle (début/fin pondérées par la temporalité) ──
       const tileData = tileRatings[tile.id];
       if (tileData) {
         const re = tileData.ratingEarly ?? 3;
@@ -571,38 +690,55 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         const timedBase = re * (1 - gameProgress) + rl * gameProgress;
         const baseScore = neutralBase + (timedBase - neutralBase) * tempBlend;
         // delta from neutral 3 → negative penalises bad tiles, positive rewards good tiles
-        weight += (baseScore - 3) * DB_SCALE;
+        weight += (baseScore - 3) * AI_WEIGHTS.buy_dbTileScale;
       }
 
-      // ── Score DB : synergie avec les tuiles déjà possédées ───────────────
-      let totalCombo = 0;
-      let comboCount = 0;
+      // ── Score DB : synergies avec les tuiles possédées (cumulées, bornées) ──
+      // Somme des écarts à 3 : plusieurs bonnes synergies s'additionnent au lieu
+      // d'être diluées dans une moyenne ; les combos non notées (3) sont neutres.
+      let ownedComboBonus = 0;
       for (const ownedId of ownedTileIds) {
-        const comboKey = [tile.id, ownedId].sort().join('-');
-        const combo = tileCombinations[comboKey];
+        const combo = tileCombinations[[tile.id, ownedId].sort().join('-')];
         if (!combo) continue;
-        const cre = combo.ratingEarly ?? 3;
-        const crl = combo.ratingLate ?? 3;
-        const ctemp = combo.temporality ?? 3;
-        const cbp = combo.buyPriority ?? 3;
-        const cBlend = (ctemp - 1) / 4;
-        const cNeutral = (cre + crl) / 2;
-        const cTimed = cre * (1 - gameProgress) + crl * gameProgress;
-        const comboScore = cNeutral + (cTimed - cNeutral) * cBlend;
-        // buyPriority: 3 = baseline (1×), 5 = urgent (1.67×), 1 = low (0.33×)
-        totalCombo += comboScore * (cbp / 3);
-        comboCount++;
+        ownedComboBonus += ((combo.rating ?? 3) - 3) * AI_WEIGHTS.buy_dbComboScale;
       }
-      if (comboCount > 0) {
-        weight += ((totalCombo / comboCount) - 3) * DB_SCALE;
-      }
+      weight += Math.max(-AI_WEIGHTS.buy_dbComboCap, Math.min(AI_WEIGHTS.buy_dbComboCap, ownedComboBonus));
 
-      candidates.push({ type: colorToAction[tile.color] || "buy_red", tileId: tile.id, weight });
+      // ── Score DB : synergies futures (combos notées avec des tuiles encore
+      // achetables). priorityTile départage : si la combo dit d'acheter l'autre
+      // tuile en premier, le potentiel de celle-ci est atténué.
+      let potentialBonus = 0;
+      for (const otherId of availableIds) {
+        if (otherId === tile.id) continue;
+        const other = POWER_TILES.find(t => t.id === otherId);
+        if (!other || !myColors.includes(other.color)) continue;
+        const combo = tileCombinations[[tile.id, otherId].sort().join('-')];
+        if (!combo) continue;
+        const delta = (combo.rating ?? 3) - 3;
+        if (delta <= 0) continue; // seules les bonnes synergies futures comptent
+        const isPriority = (combo.priorityTile ?? 1) === (combo.id1 === tile.id ? 1 : 2);
+        potentialBonus += delta * AI_WEIGHTS.buy_dbPotentialScale * (isPriority ? 1 : AI_WEIGHTS.buy_dbPriorityFactor);
+      }
+      weight += Math.min(AI_WEIGHTS.buy_dbPotentialCap, potentialBonus);
+
+      return weight;
+  }
+
+  // Candidats d'achat immédiat (tuile payable et niveau de pyramide atteint)
+  if (ank >= 5) {
+    const buyable = POWER_TILES.filter(t => {
+      if (!isTileEligible(t)) return false;
+      if (getPlayerPyramidLevel(aiPlayerId, t.color, pyramids) < t.level) return false;
+      if (t.secondaryColor && getPlayerPyramidLevel(aiPlayerId, t.secondaryColor, pyramids) < t.secondaryLevel) return false;
+      return ank >= effectiveTileCost(t);
+    });
+    for (const tile of buyable) {
+      candidates.push({ type: colorToAction[tile.color] || "buy_red", tileId: tile.id, weight: scoreBuyTile(tile) });
     }
   }
 
   // ── Recrutement ───────────────────────────────────────────────────────────
-  if (unitsReserve > 0 && joinOrder && ank >= 1) {
+  if (unitsReserve > 0 && joinOrder && ank >= 1 && !usedActions.includes('recruit')) {
     const cityZoneIds = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`)).map(z => z.id);
     const hasSpace = cityZoneIds.some(zId => (boardUnits[zId]?.[aiColor] || 0) < MAX_UNITS_PER_ZONE);
     const completeTroops = Object.values(boardUnits).filter(z => (z?.[aiColor] || 0) >= MAX_UNITS_PER_ZONE).length;
@@ -640,6 +776,11 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   const moveEarlyPenalty = extraTokens * AI_WEIGHTS.move_earlyPenalty;
   // Sur le dernier jeton, forcer l'utilisation du déplacement manquant
   const isLastToken = tokensLeft === 1;
+  // Chaque action de déplacement avance aussi un prêtre : valeur estimée du
+  // meilleur pas Ta-Seti disponible (ank, PV, jetons…), ajoutée aux candidats.
+  const tasetiMoveValue = canAdvancePriest
+    ? Math.max(AI_WEIGHTS.move_priestAdvance / 3, estimateTasetiMoveValue(gameState, aiPlayerId))
+    : 0;
 
   for (const moveType of ['move1', 'move2']) {
     if (moveType === 'move1' && move1Used) continue;
@@ -652,7 +793,10 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     const lastTokenBonus = isLastToken ? AI_WEIGHTS.move_lastToken : 0;
 
     for (const fromZoneId of myZones) {
-      const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
+      // Créature immobile (Kraken, Cerbère) : garder le minimum d'unités requis sur place
+      const myCreaturePower = getCreaturePowerById(gameState?.creatureAssignments?.[fromZoneId]?.[aiColor]);
+      const minKeep = myCreaturePower?.immovable ? (myCreaturePower.minUnitsInZone ?? 0) : 0;
+      const myUnits = (boardUnits[fromZoneId]?.[aiColor] || 0) - minKeep;
       if (myUnits < 1) continue;
 
       const sourceIsTemple = TEMPLES.includes(fromZoneId);
@@ -676,7 +820,14 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
 
         const isTemple   = TEMPLES.includes(adjZoneId);
         const zoneEmpty  = !Object.values(adjUnits).some(n => n > 0);
-        const adjToEmpty = hasEmptyTempleAdjacent(adjZoneId, boardUnits);
+        // Bonus "tremplin vers un temple vide" : seulement si ce temple n'est pas
+        // directement atteignable dans ce déplacement — sinon autant y aller franchement.
+        const reachableSet = new Set(reachableZones);
+        const adjToEmpty = (ZONE_ADJACENCY[adjZoneId] || []).some(z =>
+          TEMPLES.includes(z) &&
+          !Object.values(boardUnits[z] || {}).some(n => n > 0) &&
+          !reachableSet.has(z)
+        );
         const newTemple  = isTemple && zoneEmpty ? 1 : 0;
         const wouldControl2 = (myTemples + newTemple) >= 2;
 
@@ -700,7 +851,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         if (!isEmptyDesert) weight += preferBothBonus + lastTokenBonus;
         if (isTemple && zoneEmpty) weight += AI_WEIGHTS.move_emptyTemple;
         if (adjToEmpty)            weight += AI_WEIGHTS.move_adjacentTemple;
-        if (canAdvancePriest)      weight += AI_WEIGHTS.move_priestAdvance;
+        weight += tasetiMoveValue;
         if (existingFriendly > 0)  weight += AI_WEIGHTS.move_reinforce;
         if (wouldControl2)         weight += AI_WEIGHTS.move_control2temples;
         if (hasAttackOpportunity)  weight += AI_WEIGHTS.move_towardAttack;
@@ -748,7 +899,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
 
           const wouldControl2 = (myTemples + 1) >= 2;
 
-          let weight = 1 + moveEarlyPenalty + preferBothBonus + lastTokenBonusTele;
+          let weight = 1 + moveEarlyPenalty + preferBothBonus + lastTokenBonusTele + tasetiMoveValue;
           weight += AI_WEIGHTS.move_emptyTemple;
           if (wouldControl2) weight += AI_WEIGHTS.move_control2temples;
           weight += effectiveTeleportCost * AI_WEIGHTS.teleport_ankPenalty;
@@ -797,10 +948,93 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     }
   }
 
+  // ── Planification multi-coups (revue à chaque tour) ──────────────────────
+  // Projette l'ank maximal du jour (prières restantes, une fois chacune) et le
+  // niveau de pyramide atteignable, puis évalue des chaînes
+  // [prières]* → [pyramide] → achat. Le meilleur plan injecte son premier pas
+  // comme candidat renforcé ; il est recalculé de zéro à chaque tour.
+  let bestPlan = null;
+  {
+    const prayerBonusCount = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
+    const hasDayAnkTile = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée");
+    const prayerGain = base => (base + prayerBonusCount) * (hasDayAnkTile ? 2 : 1);
+    const prayersAvail = []; // les plus gros gains d'abord
+    if (!usedActions.includes('prayer3')) prayersAvail.push({ type: 'prayer3', gain: prayerGain(3), label: 'prière niv.3' });
+    if (!usedActions.includes('prayer2')) prayersAvail.push({ type: 'prayer2', gain: prayerGain(2), label: 'prière niv.2' });
+
+    const triCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+
+    for (const tile of POWER_TILES) {
+      if (!isTileEligible(tile)) continue;
+      const curLvl = getPlayerPyramidLevel(aiPlayerId, tile.color, pyramids);
+      const lvlNeed = Math.max(0, tile.level - curLvl);
+      // Couleur secondaire insuffisante : double évolution, hors périmètre du plan
+      if (tile.secondaryColor && getPlayerPyramidLevel(aiPlayerId, tile.secondaryColor, pyramids) < tile.secondaryLevel) continue;
+      if (lvlNeed > 0 && pyramidAlreadyUsed) continue;
+
+      // Pyramide contrôlée de la bonne couleur à faire évoluer
+      let pyrSlotId = null;
+      if (lvlNeed > 0) {
+        const entry = Object.entries(pyramids).find(([, p]) =>
+          p.controllerId === aiPlayerId && p.color === tile.color && (p.level ?? 0) === curLvl);
+        if (!entry) continue;
+        pyrSlotId = entry[0];
+      }
+
+      const totalCost = (lvlNeed > 0 ? triCost(curLvl, tile.level) : 0) + effectiveTileCost(tile);
+
+      // Prières nécessaires pour couvrir l'ank manquant
+      const steps = [];
+      let projAnk = ank;
+      for (const pr of prayersAvail) {
+        if (projAnk >= totalCost) break;
+        steps.push(pr);
+        projAnk = Math.min(11, projAnk + pr.gain);
+      }
+      if (projAnk < totalCost) continue; // inatteignable aujourd'hui
+      if (lvlNeed > 0) steps.push({ type: 'upgradePyramid', slotId: pyrSlotId, targetLevel: tile.level, color: tile.color, label: `pyramide ${tile.color}→${tile.level}` });
+      steps.push({ type: colorToAction[tile.color] || 'buy_red', tileId: tile.id, label: `achat ${tile.name}` });
+
+      if (steps.length < 2) continue;           // achat direct : déjà couvert par les candidats immédiats
+      if (steps.length > tokensLeft) continue;  // pas assez de jetons aujourd'hui
+
+      const value = scoreBuyTile(tile);
+      const score = value - AI_WEIGHTS.plan_stepMalus * (steps.length - 1);
+      if (score <= 0) continue;
+      if (!bestPlan || score > bestPlan.score) {
+        bestPlan = { steps, score, note: `PLAN ${steps.length} coups : ${steps.map(s => s.label ?? s.type).join(' → ')}` };
+      }
+    }
+  }
+  if (bestPlan) {
+    const { label, ...firstStep } = bestPlan.steps[0];
+    candidates.push({
+      ...firstStep,
+      weight: bestPlan.score + AI_WEIGHTS.plan_bias,
+      planNote: bestPlan.note,
+    });
+  }
+
   // ── Sélection de la carte ID à jouer gratuitement avec l'action ──────────
   const idCardToPlay = selectBestDayIdCard(myState, boardUnits, aiColor);
 
-  const decision = weightedSelect(candidates) ?? { type: "endTurn" };
+  // Victoire facile : attaque immédiate, prioritaire sur tout plan
+  if (bestEasyAttack) {
+    const dec = { ...bestEasyAttack, planNote: "victoire facile → attaque immédiate" };
+    return idCardToPlay ? { ...dec, idCardToPlay } : dec;
+  }
+
+  // Sélection : déterministe quand un candidat domine nettement (protège les
+  // plans multi-coups du tirage aléatoire), sinon tirage pondéré parmi les
+  // candidats proches du meilleur (conserve de la variété, élimine le bruit).
+  const sorted = [...candidates].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+  const best = sorted[0];
+  let decision;
+  if (!best) decision = { type: "endTurn" };
+  else if (best.weight <= 0) decision = best; // rien de bon : jouer quand même le moins mauvais
+  else if (!sorted[1] || best.weight >= (sorted[1].weight ?? 0) * 1.4) decision = best;
+  else decision = weightedSelect(sorted.filter(c => (c.weight ?? 0) >= best.weight * 0.7)) ?? best;
+
   if (decision.type === "endTurn" || !idCardToPlay) return decision;
   return { ...decision, idCardToPlay };
 }

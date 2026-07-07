@@ -17,6 +17,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   const [selectedIdCards, setSelectedIdCards] = useState([]);
   const [blessureCards, setBlessureCards] = useState([]);
   const [phase, setPhase] = useState("declare");
+  const [sceauPickerToken, setSceauPickerToken] = useState(null); // jeton Sceau Divin en cours de ciblage
 
   const me = allPlayers.find(p => p.id === playerId);
   const myState = gameState?.players?.[playerId] || {};
@@ -280,6 +281,39 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     setSelectedDiscard(null);
   }
 
+  // ── Jetons JU (Ta-Seti) jouables au démarrage du combat (attaquant) ────────
+  async function playJuTokenInCombat(token, extraUpdates, logText) {
+    const hand = myState.juTokenHand || [];
+    const idx = hand.findIndex(t => t.nodeId === token.nodeId && t.cardId === token.cardId);
+    if (idx === -1) return;
+    const newHand = hand.filter((_, i) => i !== idx);
+    await update(ref(db, "/"), {
+      [`rooms/${roomCode}/gameState/players/${playerId}/juTokenHand`]: newHand.length > 0 ? newHand : null,
+      ...extraUpdates,
+    });
+    if (logText) logAction?.(playerId, logText);
+    setSceauPickerToken(null);
+  }
+
+  function handlePlayPointsToken(token) {
+    playJuTokenInCombat(token, {
+      [`rooms/${roomCode}/combat/pointsTokenPlayerId`]: playerId,
+    }, `joue le jeton Points en ${combat?.zoneId} (+1 PV si victoire avec survivants, -1 PV si défaite)`);
+  }
+
+  function handlePlaySimpleToken(token) {
+    playJuTokenInCombat(token, {
+      [`rooms/${roomCode}/combat/simpleCombat`]: true,
+    }, `joue le jeton Combat Simple en ${combat?.zoneId} : seules les unités et les cartes combat comptent`);
+  }
+
+  function handlePlaySceauToken(token, tileId, ownerPid) {
+    const tileName = POWER_TILES.find(t => t.id === tileId)?.name ?? tileId;
+    playJuTokenInCombat(token, {
+      [`rooms/${roomCode}/gameState/disabledTileIds/${tileId}`]: ownerPid,
+    }, `joue le Sceau Divin : annule "${tileName}" jusqu'au prochain tour de son propriétaire`);
+  }
+
   async function handlePlayIdCards() {
     if (!combat) return;
     const currentIdCards = combat.choices?.[playerId]?.idCards || [];
@@ -357,6 +391,12 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const winnerUnitsAfter = winnerId === combat.attacker ? finalAttackerUnits : finalDefenderUnits;
     const loserUnitsAfter  = loserId  === combat.attacker ? finalAttackerUnits : finalDefenderUnits;
 
+    // Sceau Divin : les tuiles annulées ne donnent pas leurs bonus post-combat
+    const disabledT = gameState?.disabledTileIds || {};
+    const hasActiveTile = (pid, name) => (gameState?.players?.[pid]?.ownedTileIds || []).some(
+      id => !disabledT[id] && POWER_TILES.find(t => t.id === id)?.name === name
+    );
+
     const updates = {};
 
     // Appliquer dégâts sang + lose2units dans boardUnits
@@ -424,9 +464,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     // Victoire Défensive : +1 PV si le défenseur gagne (tuile pouvoir ou jeton JP)
     if (winnerId === combat.defender) {
       const defState = gameState?.players?.[winnerId] || {};
-      const hasVictoireDefensive = (defState.ownedTileIds || []).some(
-        id => POWER_TILES.find(t => t.id === id)?.name === "Victoire Défensive"
-      ) || jpFlagsD?.defenseVictoryVp;
+      const hasVictoireDefensive = hasActiveTile(winnerId, "Victoire Défensive") || jpFlagsD?.defenseVictoryVp;
       if (hasVictoireDefensive && defenderUnitsAfter > 0) {
         const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] ?? (defState.vpPermanent ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${winnerId}/vpPermanent`] = base + 1;
@@ -435,18 +473,32 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       }
     }
 
+    // Jeton Points (Ta-Seti) : pari sur l'issue du combat
+    // +1 PV si victoire avec au moins 1 unité survivante ; 0 si victoire sans
+    // survivant ; -1 PV en cas de défaite.
+    if (combat.pointsTokenPlayerId) {
+      const pid = combat.pointsTokenPlayerId;
+      const won = winnerId === pid;
+      const myUnitsAfter = pid === combat.attacker ? attackerUnitsAfter : defenderUnitsAfter;
+      let delta = 0;
+      if (won && myUnitsAfter > 0) delta = 1;
+      else if (!won) delta = -1;
+      if (delta !== 0) {
+        const ps = gameState?.players?.[pid] || {};
+        const base = updates[`rooms/${roomCode}/gameState/players/${pid}/vpPermanent`] ?? (ps.vpPermanent ?? 0);
+        updates[`rooms/${roomCode}/gameState/players/${pid}/vpPermanent`] = Math.max(0, base + delta);
+      }
+      logAction?.(pid, `jeton Points : ${delta > 0 ? "+1 PV (victoire avec survivants)" : delta < 0 ? "-1 PV (défaite)" : "aucun PV (victoire sans survivant)"}`);
+    }
+
     function hasDayAnk(pid) {
-      return (gameState?.players?.[pid]?.ownedTileIds || []).some(
-        id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée"
-      );
+      return hasActiveTile(pid, "+1 d'Ank en journée");
     }
 
     // 4 ank en cas de victoire
     if (winnerId) {
       const ws = gameState?.players?.[winnerId] || {};
-      const has4AnkWin = (ws.ownedTileIds || []).some(
-        id => POWER_TILES.find(t => t.id === id)?.name === "4 ank en cas de victoire"
-      );
+      const has4AnkWin = hasActiveTile(winnerId, "4 ank en cas de victoire");
       if (has4AnkWin) {
         const gain = 4 + (hasDayAnk(winnerId) ? 4 : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/ank`] ?? (ws.ank ?? 7);
@@ -459,9 +511,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const defenderKills = (unitsA ?? 0) - attackerUnitsAfter;
     if (attackerKills > 0) {
       const ps = gameState?.players?.[combat.attacker] || {};
-      const hasAnkPerKill = (ps.ownedTileIds || []).some(
-        id => POWER_TILES.find(t => t.id === id)?.name === "1 Ank par unité tué"
-      );
+      const hasAnkPerKill = hasActiveTile(combat.attacker, "1 Ank par unité tué");
       if (hasAnkPerKill) {
         const gain = attackerKills + (hasDayAnk(combat.attacker) ? attackerKills : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] ?? (ps.ank ?? 0);
@@ -470,9 +520,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     }
     if (defenderKills > 0) {
       const ps = gameState?.players?.[combat.defender] || {};
-      const hasAnkPerKill = (ps.ownedTileIds || []).some(
-        id => POWER_TILES.find(t => t.id === id)?.name === "1 Ank par unité tué"
-      );
+      const hasAnkPerKill = hasActiveTile(combat.defender, "1 Ank par unité tué");
       if (hasAnkPerKill) {
         const gain = defenderKills + (hasDayAnk(combat.defender) ? defenderKills : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] ?? (ps.ank ?? 0);
@@ -485,7 +533,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     const defenderLosses = attackerKills;
     if (attackerLosses > 0) {
       const ps = gameState?.players?.[combat.attacker] || {};
-      if ((ps.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === "1 ank par unité perdu")) {
+      if (hasActiveTile(combat.attacker, "1 ank par unité perdu")) {
         const gain = attackerLosses + (hasDayAnk(combat.attacker) ? attackerLosses : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] ?? (ps.ank ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] = Math.min(11, base + gain);
@@ -493,7 +541,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     }
     if (defenderLosses > 0) {
       const ps = gameState?.players?.[combat.defender] || {};
-      if ((ps.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === "1 ank par unité perdu")) {
+      if (hasActiveTile(combat.defender, "1 ank par unité perdu")) {
         const gain = defenderLosses + (hasDayAnk(combat.defender) ? defenderLosses : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] ?? (ps.ank ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] = Math.min(11, base + gain);
@@ -837,6 +885,69 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                   </div>
                 ) : (
                   <>
+                    {/* Jetons Ta-Seti jouables au démarrage du combat (attaquant uniquement) */}
+                    {playerId === combat?.attacker && (() => {
+                      const hand = myState.juTokenHand || [];
+                      const pointsToken = !combat?.pointsTokenPlayerId ? hand.find(t => t.cardId === 'PU_points') : null;
+                      const simpleToken = !combat?.simpleCombat ? hand.find(t => t.cardId === 'PU_combat_simple') : null;
+                      const sceauToken  = hand.find(t => t.cardId === 'PU_sceau_divin');
+                      if (!pointsToken && !simpleToken && !sceauToken) return null;
+                      const defenderTiles = (gameState?.players?.[combat?.defender]?.ownedTileIds || [])
+                        .map(id => POWER_TILES.find(t => t.id === id))
+                        .filter(t => t && !(gameState?.disabledTileIds || {})[t.id]);
+                      return (
+                        <div className="bg-amber-950/40 border border-amber-800/50 rounded-lg p-3">
+                          <p className="text-amber-300 text-xs font-bold mb-2">🪬 Jetons Ta-Seti (démarrage du combat)</p>
+                          <div className="flex flex-wrap gap-2">
+                            {pointsToken && (
+                              <button
+                                onClick={() => handlePlayPointsToken(pointsToken)}
+                                title="+1 PV si victoire avec au moins 1 unité survivante · rien si victoire sans survivant · -1 PV si défaite"
+                                className="text-xs px-2.5 py-1 rounded border font-semibold bg-yellow-800/70 text-yellow-100 border-yellow-600 hover:bg-yellow-700"
+                              >
+                                🪬 Points
+                              </button>
+                            )}
+                            {simpleToken && (
+                              <button
+                                onClick={() => handlePlaySimpleToken(simpleToken)}
+                                title="Seules les unités et les cartes combat comptent dans ce combat"
+                                className="text-xs px-2.5 py-1 rounded border font-semibold bg-cyan-900/70 text-cyan-100 border-cyan-600 hover:bg-cyan-800"
+                              >
+                                🪬 Combat Simple
+                              </button>
+                            )}
+                            {sceauToken && defenderTiles.length > 0 && (
+                              <button
+                                onClick={() => setSceauPickerToken(sceauPickerToken ? null : sceauToken)}
+                                title="Annule une tuile pouvoir du défenseur jusqu'à son prochain tour"
+                                className="text-xs px-2.5 py-1 rounded border font-semibold bg-purple-900/70 text-purple-100 border-purple-600 hover:bg-purple-800"
+                              >
+                                🪬 Sceau Divin{sceauPickerToken ? " ▲" : ""}
+                              </button>
+                            )}
+                          </div>
+                          {combat?.simpleCombat && (
+                            <p className="text-cyan-300 text-[11px] mt-2">Combat simple actif : unités + cartes combat uniquement.</p>
+                          )}
+                          {sceauPickerToken && (
+                            <div className="mt-2 flex flex-col gap-1">
+                              <p className="text-purple-300 text-[11px]">Tuile du défenseur à annuler :</p>
+                              {defenderTiles.map(t => (
+                                <button
+                                  key={t.id}
+                                  onClick={() => handlePlaySceauToken(sceauPickerToken, t.id, combat.defender)}
+                                  className="text-left text-xs px-2 py-1 rounded border bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700"
+                                >
+                                  {t.name} <span className="text-gray-500">· {t.color} niv.{t.level}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     <div>
                       <p className="text-sm text-gray-400 mb-2">Choisis ta carte combat :</p>
                       <div className="flex gap-2 flex-wrap">
@@ -1188,7 +1299,6 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                           <span className="text-xs text-cyan-300">Kraken</span>
                         </div>
                       )}
-
                       {card && (
                         <div className="bg-gray-700 rounded-lg p-3 mb-2">
                           <img

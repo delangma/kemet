@@ -5,6 +5,9 @@ import { BOARD_ZONES } from "../../constants/board";
 import { CREATURE_POWERS } from "../../constants/creaturePowers";
 
 export default function CreatureEquipModal({ playerId, playerColor, joinOrder, gameState, onConfirm, onClose, anyZone = false, specificCreatureId = null }) {
+  // Équipement obligatoire (Cerbère) : la modale ne peut pas être fermée sans choisir
+  const specificName = specificCreatureId ? POWER_TILES.find(t => t.id === specificCreatureId)?.name : null;
+  const mustEquip = !!(specificName && CREATURE_POWERS[specificName]?.mustEquipOnPurchase);
   const ownedTileIds = gameState?.players?.[playerId]?.ownedTileIds || [];
   const creatureAssignments  = gameState?.creatureAssignments  || {};
   const creatureAssignments2 = gameState?.creatureAssignments2 || {};
@@ -65,7 +68,7 @@ export default function CreatureEquipModal({ playerId, playerColor, joinOrder, g
       <div className="kmt-panel w-96 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-800">
           <h2 className="kmt-title text-lg">🐉 Équiper des Créatures</h2>
-          <button onClick={onClose} className="kmt-close">✕</button>
+          {!mustEquip && <button onClick={onClose} className="kmt-close">✕</button>}
         </div>
 
         <div className="px-6 py-5 space-y-3">
@@ -78,7 +81,9 @@ export default function CreatureEquipModal({ playerId, playerColor, joinOrder, g
           ) : (
             <>
               <p className="text-gray-400 text-xs">
-                Assignez chaque créature à une troupe de votre cité. Gratuit, sans action.
+                {mustEquip
+                  ? "Cette créature doit être équipée immédiatement sur une de vos troupes sans créature (n'importe quelle zone)."
+                  : "Assignez chaque créature à une troupe de votre cité. Gratuit, sans action."}
               </p>
 
               {reserveCreatures.map(tile => {
@@ -96,7 +101,9 @@ export default function CreatureEquipModal({ playerId, playerColor, joinOrder, g
                       onChange={e => assign(tile.id, e.target.value || null)}
                       className="mt-2 w-full bg-gray-800 border border-gray-700 text-white text-xs rounded px-2 py-1.5 outline-none"
                     >
-                      <option value="">— Réserve (non équipée) —</option>
+                      {mustEquip
+                        ? <option value="" disabled>— Choisissez une troupe —</option>
+                        : <option value="">— Réserve (non équipée) —</option>}
                       {validZones.map(z => {
                         const takenByOther = Object.entries(assignments).some(
                           ([cId, zId]) => zId === z.id && cId !== tile.id

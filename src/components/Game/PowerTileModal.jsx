@@ -1,4 +1,5 @@
-import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidLevel, getTileImageUrl } from "../../constants/powerTiles";
+import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidLevel, getTileImageUrl, isGrayTokenTile } from "../../constants/powerTiles";
+import { CREATURE_POWERS } from "../../constants/creaturePowers";
 
 const COLOR_META = {
   Rouge: { emoji: "🔴", title: "Pouvoirs Rouges" },
@@ -38,11 +39,37 @@ export default function PowerTileModal({ color, gameState, session, isGoldenBuy 
     return getPlayerPyramidLevel(playerId, tile.secondaryColor, pyramids) >= tile.secondaryLevel;
   }
 
+  // Cerbère : achat impossible sans troupe sans créature (équipement obligatoire à l'achat)
+  function missingFreeTroop(tile) {
+    const power = tile.type === "creature" ? CREATURE_POWERS[tile.name] : null;
+    if (!power?.mustEquipOnPurchase) return false;
+    const playerColor = session.playerColor;
+    const ca = gameState?.creatureAssignments || {};
+    return !Object.entries(gameState?.boardUnits || {}).some(
+      ([zId, units]) => (units?.[playerColor] || 0) > 0 && !ca[zId]?.[playerColor]
+    );
+  }
+
+  // Un seul "Point Majeur" (type vp) par joueur
+  function hasOtherVpTile(tile) {
+    if (tile.type !== "vp") return false;
+    return ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.type === "vp");
+  }
+
+  // Un seul "Jeton gris" par joueur
+  function hasOtherGrayToken(tile) {
+    if (!isGrayTokenTile(tile)) return false;
+    return ownedTileIds.some(id => isGrayTokenTile(POWER_TILES.find(t => t.id === id)));
+  }
+
   function canBuy(tile) {
     if (ank < effectiveCost(tile)) return false;
     if (ownedNames.includes(tile.name)) return false;
     if (maxPyramidLevel < tile.level) return false;
     if (!secondaryOk(tile)) return false;
+    if (missingFreeTroop(tile)) return false;
+    if (hasOtherVpTile(tile)) return false;
+    if (hasOtherGrayToken(tile)) return false;
     return true;
   }
 
@@ -51,6 +78,9 @@ export default function PowerTileModal({ color, gameState, session, isGoldenBuy 
     if (maxPyramidLevel < tile.level) return `Pyramide ${color} niv.${tile.level} requise`;
     if (!secondaryOk(tile)) return `Pyramide ${tile.secondaryColor} niv.${tile.secondaryLevel} requise`;
     if (ank < effectiveCost(tile)) return `${effectiveCost(tile)} 🪙 requis`;
+    if (missingFreeTroop(tile)) return "Troupe sans créature requise";
+    if (hasOtherVpTile(tile)) return "Point Majeur déjà possédé";
+    if (hasOtherGrayToken(tile)) return "Jeton gris déjà possédé";
     return null;
   }
 
