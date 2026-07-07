@@ -3,7 +3,7 @@ import { PYRAMID_SLOTS, PYRAMID_COLORS } from "../constants/pyramids";
 import { ZONE_ADJACENCY, BOARD_ZONES, TELEPORT_TARGETS } from "../constants/board";
 import { MAX_UNITS_PER_ZONE } from "../constants/game";
 import { COMBAT_CARDS } from "../constants/cards";
-import { CREATURE_POWERS } from "../constants/creaturePowers";
+import { CREATURE_POWERS, getPowerTileCombatBonus } from "../constants/creaturePowers";
 import { getValidPriestDestinations } from "../constants/taSetiGraph";
 import { TASETI_E_BONUSES } from "../constants/taSetiBonuses";
 import { E_TO_TOKENS } from "../constants/taSetiPositions";
@@ -126,10 +126,15 @@ export const AI_WEIGHTS = {
   // ── Téléportation ────────────────────────────────────────────────────────
   teleport_ankPenalty:  -10,   // pénalité par ank dépensé pour se téléporter
 
-  // ── Planification (plans multi-coups, révisés à chaque tour) ─────────────
-  plan_stepMalus:        12,   // malus par coup supplémentaire du plan (risque que la cible disparaisse)
-  plan_bias:             15,   // bonus de détermination accordé au meilleur plan multi-coups
+  // ── Planification (plan sur 3 coups, révisé à chaque tour) ───────────────
+  plan_stepDiscount:   0.92,   // escompte par coup : privilégie la valeur immédiate à valeur égale
+  plan_lateActionMalus: 0.8,   // décote des actions de plateau (déplacement/attaque) planifiées pour plus tard
+  plan_lateBuyMalus:   0.85,   // décote des achats planifiés pour plus tard (la tuile peut être prise entre-temps)
   plan_easyAttackRatio: 1.5,   // ratio à partir duquel une victoire est "facile" → attaque immédiate
+
+  // ── Règles métier supplémentaires ────────────────────────────────────────
+  recruit_incompleteInCity: 40, // troupe incomplète dans la cité (ou Recrutement Local) → recruter au plus vite
+  buy_reinforceWhenWeak:    30, // aucune attaque favorable en vue → viser les tuiles de force/combat
 };
 
 // ─── Moteur de sélection pondérée ────────────────────────────────────────────
@@ -582,6 +587,10 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   });
   // Victoire facile détectée → attaque immédiate, sans passer par le tirage
   let bestEasyAttack = null;
+  // Au moins une attaque favorable en force de base ? (sinon → se renforcer en tuiles de force)
+  let anyFavorableAttack = false;
+  const disabledTilesAI = gameState.disabledTileIds || {};
+  const myTilesCombat = getPowerTileCombatBonus(ownedTileIds, true, POWER_TILES, disabledTilesAI);
 
   for (const fromZoneId of myZones) {
     const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
@@ -619,11 +628,26 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
 
       candidates.push({ type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight });
 
-      // Victoire facile : gros ratio sans créature adverse (ou ratio écrasant) —
-      // à jouer immédiatement plutôt que de reporter l'attaque.
-      const easyWin = (ratio >= 2 && !enemyCreature) ||
-        (ratio >= AI_WEIGHTS.plan_easyAttackRatio && (myCreature || hasCombatTile) && !enemyCreature) ||
-        ratio >= 3;
+      // Force de base : unités + tuiles pouvoir + créature (annulations Serpent comprises)
+      const enemyPid = allPlayers.find(p => p.color === enemy.color)?.id;
+      const enemyTilesCombat = getPowerTileCombatBonus(
+        gameState.players?.[enemyPid]?.ownedTileIds, false, POWER_TILES, disabledTilesAI
+      );
+      const myCreatP = getCreaturePowerById(myCreature);
+      const enemyCreatP = getCreaturePowerById(enemyCreature);
+      const myCreatForce = enemyCreatP?.nullifiesEnemy ? 0 : (myCreatP?.combatForce ?? 0);
+      const enemyCreatForce = myCreatP?.nullifiesEnemy ? 0 : (enemyCreatP?.combatForce ?? 0);
+      const myBaseForce = attackCount + myTilesCombat.force + myCreatForce;
+      const enemyBaseForce = enemy.count + enemyTilesCombat.force + enemyCreatForce;
+      // Gouttes de sang potentielles adverses (tuiles + créature + ~2 d'une carte combat)
+      const enemyBloodPotential = enemyTilesCombat.blood + (enemyCreatP?.combatBlood ?? 0) + 2;
+      const forceFavorable = myBaseForce > enemyBaseForce && attackCount > enemyBloodPotential;
+      if (forceFavorable) anyFavorableAttack = true;
+
+      // Victoire facile : force de base supérieure (sans se faire décimer par le
+      // sang) ou ratio écrasant — à jouer immédiatement, sans reporter l'attaque.
+      const easyWin = forceFavorable || ratio >= 3 ||
+        (ratio >= AI_WEIGHTS.plan_easyAttackRatio && (myCreature || hasCombatTile) && !enemyCreature);
       if (easyWin && (!bestEasyAttack || weight > bestEasyAttack.weight)) {
         bestEasyAttack = { type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight };
       }
@@ -672,6 +696,8 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       if ((tile.vpOnPurchase ?? 0) > 0)                                  weight += AI_WEIGHTS.buy_vpImmediate;
       if (tile.type === 'combat')                                         weight += AI_WEIGHTS.buy_combat;
       if (hasNoCombatTile && (tile.type === 'combat' || tile.type === 'creature')) weight += AI_WEIGHTS.buy_noCombatTile;
+      // Aucune attaque favorable en force de base → se renforcer avec des tuiles de force
+      if (!anyFavorableAttack && (tile.type === 'combat' || tile.type === 'creature')) weight += AI_WEIGHTS.buy_reinforceWhenWeak;
       if (tile.type === 'movement')                                       weight += AI_WEIGHTS.buy_movement;
       if (tile.level >= 3)                                                weight += AI_WEIGHTS.buy_level3;
       if (noTileInColor)                                                  weight += AI_WEIGHTS.buy_noTileInColor;
@@ -756,6 +782,14 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       if (completeTroops === 0) weight += AI_WEIGHTS.recruit_noCompleteTroop;
       else                      weight += AI_WEIGHTS.recruit_oneCompleteTroop;
       if (hasPartialTroop)      weight += AI_WEIGHTS.recruit_completePartial;
+      // Troupe incomplète dans la cité (ou n'importe où avec Recrutement Local) →
+      // recruter au plus vite pour la compléter
+      const hasRecrutLocal = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
+      const incompleteInCity = cityZoneIds.some(zId => {
+        const n = boardUnits[zId]?.[aiColor] || 0;
+        return n > 0 && n < MAX_UNITS_PER_ZONE;
+      });
+      if (incompleteInCity || (hasRecrutLocal && hasPartialTroop)) weight += AI_WEIGHTS.recruit_incompleteInCity;
       candidates.push({ type: "recruit", weight });
     }
   }
@@ -948,72 +982,136 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     }
   }
 
-  // ── Planification multi-coups (revue à chaque tour) ──────────────────────
-  // Projette l'ank maximal du jour (prières restantes, une fois chacune) et le
-  // niveau de pyramide atteignable, puis évalue des chaînes
-  // [prières]* → [pyramide] → achat. Le meilleur plan injecte son premier pas
-  // comme candidat renforcé ; il est recalculé de zéro à chaque tour.
-  let bestPlan = null;
-  {
-    const prayerBonusCount = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
-    const hasDayAnkTile = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée");
-    const prayerGain = base => (base + prayerBonusCount) * (hasDayAnkTile ? 2 : 1);
-    const prayersAvail = []; // les plus gros gains d'abord
-    if (!usedActions.includes('prayer3')) prayersAvail.push({ type: 'prayer3', gain: prayerGain(3), label: 'prière niv.3' });
-    if (!usedActions.includes('prayer2')) prayersAvail.push({ type: 'prayer2', gain: prayerGain(2), label: 'prière niv.2' });
+  // ── Planification générique sur 3 coups (revue à chaque tour) ────────────
+  // Simule l'état des ressources (ank, cases d'action, pyramides, boutique) et
+  // cherche la meilleure séquence de `planDepth` actions parmi TOUTES les
+  // familles : prière, pyramide, achat, recrutement, déplacement, attaque.
+  // Seul le premier pas est exécuté ; le plan est recalculé au tour suivant.
+  const planDepth = Math.max(1, Math.min(3, tokensLeft));
+  const bestOf = type => candidates.filter(c => c.type === type).sort((a, b) => b.weight - a.weight)[0] ?? null;
+  const bestMoveCand   = [bestOf('move1'), bestOf('move2')].filter(Boolean).sort((a, b) => b.weight - a.weight)[0] ?? null;
+  const bestAttackCand = bestOf('attack');
+  const recruitCand    = bestOf('recruit');
 
-    const triCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+  const prayerBonusCount = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
+  const hasDayAnkTile = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée");
+  const prayerGainOf = base => (base + prayerBonusCount) * (hasDayAnkTile ? 2 : 1);
+  const triCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
 
-    for (const tile of POWER_TILES) {
-      if (!isTileEligible(tile)) continue;
-      const curLvl = getPlayerPyramidLevel(aiPlayerId, tile.color, pyramids);
-      const lvlNeed = Math.max(0, tile.level - curLvl);
-      // Couleur secondaire insuffisante : double évolution, hors périmètre du plan
-      if (tile.secondaryColor && getPlayerPyramidLevel(aiPlayerId, tile.secondaryColor, pyramids) < tile.secondaryLevel) continue;
-      if (lvlNeed > 0 && pyramidAlreadyUsed) continue;
+  // Pyramides contrôlées améliorables + tuiles légales (pré-calculées pour la recherche)
+  const myPyrSlots = Object.entries(pyramids)
+    .filter(([, p]) => p.controllerId === aiPlayerId && (p.level ?? 0) < 4)
+    .map(([slotId, p]) => ({ slotId, color: p.color, level: p.level ?? 0 }));
+  const scoreCache = new Map();
+  const scoreTileCached = tile => {
+    if (!scoreCache.has(tile.id)) scoreCache.set(tile.id, scoreBuyTile(tile));
+    return scoreCache.get(tile.id);
+  };
+  const eligibleTiles = POWER_TILES.filter(t => {
+    if (!isTileEligible(t)) return false;
+    if (t.secondaryColor && getPlayerPyramidLevel(aiPlayerId, t.secondaryColor, pyramids) < t.secondaryLevel) return false;
+    return true;
+  });
 
-      // Pyramide contrôlée de la bonne couleur à faire évoluer
-      let pyrSlotId = null;
-      if (lvlNeed > 0) {
-        const entry = Object.entries(pyramids).find(([, p]) =>
-          p.controllerId === aiPlayerId && p.color === tile.color && (p.level ?? 0) === curLvl);
-        if (!entry) continue;
-        pyrSlotId = entry[0];
-      }
+  // Recherche en profondeur : retourne { score, steps }
+  function planSearch(state, depth) {
+    if (depth === 0) return { score: 0, steps: [] };
+    let best = { score: 0, steps: [] };
+    const options = [];
+    const lateFactor = state.isFirst ? 1 : AI_WEIGHTS.plan_lateActionMalus;
 
-      const totalCost = (lvlNeed > 0 ? triCost(curLvl, tile.level) : 0) + effectiveTileCost(tile);
+    // Prières (chaque case une fois par jour) — valeur propre faible,
+    // leur intérêt vient de ce qu'elles financent dans la suite du plan
+    for (const [type, base, label] of [['prayer2', 2, 'prière niv.2'], ['prayer3', 3, 'prière niv.3']]) {
+      if (state.used.has(type) || state.ank >= 11) continue;
+      options.push({
+        step: { type, label },
+        value: (bestOf(type)?.weight ?? 1) * 0.4,
+        apply: s => ({ ...s, ank: Math.min(11, s.ank + prayerGainOf(base)), used: new Set(s.used).add(type) }),
+      });
+    }
 
-      // Prières nécessaires pour couvrir l'ank manquant
-      const steps = [];
-      let projAnk = ank;
-      for (const pr of prayersAvail) {
-        if (projAnk >= totalCost) break;
-        steps.push(pr);
-        projAnk = Math.min(11, projAnk + pr.gain);
-      }
-      if (projAnk < totalCost) continue; // inatteignable aujourd'hui
-      if (lvlNeed > 0) steps.push({ type: 'upgradePyramid', slotId: pyrSlotId, targetLevel: tile.level, color: tile.color, label: `pyramide ${tile.color}→${tile.level}` });
-      steps.push({ type: colorToAction[tile.color] || 'buy_red', tileId: tile.id, label: `achat ${tile.name}` });
-
-      if (steps.length < 2) continue;           // achat direct : déjà couvert par les candidats immédiats
-      if (steps.length > tokensLeft) continue;  // pas assez de jetons aujourd'hui
-
-      const value = scoreBuyTile(tile);
-      const score = value - AI_WEIGHTS.plan_stepMalus * (steps.length - 1);
-      if (score <= 0) continue;
-      if (!bestPlan || score > bestPlan.score) {
-        bestPlan = { steps, score, note: `PLAN ${steps.length} coups : ${steps.map(s => s.label ?? s.type).join(' → ')}` };
+    // Pyramide (une action par jour, saut multi-niveaux possible)
+    if (!state.used.has('pyramid')) {
+      for (const pyr of myPyrSlots) {
+        const from = state.pyr[pyr.slotId] ?? pyr.level;
+        for (let to = from + 1; to <= 4; to++) {
+          const cost = triCost(from, to);
+          if (cost > state.ank) break;
+          let v = 1 + (to - from - 1) * 10;
+          if (to === 2) v += AI_WEIGHTS.pyramid_toLevel2;
+          else if (to === 3) v += AI_WEIGHTS.pyramid_toLevel3;
+          else if (to === 4) v += AI_WEIGHTS.pyramid_toLevel4;
+          options.push({
+            step: { type: 'upgradePyramid', slotId: pyr.slotId, targetLevel: to, color: pyr.color, label: `pyramide ${pyr.color}→${to}` },
+            value: v,
+            apply: s => ({ ...s, ank: s.ank - cost, used: new Set(s.used).add('pyramid'), pyr: { ...s.pyr, [pyr.slotId]: to } }),
+          });
+        }
       }
     }
+
+    // Achats (une couleur par jour ; niveau de pyramide simulé par le plan)
+    for (const tile of eligibleTiles) {
+      if (state.bought.has(tile.id)) continue;
+      const action = colorToAction[tile.color];
+      if (state.used.has(action)) continue;
+      const lvlNow = Math.max(
+        getPlayerPyramidLevel(aiPlayerId, tile.color, pyramids),
+        ...myPyrSlots.filter(p => p.color === tile.color).map(p => state.pyr[p.slotId] ?? 0)
+      );
+      if (lvlNow < tile.level) continue;
+      const cost = effectiveTileCost(tile);
+      if (cost > state.ank) continue;
+      options.push({
+        step: { type: action, tileId: tile.id, label: `achat ${tile.name}` },
+        value: scoreTileCached(tile) * (state.isFirst ? 1 : AI_WEIGHTS.plan_lateBuyMalus),
+        apply: s => ({ ...s, ank: s.ank - cost, used: new Set(s.used).add(action), bought: new Set(s.bought).add(tile.id) }),
+      });
+    }
+
+    // Recrutement (case unique)
+    if (recruitCand && !state.used.has('recruit') && state.ank >= 1) {
+      options.push({
+        step: { type: 'recruit', label: 'recrutement' },
+        value: recruitCand.weight,
+        apply: s => ({ ...s, ank: Math.max(0, s.ank - 2), used: new Set(s.used).add('recruit') }),
+      });
+    }
+
+    // Déplacement (2 cases équivalentes) — valeur du meilleur candidat actuel,
+    // décotée si planifiée pour plus tard (le plateau aura changé)
+    if (bestMoveCand) {
+      const mv = !state.used.has('move1') ? 'move1' : (!state.used.has('move2') ? 'move2' : null);
+      if (mv) {
+        options.push({
+          step: { type: mv, label: 'déplacement' },
+          value: Math.max(0, bestMoveCand.weight) * lateFactor,
+          apply: s => ({ ...s, used: new Set(s.used).add(mv) }),
+        });
+      }
+    }
+
+    // Attaque — pleine valeur au premier coup uniquement
+    if (bestAttackCand && !state.used.has('attack')) {
+      options.push({
+        step: { type: 'attack', label: 'attaque' },
+        value: Math.max(0, bestAttackCand.weight) * lateFactor,
+        apply: s => ({ ...s, used: new Set(s.used).add('attack') }),
+      });
+    }
+
+    for (const opt of options) {
+      const sub = planSearch({ ...opt.apply(state), isFirst: false }, depth - 1);
+      const total = opt.value + AI_WEIGHTS.plan_stepDiscount * sub.score;
+      if (total > best.score) best = { score: total, steps: [opt.step, ...sub.steps] };
+    }
+    return best;
   }
-  if (bestPlan) {
-    const { label, ...firstStep } = bestPlan.steps[0];
-    candidates.push({
-      ...firstStep,
-      weight: bestPlan.score + AI_WEIGHTS.plan_bias,
-      planNote: bestPlan.note,
-    });
-  }
+
+  const initialUsed = new Set(usedActions);
+  if (usedActions.includes('upgradePyramid')) initialUsed.add('pyramid');
+  const plan = planSearch({ ank, used: initialUsed, pyr: {}, bought: new Set(), isFirst: true }, planDepth);
 
   // ── Sélection de la carte ID à jouer gratuitement avec l'action ──────────
   const idCardToPlay = selectBestDayIdCard(myState, boardUnits, aiColor);
@@ -1024,16 +1122,38 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     return idCardToPlay ? { ...dec, idCardToPlay } : dec;
   }
 
-  // Sélection : déterministe quand un candidat domine nettement (protège les
-  // plans multi-coups du tirage aléatoire), sinon tirage pondéré parmi les
-  // candidats proches du meilleur (conserve de la variété, élimine le bruit).
-  const sorted = [...candidates].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
-  const best = sorted[0];
-  let decision;
-  if (!best) decision = { type: "endTurn" };
-  else if (best.weight <= 0) decision = best; // rien de bon : jouer quand même le moins mauvais
-  else if (!sorted[1] || best.weight >= (sorted[1].weight ?? 0) * 1.4) decision = best;
-  else decision = weightedSelect(sorted.filter(c => (c.weight ?? 0) >= best.weight * 0.7)) ?? best;
+  // Exécute le premier pas du meilleur plan ; les pas de plateau sont résolus
+  // avec le meilleur candidat concret du moment.
+  function stepToDecision(step) {
+    switch (step.type) {
+      case 'prayer2':
+      case 'prayer3':
+      case 'recruit':
+        return { type: step.type };
+      case 'upgradePyramid':
+        return { type: 'upgradePyramid', slotId: step.slotId, targetLevel: step.targetLevel, color: step.color };
+      case 'move1':
+      case 'move2':
+        return bestMoveCand ? { ...bestMoveCand, type: step.type } : null;
+      case 'attack':
+        return bestAttackCand;
+      default:
+        return step.tileId ? { type: step.type, tileId: step.tileId } : null;
+    }
+  }
+
+  let decision = null;
+  if (plan.steps.length > 0) {
+    const dec = stepToDecision(plan.steps[0]);
+    if (dec) {
+      decision = {
+        ...dec,
+        planNote: `PLAN ${plan.steps.length} coup${plan.steps.length > 1 ? "s" : ""} : ${plan.steps.map(s => s.label).join(' → ')}`,
+      };
+    }
+  }
+  // Filet de sécurité : aucun plan → ancien tirage pondéré
+  if (!decision) decision = weightedSelect(candidates) ?? { type: "endTurn" };
 
   if (decision.type === "endTurn" || !idCardToPlay) return decision;
   return { ...decision, idCardToPlay };

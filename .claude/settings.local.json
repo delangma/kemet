@@ -32,7 +32,8 @@
       "Bash(grep -n \"Combat_\\\\|force}\\\\${\" \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Combat\\\\CombatModal.jsx\")",
       "Bash(awk -F: '$1>=900 && $1<=1060')",
       "Bash(awk -F: '$1>=1440 && $1<=1720')",
-      "Bash(awk -F: '$1>=400 && $1<=650')"
+      "Bash(awk -F: '$1>=400 && $1<=650')",
+      "Bash(node --input-type=module -e ' *)"
     ]
   }
 }
