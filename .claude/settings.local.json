@@ -33,7 +33,11 @@
       "Bash(awk -F: '$1>=900 && $1<=1060')",
       "Bash(awk -F: '$1>=1440 && $1<=1720')",
       "Bash(awk -F: '$1>=400 && $1<=650')",
-      "Bash(node --input-type=module -e ' *)"
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(node *)",
+      "Bash(npx firebase-tools *)",
+      "Bash(grep -rn \"gameState/turn\\\\`\\\\]\\\\|turn: 0\\\\|turn:1\\\\|\\\\\"turn\\\\\"\" \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Lobby\\\\Lobby.jsx\" \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Game\\\\GameScreen.jsx\")",
+      "Bash(grep *)"
     ]
   }
 }

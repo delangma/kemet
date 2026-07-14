@@ -290,31 +290,86 @@ function computeAITeleportCost(myState) {
   return Math.max(0, (has("Réduction Téléportation") ? 1 : 2) - (has("Réduction d'ank") ? 1 : 0) - (has("Téléportation facile") ? 1 : 0));
 }
 
-// Capacité de déplacement max théorique :
-// tuiles pouvoirs + cartes ID Marche Forcée en main + jetons JP sur les prêtres
-function computeMaxMovePoints(aiPlayerId, gameState) {
+// Bonus de déplacement d'une créature équipée sur la troupe (ex: Scarabée +2,
+// Scorpion +2, Momie +1) — propre à la zone/troupe, contrairement aux autres
+// bonus (tuiles, cartes ID, jetons JP) qui s'appliquent à tout le joueur.
+function movementBonusInZone(zoneId, aiColor, gameState) {
+  const ids = [
+    gameState?.creatureAssignments?.[zoneId]?.[aiColor],
+    gameState?.creatureAssignments2?.[zoneId]?.[aiColor],
+  ];
+  return ids.reduce((sum, id) => sum + (getCreaturePowerById(id)?.movementBonus ?? 0), 0);
+}
+
+// Capacité de déplacement GARANTIE (sans carte à jouer) :
+// tuiles pouvoirs + jetons JP sur les prêtres + bonus de créature propre à la
+// troupe qui bouge (fromZoneId). "Marche Forcée" n'est PAS comptée ici : la
+// règle donne "+1 déplacement pour le déplacement en cours", donc uniquement
+// si la carte est activement jouée pour CE déplacement précis — pas un bonus
+// passif tant qu'elle reste en main.
+function computeMovePointsDetail(aiPlayerId, gameState, fromZoneId = null) {
   const myState = gameState.players?.[aiPlayerId] || {};
   const ownedTileIds = myState.ownedTileIds || [];
+  const sources = [];
+  let pts = 1;
 
-  let pts = 1 + ownedTileIds.filter(id => {
+  const tileBonusCount = ownedTileIds.filter(id => {
     const name = POWER_TILES.find(t => t.id === id)?.name;
     return name === "Déplacement" || name === "Furie Bestiale";
   }).length;
-
-  // Cartes ID Marche Forcée en main
-  pts += (myState.idCards || []).filter(c => c.id === "marche_forcee").length;
+  if (tileBonusCount > 0) {
+    pts += tileBonusCount;
+    sources.push(`tuile Déplacement/Furie Bestiale x${tileBonusCount}`);
+  }
 
   // Jetons JP capacité déplacement portés par les prêtres sur le plateau
   const aiColor = myState.color;
   const boardPriests = gameState.boardPriests || {};
+  let jpCount = 0;
   Object.values(boardPriests).forEach(zoneColors => {
     const priest = zoneColors?.[aiColor];
     if (priest?.jpTokenIds) {
-      pts += priest.jpTokenIds.filter(id => id === 'JP_capacite_deplacement').length;
+      jpCount += priest.jpTokenIds.filter(id => id === 'JP_capacite_deplacement').length;
     }
   });
+  if (jpCount > 0) {
+    pts += jpCount;
+    sources.push(`jeton JP déplacement x${jpCount}`);
+  }
 
-  return pts;
+  if (fromZoneId) {
+    const creatureBonus = movementBonusInZone(fromZoneId, aiColor, gameState);
+    if (creatureBonus > 0) {
+      pts += creatureBonus;
+      sources.push(`créature +${creatureBonus}`);
+    }
+  }
+
+  return { total: pts, sources };
+}
+
+function computeMaxMovePoints(aiPlayerId, gameState, fromZoneId = null) {
+  return computeMovePointsDetail(aiPlayerId, gameState, fromZoneId).total;
+}
+
+// Nombre de cartes "Marche Forcée" en main, jouables pour étendre la portée
+// d'UN déplacement précis (chacune consommée si utilisée).
+function getMarcheForceeAvailable(aiPlayerId, gameState) {
+  const myState = gameState.players?.[aiPlayerId] || {};
+  return (myState.idCards || []).filter(c => c.id === "marche_forcee").length;
+}
+
+// Pour les logs : détail lisible des points de déplacement réellement utilisés
+// pour un trajet donné (base + bonus garantis + Marche Forcée réellement jouée).
+export function describeMovePoints(aiPlayerId, gameState, fromZoneId = null, marcheForceeUsed = 0) {
+  const detail = computeMovePointsDetail(aiPlayerId, gameState, fromZoneId);
+  if (marcheForceeUsed > 0) {
+    return {
+      total: detail.total + marcheForceeUsed,
+      sources: [...detail.sources, `carte Marche Forcée x${marcheForceeUsed}`],
+    };
+  }
+  return detail;
 }
 
 // BFS : retourne les temples vides atteignables depuis fromZoneId en <= maxPts pas
@@ -347,6 +402,9 @@ function getReachableEmptyTemples(fromZoneId, maxPts, boardUnits, aiColor) {
 
 // BFS : retourne toutes les zones accessibles depuis fromZoneId en <= maxPts pas
 // (ne traverse pas les zones ennemies)
+// Retourne { zoneId, distance } pour chaque zone accessible — la distance sert
+// à déterminer si le trajet dépasse la capacité garantie et nécessite de jouer
+// une/des carte(s) Marche Forcée.
 function getReachableZonesForMove(fromZoneId, maxPts, boardUnits, aiColor) {
   const visited = new Set([fromZoneId]);
   let frontier = [fromZoneId];
@@ -359,7 +417,33 @@ function getReachableZonesForMove(fromZoneId, maxPts, boardUnits, aiColor) {
         visited.add(adj);
         const hasEnemy = Object.entries(boardUnits[adj] || {}).some(([c, n]) => c !== aiColor && (n || 0) > 0);
         if (hasEnemy) continue;
-        reachable.push(adj);
+        reachable.push({ zoneId: adj, distance: step });
+        next.push(adj);
+      }
+    }
+    frontier = next;
+  }
+  return reachable;
+}
+
+// BFS : retourne les zones ennemies atteignables en <= maxPts pas, avec la
+// distance parcourue. Une armée qui entre sur une case ennemie déclenche un
+// combat immédiat et s'arrête (règle 6.10) — on ne peut donc PAS traverser une
+// zone ennemie, seulement y arriver en dernière étape. Ceci permet à l'IA
+// d'attaquer une cible à plusieurs cases de distance (ex: créature +2 mvt),
+// pas seulement les voisins directs.
+function getReachableEnemyZones(fromZoneId, maxPts, boardUnits, aiColor) {
+  const visited = new Set([fromZoneId]);
+  let frontier = [fromZoneId];
+  const reachable = []; // { zoneId, distance }
+  for (let step = 1; step <= maxPts; step++) {
+    const next = [];
+    for (const zone of frontier) {
+      for (const adj of (ZONE_ADJACENCY[zone] || [])) {
+        if (visited.has(adj)) continue;
+        visited.add(adj);
+        const hasEnemy = Object.entries(boardUnits[adj] || {}).some(([c, n]) => c !== aiColor && (n || 0) > 0);
+        if (hasEnemy) { reachable.push({ zoneId: adj, distance: step }); continue; }
         next.push(adj);
       }
     }
@@ -597,10 +681,22 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     if (myUnits < 2) continue;
     const attackCount = Math.min(myUnits - 1, 5);
 
-    for (const adjZoneId of (ZONE_ADJACENCY[fromZoneId] || [])) {
+    // Une armée peut attaquer toute cible ennemie atteignable en fin de trajet
+    // (pas seulement les voisins directs) : le combat se déclenche dès l'entrée
+    // sur la case ennemie et arrête le déplacement (règle 6.10), donc une
+    // créature qui donne +mvt (Scarabée, Scorpion...) permet d'attaquer à
+    // plusieurs cases de distance, en ligne droite, tant qu'aucune autre zone
+    // ennemie n'est traversée en chemin. Marche Forcée peut aussi étendre la
+    // portée, mais seulement si elle est réellement jouée (marquée sur la décision).
+    const attackBasePts = computeMaxMovePoints(aiPlayerId, gameState) + movementBonusInZone(fromZoneId, aiColor, gameState);
+    const attackMarcheForcee = getMarcheForceeAvailable(aiPlayerId, gameState);
+    const reachableEnemyZones = getReachableEnemyZones(fromZoneId, attackBasePts + attackMarcheForcee, boardUnits, aiColor);
+
+    for (const { zoneId: adjZoneId, distance } of reachableEnemyZones) {
       const enemy = getEnemyEntry(boardUnits, adjZoneId, aiColor);
       if (!enemy) continue;
       if (attackCount < enemy.count) continue;
+      const marcheForceeNeeded = Math.max(0, distance - attackBasePts);
 
       const ratio     = attackCount / Math.max(1, enemy.count);
       const isTemple  = TEMPLES.includes(adjZoneId);
@@ -625,8 +721,12 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       if (enemyCreature)     weight += AI_WEIGHTS.attack_enemyCreature;
       if (adjToEmpty)        weight += AI_WEIGHTS.attack_adjTemple;
       if (hasCombatTile)     weight += AI_WEIGHTS.attack_hasCombatTile;
+      if (distance > 1)      weight -= (distance - 1) * 5; // légère préférence pour la cible la plus proche à mérite égal
 
-      candidates.push({ type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight });
+      candidates.push({
+        type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight,
+        ...(marcheForceeNeeded > 0 && { marcheForceeUsed: marcheForceeNeeded }),
+      });
 
       // Force de base : unités + tuiles pouvoir + créature (annulations Serpent comprises)
       const enemyPid = allPlayers.find(p => p.color === enemy.color)?.id;
@@ -649,7 +749,10 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const easyWin = forceFavorable || ratio >= 3 ||
         (ratio >= AI_WEIGHTS.plan_easyAttackRatio && (myCreature || hasCombatTile) && !enemyCreature);
       if (easyWin && (!bestEasyAttack || weight > bestEasyAttack.weight)) {
-        bestEasyAttack = { type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight };
+        bestEasyAttack = {
+          type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight,
+          ...(marcheForceeNeeded > 0 && { marcheForceeUsed: marcheForceeNeeded }),
+        };
       }
     }
   }
@@ -833,15 +936,21 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const myUnits = (boardUnits[fromZoneId]?.[aiColor] || 0) - minKeep;
       if (myUnits < 1) continue;
 
+      // Points de déplacement propres à cette troupe (bonus de créature inclus, ex: Scarabée +2)
+      const movePtsHere = maxMovePts + movementBonusInZone(fromZoneId, aiColor, gameState);
+      // Marche Forcée en main : portée potentielle si la carte est jouée (voir plus bas)
+      const marcheForceeHere = getMarcheForceeAvailable(aiPlayerId, gameState);
+
       const sourceIsTemple = TEMPLES.includes(fromZoneId);
       const reachableEmptyTemples = (sourceIsTemple && isLastToPlay && hasOnlyOneGroup)
-        ? getReachableEmptyTemples(fromZoneId, maxMovePts, boardUnits, aiColor)
+        ? getReachableEmptyTemples(fromZoneId, movePtsHere, boardUnits, aiColor)
         : [];
       const canSplitForTemple = reachableEmptyTemples.length > 0;
 
-      const reachableZones = getReachableZonesForMove(fromZoneId, maxMovePts, boardUnits, aiColor);
+      const reachableZones = getReachableZonesForMove(fromZoneId, movePtsHere + marcheForceeHere, boardUnits, aiColor);
 
-      for (const adjZoneId of reachableZones) {
+      for (const { zoneId: adjZoneId, distance } of reachableZones) {
+        const marcheForceeNeededMove = Math.max(0, distance - movePtsHere);
         const adjUnits = boardUnits[adjZoneId] || {};
         const existingFriendly = adjUnits[aiColor] || 0;
 
@@ -856,7 +965,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         const zoneEmpty  = !Object.values(adjUnits).some(n => n > 0);
         // Bonus "tremplin vers un temple vide" : seulement si ce temple n'est pas
         // directement atteignable dans ce déplacement — sinon autant y aller franchement.
-        const reachableSet = new Set(reachableZones);
+        const reachableSet = new Set(reachableZones.map(z => z.zoneId));
         const adjToEmpty = (ZONE_ADJACENCY[adjZoneId] || []).some(z =>
           TEMPLES.includes(z) &&
           !Object.values(boardUnits[z] || {}).some(n => n > 0) &&
@@ -873,9 +982,13 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         });
 
         // Une cible n'a de valeur stratégique que si elle rapproche d'un temple,
-        // permet de renforcer/attaquer, ou fait avancer un prêtre. Un désert vide
+        // permet de renforcer/attaquer, ou de contrôler 2 temples. Un désert vide
         // sans aucun de ces atouts est une mauvaise destination (cf. règles IA).
-        const hasStrategicValue = (isTemple && zoneEmpty) || adjToEmpty || canAdvancePriest
+        // NB: canAdvancePriest est volontairement exclu — c'est un bonus global
+        // (vrai dès qu'un prêtre a un coup jouable, peu importe la destination),
+        // déjà crédité séparément via tasetiMoveValue ; l'inclure ici neutralisait
+        // la pénalité désert sur quasi tous les tours.
+        const hasStrategicValue = (isTemple && zoneEmpty) || adjToEmpty
           || existingFriendly > 0 || wouldControl2 || hasAttackOpportunity;
         const isEmptyDesert = zoneEmpty && !isTemple && !hasStrategicValue;
 
@@ -892,13 +1005,21 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         if (isEmptyDesert)         weight += AI_WEIGHTS.move_emptyDesert;
 
         if (weight > 0) {
-          candidates.push({ type: moveType, sourceZoneId: fromZoneId, targetZoneId: adjZoneId, count: canAdd, weight });
+          candidates.push({
+            type: moveType, sourceZoneId: fromZoneId, targetZoneId: adjZoneId, count: canAdd, weight,
+            ...(marcheForceeNeededMove > 0 && { marcheForceeUsed: marcheForceeNeededMove }),
+          });
         }
       }
     }
   }
 
-  // ── Téléportation vers temple vide inaccessible normalement ──────────────
+  // ── Téléportation vers un temple inaccessible normalement (vide OU ennemi) ──
+  // La téléportation suit les mêmes règles qu'un déplacement normal : si la
+  // cible est occupée par un adversaire, elle déclenche un combat. Un temple
+  // ennemi faiblement défendu et hors de portée normale est souvent une
+  // meilleure cible qu'un temple vide (gain de combat + retrait d'un temple
+  // adverse + prise de contrôle), donc les deux cas doivent être évalués.
   const hasFreeAnyTeleport = myState.pendingFreeAnyTeleport ?? false;
   const rawTeleportCost = computeAITeleportCost(myState);
   const effectiveTeleportCost = hasFreeAnyTeleport ? 0 : rawTeleportCost;
@@ -916,16 +1037,61 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
         if (myUnits < 1) continue;
 
-        const reachableNormal = new Set(getReachableZonesForMove(fromZoneId, maxMovePts, boardUnits, aiColor));
+        const movePtsHereTele = maxMovePts + movementBonusInZone(fromZoneId, aiColor, gameState);
+        // Inclut Marche Forcée dans la portée "gratuite" : si une carte (coût 0)
+        // suffit à atteindre la cible, pas besoin de payer une téléportation (Ank).
+        const reachableNormal = new Set(
+          getReachableZonesForMove(fromZoneId, movePtsHereTele + getMarcheForceeAvailable(aiPlayerId, gameState), boardUnits, aiColor)
+            .map(z => z.zoneId)
+        );
 
         for (const teleTarget of TELEPORT_TARGETS) {
           if (reachableNormal.has(teleTarget)) continue; // déjà accessible sans payer
           if (!TEMPLES.includes(teleTarget)) continue;   // uniquement les temples
 
+          const enemyTele = getEnemyEntry(boardUnits, teleTarget, aiColor);
+
+          if (enemyTele) {
+            // Téléportation offensive : attaquer un temple ennemi hors de portée normale
+            if (myUnits < 2) continue;
+            const enemyCreatureTele = getCreatureInZone(teleTarget, enemyTele.color, gameState);
+            if (getCreaturePowerById(enemyCreatureTele)?.blockEnemyEntry) continue;
+            const attackCount = Math.min(myUnits - 1, 5);
+            if (attackCount < enemyTele.count) continue;
+
+            const ratio = attackCount / Math.max(1, enemyTele.count);
+            const myCreatureTele = getCreatureInZone(fromZoneId, aiColor, gameState);
+
+            let weight = 1 + AI_WEIGHTS.attack_base;
+            if (ratio >= 2)       weight += AI_WEIGHTS.attack_ratio2to1;
+            else if (ratio >= 1.5) weight += AI_WEIGHTS.attack_ratio1_5to1;
+            else                   weight += AI_WEIGHTS.attack_ratio1to1;
+            weight += AI_WEIGHTS.attack_temple; // TELEPORT_TARGETS ne contient que des temples
+            if (enemyTele.count === 1) weight += AI_WEIGHTS.attack_enemyAlone;
+            if (attackCount >= 4)  weight += AI_WEIGHTS.attack_myUnits4plus;
+            if (leaderColor && enemyTele.color === leaderColor) weight += AI_WEIGHTS.attack_leaderEnemy;
+            if (myCreatureTele)    weight += AI_WEIGHTS.attack_myCreature;
+            if (hasStrongCombatCard(myState)) weight += AI_WEIGHTS.attack_myStrongCard;
+            if (enemyCreatureTele) weight += AI_WEIGHTS.attack_enemyCreature;
+            if (hasCombatTile)     weight += AI_WEIGHTS.attack_hasCombatTile;
+            weight += effectiveTeleportCost * AI_WEIGHTS.teleport_ankPenalty;
+
+            if (weight > 0) {
+              candidates.push({
+                type: "attack",
+                fromZoneId,
+                toZoneId: teleTarget,
+                count: attackCount,
+                weight,
+                isTeleport: true,
+                teleportCost: effectiveTeleportCost,
+              });
+            }
+            continue;
+          }
+
           const adjUnits = boardUnits[teleTarget] || {};
-          const hasEnemy = Object.entries(adjUnits).some(([c, n]) => c !== aiColor && (n || 0) > 0);
-          if (hasEnemy) continue;
-          if (Object.values(adjUnits).some(n => n > 0)) continue; // temple non vide
+          if (Object.values(adjUnits).some(n => n > 0)) continue; // temple non vide (allié déjà dessus)
 
           const existingFriendly = adjUnits[aiColor] || 0;
           const canAdd = Math.min(myUnits, MAX_UNITS_PER_ZONE - existingFriendly);

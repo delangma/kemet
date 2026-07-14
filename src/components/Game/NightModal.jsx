@@ -70,6 +70,10 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
   const tbUnits = tbController ? (boardUnits["TB"]?.[tbController.color] || 0) : 0;
   const canT3Sacrifice = t3Units >= 1;
   const canTbSacrifice = tbUnits >= 2;
+  // L'IA sacrifie systématiquement (le gain en Ank/PV vaut toujours plus qu'une
+  // unité) — le choix par case à cocher ne s'applique qu'aux joueurs humains.
+  const t3Effective = canT3Sacrifice && (t3Controller?.isAI || t3Sacrifice);
+  const tbEffective = canTbSacrifice && (tbController?.isAI || tbSacrifice);
 
   function get2TempleWinners(t3Sacrificed) {
     const t3After = (t3Sacrificed && t3Units <= 1) ? null : t3Controller;
@@ -82,7 +86,7 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       .filter(Boolean);
   }
 
-  const twoTempleWinners = get2TempleWinners(t3Sacrifice && canT3Sacrifice);
+  const twoTempleWinners = get2TempleWinners(t3Effective);
 
   async function handleNightPhase() {
     setLoading(true);
@@ -96,7 +100,6 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
 
     const updates = {};
     const deck = [...(state.idDeck || [])];
-    const sortedPlayers = [...allPlayers].sort((a, b) => a.order - b.order);
     const ankBonus = {};
     const vpBonus = {};
     allPlayers.forEach(p => { ankBonus[p.id] = 0; vpBonus[p.id] = 0; });
@@ -155,7 +158,7 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
     if (t2Controller) ankBonus[t2Controller.id] += 3;
 
     let t3CtrlAfter = t3Controller;
-    if (t3Controller && t3Sacrifice && canT3Sacrifice) {
+    if (t3Controller && t3Effective) {
       ankBonus[t3Controller.id] += 5;
       const newT3 = t3Units - 1;
       updates[`rooms/${roomCode}/gameState/boardUnits/T3/${t3Controller.color}`] = newT3;
@@ -164,7 +167,7 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       updates[`rooms/${roomCode}/gameState/players/${t3Controller.id}/unitsReserve`] = (ps.unitsReserve ?? 2) + 1;
     }
 
-    if (tbController && tbSacrifice && canTbSacrifice) {
+    if (tbController && tbEffective) {
       vpBonus[tbController.id] += 1;
       updates[`rooms/${roomCode}/gameState/boardUnits/TB/${tbController.color}`] = tbUnits - 2;
       const ps = state.players?.[tbController.id] || {};
@@ -298,7 +301,11 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       updates[`rooms/${roomCode}/gameState/jpAssignment`] = jpAssignment;
     }
 
-    updates[`rooms/${roomCode}/gameState/currentTurnPlayerId`] = sortedPlayers[0].id;
+    // currentTurnPlayerId n'est PAS fixé ici : l'Aube va déterminer l'ordre de jeu
+    // du nouveau jour, et c'est elle qui doit désigner le premier joueur une fois
+    // résolue (sinon un joueur IA se met à jouer son tour immédiatement, en
+    // parallèle de l'Aube, avant même qu'elle ait déterminé le bon ordre).
+    updates[`rooms/${roomCode}/gameState/currentTurnPlayerId`] = null;
     updates[`rooms/${roomCode}/gameState/idDeck`] = deck;
     updates[`rooms/${roomCode}/gameState/turn`] = (state.turn ?? 0) + 1;
 
@@ -323,6 +330,22 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
     }
 
     await update(ref(db, "/"), updates);
+
+    // Message de fin de journée — séparateur visible dans les logs.
+    // `gameState.turn` compte le nombre de journées déjà écoulées (0 avant la
+    // 1ère nuit) : la journée qui se termine porte donc ce numéro une fois
+    // incrémenté, et la nouvelle journée qui commence porte le numéro suivant.
+    const completedDay = (state.turn ?? 0) + 1;
+    const upcomingDay = completedDay + 1;
+    await update(ref(db, `rooms/${roomCode}/actionLog`), {
+      [Date.now()]: {
+        playerName: "Nuit",
+        color: null,
+        text: `Fin de journée ${completedDay} — la journée ${upcomingDay} commence`,
+        time: Date.now(),
+        meta: { type: "dayEnd" },
+      },
+    });
 
     // Log résumé de nuit par joueur
     if (logAction) {
@@ -387,16 +410,17 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
                     <p className="text-sm text-gray-300 mb-3">
                       <PlayerName player={t3Controller} /> contrôle T3 ({t3Units} unité{t3Units > 1 ? "s" : ""})
                     </p>
-                    <label className={`flex items-center gap-3 cursor-pointer select-none ${!canT3Sacrifice ? "opacity-40" : ""}`}>
+                    <label className={`flex items-center gap-3 select-none ${!canT3Sacrifice ? "opacity-40" : t3Controller.isAI ? "cursor-default" : "cursor-pointer"}`}>
                       <input
-                        type="checkbox" checked={t3Sacrifice}
-                        onChange={e => canT3Sacrifice && setT3Sacrifice(e.target.checked)}
-                        disabled={!canT3Sacrifice}
+                        type="checkbox" checked={t3Effective}
+                        onChange={e => canT3Sacrifice && !t3Controller.isAI && setT3Sacrifice(e.target.checked)}
+                        disabled={!canT3Sacrifice || t3Controller.isAI}
                         className="w-4 h-4 accent-amber-500 rounded"
                       />
                       <span className="text-sm text-amber-300">
                         Sacrifier 1 unité → <strong>+5 Ank</strong>
-                        {t3Units === 1 && t3Sacrifice && <span className="text-red-400 text-xs ml-2">(perd le contrôle)</span>}
+                        {t3Controller.isAI && <span className="text-amber-500/70 text-xs ml-2">(automatique — IA)</span>}
+                        {t3Units === 1 && t3Effective && <span className="text-red-400 text-xs ml-2">(perd le contrôle)</span>}
                       </span>
                     </label>
                   </>
@@ -413,15 +437,16 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
                     <p className="text-sm text-gray-300 mb-3">
                       <PlayerName player={tbController} /> contrôle TB ({tbUnits} unité{tbUnits > 1 ? "s" : ""})
                     </p>
-                    <label className={`flex items-center gap-3 cursor-pointer select-none ${!canTbSacrifice ? "opacity-40" : ""}`}>
+                    <label className={`flex items-center gap-3 select-none ${!canTbSacrifice ? "opacity-40" : tbController.isAI ? "cursor-default" : "cursor-pointer"}`}>
                       <input
-                        type="checkbox" checked={tbSacrifice}
-                        onChange={e => canTbSacrifice && setTbSacrifice(e.target.checked)}
-                        disabled={!canTbSacrifice}
+                        type="checkbox" checked={tbEffective}
+                        onChange={e => canTbSacrifice && !tbController.isAI && setTbSacrifice(e.target.checked)}
+                        disabled={!canTbSacrifice || tbController.isAI}
                         className="w-4 h-4 accent-blue-500 rounded"
                       />
                       <span className="text-sm text-blue-300">
                         Sacrifier 2 unités → <strong>+1 PV permanent</strong>
+                        {tbController.isAI && <span className="text-blue-400/70 text-xs ml-2">(automatique — IA)</span>}
                       </span>
                     </label>
                     {!canTbSacrifice && (
@@ -462,10 +487,10 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
                 <p className="text-green-400 font-bold text-lg">✅ Nuit résolue</p>
                 <p className="text-gray-400 text-sm">Chaque joueur a reçu +2 Ank et +1 carte ID.</p>
                 {(t1Controller || t2Controller) && <p className="text-amber-300 text-sm">Bonus temples T1/T2 distribués.</p>}
-                {t3Sacrifice && canT3Sacrifice && t3Controller && (
+                {t3Effective && t3Controller && (
                   <p className="text-amber-300 text-sm">{t3Controller.name} a sacrifié sur T3 → +5 Ank.</p>
                 )}
-                {tbSacrifice && canTbSacrifice && tbController && (
+                {tbEffective && tbController && (
                   <p className="text-blue-300 text-sm">{tbController.name} a sacrifié sur TB → +1 PV.</p>
                 )}
                 {twoTempleWinners.length > 0 && (

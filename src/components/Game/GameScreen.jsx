@@ -38,7 +38,7 @@ import { useCoinSound } from "../../hooks/useCoinSound";
 import { useDrawCardSound } from "../../hooks/useDrawCardSound";
 import { useSwordSound } from "../../hooks/useSwordSound";
 import VolumeControl from "../ui/VolumeControl";
-import { aiChooseSetup, aiChooseDraftTile, aiChoosePlacement, aiDecideAction, aiFindCerbereTarget, aiDecideTakeTokens } from "../../ai/aiPlayer";
+import { aiChooseSetup, aiChooseDraftTile, aiChoosePlacement, aiDecideAction, aiFindCerbereTarget, aiDecideTakeTokens, describeMovePoints } from "../../ai/aiPlayer";
 import { computeTempVP } from "../../utils/vp";
 import VictoryScreen from "./VictoryScreen";
 
@@ -65,6 +65,7 @@ const ACTION_TOAST_STYLE = {
   move:    { borderColor: "rgba(37,99,235,0.7)",  glow: "rgba(37,99,235,0.18)",  icon: "→",  label: "Déplacement" },
   recruit: { borderColor: "rgba(22,163,74,0.7)",  glow: "rgba(22,163,74,0.18)",  icon: "⬆",  label: "Recrutement" },
   prayer:  { borderColor: "rgba(202,138,4,0.7)",  glow: "rgba(202,138,4,0.18)",  icon: "☀",  label: "Prière"    },
+  dayEnd:  { borderColor: "rgba(217,119,6,0.7)",  glow: "rgba(217,119,6,0.25)",  icon: "🌙",  label: null        },
   default: { borderColor: "rgba(100,100,100,0.5)", glow: "transparent",           icon: "⚡", label: null        },
 };
 const PLAYER_DOT_CSS = {
@@ -207,6 +208,9 @@ export default function GameScreen({ session }) {
   const [pendingCerbereId, setPendingCerbereId] = useState(null); // placement immédiat après achat
   const [sceauDivinPicker, setSceauDivinPicker] = useState(null); // choix de la tuile adverse à annuler
   const [testViewPlayerId, setTestViewPlayerId] = useState(playerId);
+  // Mode test 3 IA : par défaut l'IA ne termine pas son tour automatiquement
+  // (on peut le faire soi-même) — ce bouton permet de réactiver l'automatisme.
+  const [aiAutoEndTurn, setAiAutoEndTurn] = useState(false);
   const [pendingMoveAction, setPendingMoveAction] = useState(null);
   const [selectedPriestIndex, setSelectedPriestIndex] = useState(null);
   const [fleeOffer, setFleeOffer] = useState(null);
@@ -2533,12 +2537,48 @@ export default function GameScreen({ session }) {
           const prevAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
           baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = prevAnk - decision.teleportCost;
         }
+        // Marche Forcée jouée pour ce déplacement précis : cartes consommées et défaussées
+        // (cf. règle "+1 déplacement pour le déplacement en cours" — pas un bonus passif).
+        const marcheForceeUsedMove = decision.marcheForceeUsed ?? 0;
+        if (marcheForceeUsedMove > 0) {
+          const handBeforeMF = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] ?? (myState.idCards || []);
+          const toDiscardMF = handBeforeMF.filter(c => c.id === "marche_forcee").slice(0, marcheForceeUsedMove);
+          const discardIdsMF = new Set(toDiscardMF.map(c => c.instanceId));
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] = handBeforeMF.filter(c => !discardIdsMF.has(c.instanceId));
+          const currentDiscardMF = baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] ?? (gameState.idDiscard || []);
+          baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] = [...currentDiscardMF, ...toDiscardMF];
+        }
         const sourceName = BOARD_ZONES.find(z => z.id === sourceZoneId)?.label || sourceZoneId;
         const targetName = BOARD_ZONES.find(z => z.id === targetZoneId)?.label || targetZoneId;
         const moveCreature = creatureMoved ? ` [+créature]` : "";
-        logText = decision.isTeleport
-          ? `TÉLÉPORT ${sourceName} → ${targetName} [${count} u.${moveCreature}, coût:${decision.teleportCost ?? 0} Ank]`
-          : `DÉPLACEMENT ${sourceName} → ${targetName} [${count} u.${moveCreature}]`;
+        if (decision.isTeleport) {
+          logText = `TÉLÉPORT ${sourceName} → ${targetName} [${count} u.${moveCreature}, coût:${decision.teleportCost ?? 0} Ank]`;
+        } else {
+          // Nombre de cases traversées (BFS topologique, sans tenir compte de l'occupation)
+          let hops = null;
+          {
+            const visited = new Set([sourceZoneId]);
+            let frontier = [sourceZoneId];
+            let dist = 0;
+            while (frontier.length > 0 && hops === null) {
+              dist += 1;
+              const next = [];
+              for (const z of frontier) {
+                for (const adj of (ZONE_ADJACENCY[z] || [])) {
+                  if (visited.has(adj)) continue;
+                  if (adj === targetZoneId) { hops = dist; break; }
+                  visited.add(adj);
+                  next.push(adj);
+                }
+                if (hops !== null) break;
+              }
+              frontier = next;
+            }
+          }
+          const { total: movePts, sources: movePtsSources } = describeMovePoints(aiId, gameState, sourceZoneId, marcheForceeUsedMove);
+          const ptsDetail = movePtsSources.length > 0 ? `${movePts}=1+${movePtsSources.join("+")}` : `${movePts}`;
+          logText = `DÉPLACEMENT ${sourceName} → ${targetName} [${count} u.${moveCreature}, ${hops ?? "?"} case${hops === 1 ? "" : "s"}, pts dépl.:${ptsDetail}]`;
+        }
         logMeta = { type: "move" };
         break;
       }
@@ -2557,6 +2597,23 @@ export default function GameScreen({ session }) {
         // Déplacer les unités
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${fromZoneId}/${aiColor}`] = sourceUnits - attackCount;
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${toZoneId}/${aiColor}`] = (toZoneUnits[aiColor] || 0) + attackCount;
+
+        // Attaque via téléportation : paiement du coût en Ank
+        if (decision.isTeleport && (decision.teleportCost ?? 0) > 0) {
+          const prevAnkTele = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = prevAnkTele - decision.teleportCost;
+        }
+
+        // Marche Forcée jouée pour atteindre une cible hors de portée normale
+        const marcheForceeUsedAtk = decision.marcheForceeUsed ?? 0;
+        if (marcheForceeUsedAtk > 0) {
+          const handBeforeMFAtk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] ?? (myState.idCards || []);
+          const toDiscardMFAtk = handBeforeMFAtk.filter(c => c.id === "marche_forcee").slice(0, marcheForceeUsedAtk);
+          const discardIdsMFAtk = new Set(toDiscardMFAtk.map(c => c.instanceId));
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] = handBeforeMFAtk.filter(c => !discardIdsMFAtk.has(c.instanceId));
+          const currentDiscardMFAtk = baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] ?? (gameState.idDiscard || []);
+          baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] = [...currentDiscardMFAtk, ...toDiscardMFAtk];
+        }
 
         // La créature accompagne l'attaque (son bonus de combat est déjà compté dans la décision)
         const atkCreatId = gameState?.creatureAssignments?.[fromZoneId]?.[aiColor];
@@ -2604,7 +2661,31 @@ export default function GameScreen({ session }) {
         const enemyCreatureId = gameState?.creatureAssignments?.[toZoneId]?.[enemyColor] || gameState?.creatureAssignments2?.[toZoneId]?.[enemyColor];
         const enemyCreatureName = enemyCreatureId ? POWER_TILES.find(t => t.id === enemyCreatureId)?.name : null;
         const ratioStr = enemyCount > 0 ? `ratio ${(attackCount / enemyCount).toFixed(1)}:1` : "seul";
-        logText = `ATTAQUE ${sourceLabel} → ${targetLabel} [${attackCount} vs ${enemyCount} (${ratioStr}), vs ${enemyName}${myCreatureName ? ` + ${myCreatureName}` : ""}${enemyCreatureName ? ` vs créature ${enemyCreatureName}` : ""}]`;
+        const teleLabel = decision.isTeleport ? ` [TÉLÉPORT, coût:${decision.teleportCost ?? 0} Ank]` : "";
+        // Nombre de cases parcourues jusqu'à la cible (BFS topologique, hors téléportation)
+        let atkHops = null;
+        if (!decision.isTeleport) {
+          const visited = new Set([fromZoneId]);
+          let frontier = [fromZoneId];
+          let dist = 0;
+          while (frontier.length > 0 && atkHops === null) {
+            dist += 1;
+            const next = [];
+            for (const z of frontier) {
+              for (const adj of (ZONE_ADJACENCY[z] || [])) {
+                if (visited.has(adj)) continue;
+                if (adj === toZoneId) { atkHops = dist; break; }
+                visited.add(adj);
+                next.push(adj);
+              }
+              if (atkHops !== null) break;
+            }
+            frontier = next;
+          }
+        }
+        const hopsLabel = atkHops && atkHops > 1 ? `, ${atkHops} cases` : "";
+        const mfLabel = marcheForceeUsedAtk > 0 ? `, Marche Forcée x${marcheForceeUsedAtk}` : "";
+        logText = `ATTAQUE${decision.isTeleport ? " (téléport)" : ""} ${sourceLabel} → ${targetLabel} [${attackCount} vs ${enemyCount} (${ratioStr}), vs ${enemyName}${myCreatureName ? ` + ${myCreatureName}` : ""}${enemyCreatureName ? ` vs créature ${enemyCreatureName}` : ""}${hopsLabel}${mfLabel}]${teleLabel}`;
         logMeta = { type: "attack" };
         break;
       }
@@ -2673,7 +2754,7 @@ export default function GameScreen({ session }) {
 
     await update(ref(db, "/"), baseUpdates);
     if (logText) await logAction(aiId, logText, logMeta);
-    if (isTestMode) return;
+    if (isTestMode && !aiAutoEndTurn) return;
     await new Promise(res => setTimeout(res, 1500));
     await aiEndTurn(aiId);
   }
@@ -2745,12 +2826,17 @@ export default function GameScreen({ session }) {
     if (!gameState || gameState.phase !== "playing") return;
     if (gameState.gameOver) return;
     if (combatData) return;
+    // L'Aube doit déterminer/valider le premier joueur du jour avant que
+    // quiconque ne commence à jouer — sans cette garde, une IA pouvait
+    // démarrer son tour en parallèle de la résolution de l'Aube.
+    if (showDawn) return;
+    if (!gameState.currentTurnPlayerId) return;
     const currentTurnPlayer = currentPlayers.find(p => p.id === gameState.currentTurnPlayerId);
     if (!currentTurnPlayer?.isAI) return;
     const t = setTimeout(() => executeAITurn(currentTurnPlayer.id), simModeRef.current ? 400 : 3000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.currentTurnPlayerId, gameState?.phase, combatData]);
+  }, [gameState?.currentTurnPlayerId, gameState?.phase, combatData, showDawn]);
 
   async function handleActionToggle(pid, actionId) {
     // Conservé pour PlayerSummary (lecture seule côté adversaires)
@@ -3539,6 +3625,21 @@ export default function GameScreen({ session }) {
 
       {/* Volume + Radio — desktop uniquement */}
       <div className="hidden md:flex items-center gap-3 px-3 h-full shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
+        {isTestMode && (
+          <button
+            onClick={() => setAiAutoEndTurn(v => !v)}
+            title="Fin de tour automatique de l'IA (mode test)"
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+              background: aiAutoEndTurn ? 'rgba(34,197,94,0.15)' : 'rgba(107,76,30,0.15)',
+              border: `1px solid ${aiAutoEndTurn ? '#22c55e' : '#3a2a0c'}`,
+              color: aiAutoEndTurn ? '#4ade80' : '#6B4C1E',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🔁 Fin auto IA : {aiAutoEndTurn ? "ON" : "OFF"}
+          </button>
+        )}
         <VolumeControl volume={volume} onChange={setVolume} />
         <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
           <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
@@ -3547,7 +3648,20 @@ export default function GameScreen({ session }) {
 
       {/* Icônes droite groupées — mobile */}
       <div className="flex md:hidden items-center shrink-0" style={{ borderLeft: '1px solid #3a2a0c' }}>
-        <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: '0 8px', cursor: 'pointer', fontSize: 16, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center' }}>
+        {isTestMode && (
+          <button
+            onClick={() => setAiAutoEndTurn(v => !v)}
+            title="Fin de tour automatique de l'IA (mode test)"
+            style={{
+              background: 'none', border: 'none', padding: '0 6px', cursor: 'pointer',
+              fontSize: 14, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center',
+              color: aiAutoEndTurn ? '#4ade80' : '#6B4C1E',
+            }}
+          >
+            🔁
+          </button>
+        )}
+        <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: '0 8px', cursor: 'pointer', fontSize: 16, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center', borderLeft: isTestMode ? '1px solid #3a2a0c' : 'none' }}>
           {volume === 0 ? '🔇' : '🔊'}
         </button>
         <button onClick={() => setShowBoutique(true)} title="Voir toutes les tuiles disponibles" style={{ background: 'none', border: 'none', borderLeft: '1px solid #3a2a0c', padding: '0 6px', cursor: 'pointer', height: '100%', display: 'flex', alignItems: 'center' }}>

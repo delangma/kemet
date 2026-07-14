@@ -100,6 +100,17 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
     }
   }, [dawn]);
 
+  // Révélation → passage automatique au choix des positions après un court
+  // délai (le bouton "Choisir les positions" reste utilisable pour continuer
+  // plus vite). Sans cet auto-avance, une partie 100% IA restait bloquée sur
+  // cet écran puisque personne ne cliquait jamais le bouton.
+  useEffect(() => {
+    if (!dawn || dawn.status !== "revealed") return;
+    const t = setTimeout(() => { handleStartChoosing(); }, 2500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dawn?.status]);
+
   // ── IA : sélection de cartes en phase "selecting" ──────────────────────────
   useEffect(() => {
     if (!dawn || dawn.status !== "selecting") return;
@@ -164,6 +175,10 @@ export default function DawnModal({ onClose, session, gameState, isTestMode, tes
           if (newAvail.length < 2) newAvail = getPlayerCombatDeck(playerState);
           updates[`rooms/${roomCode}/gameState/players/${p.id}/availableCombatCards`] = newAvail;
         });
+        // L'Aube désigne le premier joueur du nouveau jour — c'est seulement
+        // maintenant que la journée peut réellement commencer.
+        const firstPid = Object.entries(newChosenPositions).find(([, pos]) => pos === 1)?.[0];
+        if (firstPid) updates[`rooms/${roomCode}/gameState/currentTurnPlayerId`] = firstPid;
         await update(ref(db, "/"), updates);
         await remove(ref(db, `rooms/${roomCode}/dawn`));
       }
@@ -289,6 +304,10 @@ async function handleChoosePosition(position) {
       });
 
       finalUpdates[`rooms/${roomCode}/dawn/chosenPositions/${playerId}`] = position;
+      // L'Aube désigne le premier joueur du nouveau jour — c'est seulement
+      // maintenant que la journée peut réellement commencer.
+      const firstPid = Object.entries(newChosenPositions).find(([, pos]) => pos === 1)?.[0];
+      if (firstPid) finalUpdates[`rooms/${roomCode}/gameState/currentTurnPlayerId`] = firstPid;
       await update(ref(db, "/"), finalUpdates);
       await remove(ref(db, `rooms/${roomCode}/dawn`));
       setSelectedCombat(null);

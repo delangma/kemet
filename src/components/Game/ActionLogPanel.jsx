@@ -40,13 +40,23 @@ export default function ActionLogPanel({ roomCode }) {
           <p className="text-gray-600 text-xs italic">Aucune action pour l'instant.</p>
         )}
         {entries.map((entry, i) => (
-          <div key={i} className="text-xs leading-snug">
-            <span className="text-gray-600 mr-1">{formatTime(entry.time)}</span>
-            <span className={`font-bold ${COLOR_TEXT[entry.color] || "text-gray-300"}`}>
-              {entry.playerName}
-            </span>
-            <span className="text-gray-300"> {entry.text}</span>
-          </div>
+          entry.meta?.type === "dayEnd" ? (
+            <div key={i} className="flex items-center gap-2 my-1">
+              <div className="flex-1 h-px bg-amber-800/40" />
+              <span className="text-amber-400 text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
+                🌙 {entry.text}
+              </span>
+              <div className="flex-1 h-px bg-amber-800/40" />
+            </div>
+          ) : (
+            <div key={i} className="text-xs leading-snug">
+              <span className="text-gray-600 mr-1">{formatTime(entry.time)}</span>
+              <span className={`font-bold ${COLOR_TEXT[entry.color] || "text-gray-300"}`}>
+                {entry.playerName}
+              </span>
+              <span className="text-gray-300"> {entry.text}</span>
+            </div>
+          )
         ))}
         <div ref={bottomRef} />
       </div>

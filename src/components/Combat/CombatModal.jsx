@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { db } from "../../firebase";
 import { ref, onValue, update, remove, set } from "firebase/database";
 import { COMBAT_CARDS, getPlayerCombatDeck } from "../../constants/cards";
-import { POWER_TILES } from "../../constants/powerTiles";
-import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags } from "../../constants/creaturePowers";
+import { POWER_TILES, getPlayerPyramidLevel } from "../../constants/powerTiles";
+import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags, getPowerTileCombatBonus } from "../../constants/creaturePowers";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { ZONE_ADJACENCY } from "../../constants/board";
 import { aiChooseCombatCards, aiSelectCombatIdCard } from "../../ai/aiPlayer";
@@ -218,7 +218,49 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combat?.status, combat?.postCombat?.retreatZoneId]);
 
-  // ── IA : décisions post-combat (vainqueur) ─────────────────────────────────
+  // ── IA : décision de rapatriement (vainqueur) ──────────────────────────────
+  // Par défaut, l'IA rapatrie sa troupe (+1 Ank/unité, plus aucune vulnérabilité).
+  // Elle ne reste sur place que si :
+  // - la troupe est déjà forte (> 4 unités) ;
+  // - le sang (tuiles + créature) dissuade une attaque adverse (> 2 gouttes) ;
+  // - elle est sur un temple ET peut acheter Cerbère à sa prochaine action pour
+  //   verrouiller la troupe dessus (sinon le temple seul ne suffit pas).
+  const TEMPLES = ["T1", "T2", "T3", "TB"];
+  function aiShouldStayAfterWin(pc, combatZoneId) {
+    if (pc.winnerUnitsAfter > 4) return true;
+
+    const winnerState = gameState?.players?.[pc.winnerId] || {};
+    const disabledTileIds = gameState?.disabledTileIds || {};
+    const creatureId = gameState?.creatureAssignments?.[combatZoneId]?.[pc.winnerColor]
+      || gameState?.creatureAssignments2?.[combatZoneId]?.[pc.winnerColor];
+    const creatureName = creatureId ? POWER_TILES.find(t => t.id === creatureId)?.name : null;
+    const creaturePower = creatureName ? CREATURE_POWERS[creatureName] : null;
+
+    const bloodBonus = getPowerTileCombatBonus(winnerState.ownedTileIds, false, POWER_TILES, disabledTileIds).blood;
+    if (bloodBonus + (creaturePower?.combatBlood ?? 0) > 2) return true;
+
+    if (TEMPLES.includes(combatZoneId) && !creatureId) {
+      // Peut acheter Cerbère à la prochaine action : dispo en boutique, pyramide
+      // Rouge niv.2 atteinte, pas déjà possédé, ank suffisant après ce combat.
+      const cerbereTile = POWER_TILES.find(t => t.name === "Cerbère");
+      const availableTileIds = gameState?.availableTileIds || [];
+      const ownedTileIds = winnerState.ownedTileIds || [];
+      const alreadyOwned = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Cerbère");
+      const hasCoutReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1");
+      const hasAnkReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
+      const effectiveCost = Math.max(0, (cerbereTile?.cost ?? 2) - (hasCoutReduc ? 1 : 0) - (hasAnkReduc ? 1 : 0));
+      const ankAfterCombat = winnerState.ank ?? 7; // récompenses post-combat déjà appliquées à ce stade
+      const canBuyCerbere = cerbereTile
+        && availableTileIds.includes(cerbereTile.id)
+        && !alreadyOwned
+        && getPlayerPyramidLevel(pc.winnerId, cerbereTile.color, gameState?.pyramids || {}) >= cerbereTile.level
+        && ankAfterCombat >= effectiveCost;
+      if (canBuyCerbere) return true;
+    }
+
+    return false;
+  }
+
   useEffect(() => {
     if (!combat || combat.status !== "post_combat") return;
     const pc = combat.postCombat;
@@ -227,8 +269,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     if (!winnerPlayer?.isAI) return;
     if (pc.winnerUnitsAfter === 0 || pc.winnerRecall != null) return;
     const t = setTimeout(() => {
-      // L'IA gagne → reste sur la zone pour contrôler le territoire
-      update(ref(db, `rooms/${roomCode}/combat/postCombat`), { winnerRecall: false });
+      const stay = aiShouldStayAfterWin(pc, combat.zoneId);
+      update(ref(db, `rooms/${roomCode}/combat/postCombat`), { winnerRecall: !stay });
     }, 600);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
