@@ -1249,7 +1249,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
 
     // Prières (chaque case une fois par jour) — valeur propre faible,
     // leur intérêt vient de ce qu'elles financent dans la suite du plan
-    for (const [type, base, label] of [['prayer2', 2, 'prière niv.2'], ['prayer3', 3, 'prière niv.3']]) {
+    for (const [type, base, label] of [['prayer2', 2, 'prière niv.2'], ['prayer3', 2, 'prière niv.3']]) {
       if (state.used.has(type) || state.ank >= 11) continue;
       options.push({
         step: { type, label },

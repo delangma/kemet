@@ -974,7 +974,7 @@ export default function GameScreen({ session }) {
       const gain = 2 + prayerBonus;
       updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, (myState.ank ?? 7) + gain + (hasDayAnk ? 1 : 0));
     } else if (actionId === "prayer3") {
-      const gain = 3 + prayerBonus;
+      const gain = 2 + prayerBonus;
       updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, (myState.ank ?? 7) + gain + (hasDayAnk ? 1 : 0));
     } else if (actionId === "pyramid") {
       const { slotId, color: newColor } = params;
@@ -2462,7 +2462,7 @@ export default function GameScreen({ session }) {
       case "prayer3": {
         const prayerBonus3 = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
         const hasDayAnkAI3 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 1 : 0;
-        const gain3 = 3 + prayerBonus3 + hasDayAnkAI3;
+        const gain3 = 2 + prayerBonus3 + hasDayAnkAI3;
         const ankAfter3 = Math.min(11, ank + gain3);
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ankAfter3;
         logText = `PRIÈRE niv.3 : +${gain3} Ank (${ank}→${ankAfter3})${prayerBonus3 ? ` [bonus tuile x${prayerBonus3}]` : ""}`;
