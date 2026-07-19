@@ -832,11 +832,11 @@ export default function GameScreen({ session }) {
     if (mode === "recruit") {
       const myState = gameState?.players?.[effectivePlayerId] || {};
       const hasRecruitBonus = (myState.ownedTileIds || []).some(
-        id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2"
+        id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 3"
       );
       if (hasRecruitBonus) {
         await update(ref(db, `rooms/${roomCode}/gameState/players/${effectivePlayerId}`), {
-          recruitFreeRemaining: 2,
+          recruitFreeRemaining: 3,
         });
       }
     }
@@ -1487,8 +1487,8 @@ export default function GameScreen({ session }) {
     if (myState.goldenTokenUsed || myState.goldenBuyBlockedThisTurn) return;
     if (actionMode) return;
     const fbUpdates = { [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`]: true };
-    if ((myState.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2")) {
-      fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/recruitFreeRemaining`] = 2;
+    if ((myState.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 3")) {
+      fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/recruitFreeRemaining`] = 3;
     }
     await update(ref(db, "/"), fbUpdates);
     setActionMode("recruit_golden");
@@ -2145,13 +2145,13 @@ export default function GameScreen({ session }) {
       }
     } else if (ga.type === "golden_recruit") {
       const hasRecrutLocalG = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
-      const hasFree2G = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2");
+      const hasFree2G = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 3");
       const cityZonesG = BOARD_ZONES.filter(z =>
         z.id.startsWith(`J${aiPlayer.joinOrder}C`) || (hasRecrutLocalG && (boardUnits[z.id]?.[aiColor] || 0) > 0)
       ).map(z => z.id).sort((a, b) => (boardUnits[b]?.[aiColor] || 0) - (boardUnits[a]?.[aiColor] || 0));
       let reserveG = reserve ?? 0;
       let ankLeftG = ank;
-      let freeLeftG = hasFree2G ? 2 : 0;
+      let freeLeftG = hasFree2G ? 3 : 0;
       let totalPlacedG = 0;
       const zoneDetailsG = [];
       for (const zId of cityZonesG) {
@@ -2475,6 +2475,9 @@ export default function GameScreen({ session }) {
         // Recrutement Local : autorise le recrutement dans n'importe quelle zone où
         // l'IA a déjà des unités, pas seulement sa cité (même règle que board.jsx).
         const hasRecrutLocalAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
+        // Recrutement + 3 : les 3 premières unités recrutées sont gratuites (sans coût
+        // d'Ank), même règle que le joueur humain (handleSetActionMode).
+        let freeLeftAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 3") ? 3 : 0;
         // Compléter en priorité la troupe la plus avancée avant d'en entamer une autre,
         // plutôt que d'éparpiller les unités recrutées sur plusieurs zones.
         const cityZones = BOARD_ZONES.filter(z =>
@@ -2484,21 +2487,25 @@ export default function GameScreen({ session }) {
         let reserve = myState.unitsReserve ?? 0;
         let ankLeft = ank;
         let totalPlaced = 0;
+        let freeUsed = 0;
         const zoneDetails = [];
         for (const zId of cityZones) {
           const current = boardUnits[zId]?.[aiColor] || 0;
           // Plafond de zone : Légion (+2 partout), Bouliste (7 fixe), JP_legion (+2 localisé)
           const zoneMaxRecruit = getZoneMaxUnits(zId, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
           const space = zoneMaxRecruit - current;
-          const toPlace = Math.min(reserve, space, Math.floor(ankLeft));
+          const toPlace = Math.min(reserve, space, freeLeftAI + Math.floor(ankLeft));
           if (toPlace <= 0) continue;
+          const freeHere = Math.min(toPlace, freeLeftAI);
           baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${zId}/${aiColor}`] = current + toPlace;
           zoneDetails.push(`${zId}:+${toPlace}`);
           reserve -= toPlace;
-          ankLeft -= toPlace;
+          ankLeft -= (toPlace - freeHere);
+          freeLeftAI -= freeHere;
+          freeUsed += freeHere;
           totalPlaced += toPlace;
         }
-        const ankSpent = (myState.unitsReserve ?? 0) - reserve;
+        const ankSpent = totalPlaced - freeUsed;
         if (ankSpent > 0) baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.max(0, ank - ankSpent);
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] = reserve;
         logText = `RECRUTEMENT : +${totalPlaced} unité${totalPlaced > 1 ? "s" : ""} (${zoneDetails.join(", ")}) [ank:${ank}→${Math.max(0, ank - ankSpent)}, réserve:${myState.unitsReserve ?? 0}→${reserve}]`;

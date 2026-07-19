@@ -1408,12 +1408,12 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     if (hasGoldenRecruit && unitsReserve > 0 && joinOrder) {
       const hasRecrutLocalG = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
       const cityZoneIdsG = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`) || (hasRecrutLocalG && (boardUnits[z.id]?.[aiColor] || 0) > 0)).map(z => z.id);
-      const hasFree2 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2");
+      const hasFree2 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 3");
       const hasSpaceG = cityZoneIdsG.some(zId => {
         const max = getZoneMaxUnits(zId, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
         return (boardUnits[zId]?.[aiColor] || 0) < max;
       });
-      // Gratuit si "Recrutement + 2" (2 premières unités), sinon coûte 1 ank/unité comme un recrutement normal.
+      // Gratuit si "Recrutement + 3" (3 premières unités), sinon coûte 1 ank/unité comme un recrutement normal.
       if (hasSpaceG && (hasFree2 || ank >= 1)) {
         goldenOptions.push({ type: "golden_recruit", weight: (recruitCand?.weight ?? 1) * 0.8 });
       }

@@ -28,8 +28,8 @@ export const POWER_TILES = [
   { id: "B_1_1", name: "Force en défense",          color: "Bleu", level: 1, cost: 1, type: "permanent" },
   { id: "B_1_2", name: "Force en défense",           color: "Bleu", level: 1, cost: 1, type: "permanent" },
   { id: "B_1_3", name: "Protection pluie de feu",   color: "Bleu", level: 1, cost: 1, type: "permanent" },
-  { id: "B_1_4", name: "Recrutement + 2",            color: "Bleu", level: 1, cost: 1, type: "permanent", unitsOnPurchase: 2 },
-  { id: "B_1_5", name: "Recrutement + 2",            color: "Bleu", level: 1, cost: 1, type: "permanent", unitsOnPurchase: 2 },
+  { id: "B_1_4", name: "Recrutement + 3",            color: "Bleu", level: 1, cost: 1, type: "permanent", unitsOnPurchase: 3 },
+  { id: "B_1_5", name: "Recrutement + 3",            color: "Bleu", level: 1, cost: 1, type: "permanent", unitsOnPurchase: 3 },
   // Bleu Niveau 2
   { id: "B_2_1", name: "Éléphant",                  color: "Bleu", level: 2, cost: 2, type: "creature" },
   { id: "B_2_2", name: "Kraken",                    color: "Bleu", level: 2, cost: 2, type: "creature" },
