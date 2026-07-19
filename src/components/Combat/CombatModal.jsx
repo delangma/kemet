@@ -901,7 +901,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   const hasPrescienceId = combat?.prescienceId === playerId;
 
   return (
-    <div className="overflow-y-auto p-4 flex flex-col gap-3 border-b border-red-900/40 max-h-[60vh] shrink-0">
+    <div className="p-4 md:p-6 flex flex-col gap-3 w-full h-full">
 
         {/* Header */}
         <div className="flex items-center">
@@ -989,7 +989,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                           src={`/Combat_${oppCard.force}${oppCard.blood}${oppCard.shields}.png`}
                           alt={`Force ${oppCard.force}`}
                           draggable={false}
-                          style={{ width: 96, borderRadius: 8, display: 'block', margin: '0 auto' }}
+                          style={{ width: 'clamp(90px, 11vw, 180px)', borderRadius: 8, display: 'block', margin: '0 auto' }}
                         />
                       )}
                     </div>
@@ -1084,8 +1084,9 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                               key={id}
                               onClick={() => setSelectedCombat(isSelected ? null : id)}
                               disabled={isDiscarded}
+                              className="w-[calc(25%-0.375rem)] max-w-[160px] md:w-[calc(12.5%-0.4375rem)] md:max-w-[260px]"
                               style={{
-                                width: 96, padding: 0, borderRadius: 8, overflow: 'hidden',
+                                padding: 0, borderRadius: 8, overflow: 'hidden',
                                 cursor: isDiscarded ? 'not-allowed' : 'pointer',
                                 border: `2px solid ${isSelected ? '#facc15' : isDiscarded ? '#374151' : '#4b5563'}`,
                                 opacity: isDiscarded ? 0.3 : 1,
@@ -1119,8 +1120,9 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                               key={id}
                               onClick={() => setSelectedDiscard(isSelected ? null : id)}
                               disabled={isCombat}
+                              className="w-[calc(25%-0.375rem)] max-w-[160px] md:w-[calc(12.5%-0.4375rem)] md:max-w-[260px]"
                               style={{
-                                width: 96, padding: 0, borderRadius: 8, overflow: 'hidden',
+                                padding: 0, borderRadius: 8, overflow: 'hidden',
                                 cursor: isCombat ? 'not-allowed' : 'pointer',
                                 border: `2px solid ${isSelected ? '#f87171' : isCombat ? '#374151' : '#4b5563'}`,
                                 opacity: isCombat ? 0.3 : 1,
@@ -1298,7 +1300,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                         <img
                           src={`/Combat_${myCombatCard.force}${myCombatCard.blood}${myCombatCard.shields}.png`}
                           alt="" draggable={false}
-                          style={{ width: 112, height: 'auto', borderRadius: 8, border: '2px solid #b45309', display: 'block' }}
+                          style={{ width: 'clamp(100px, 14vw, 220px)', height: 'auto', borderRadius: 8, border: '2px solid #b45309', display: 'block' }}
                         />
                       )}
                     </div>
@@ -1309,7 +1311,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                         <img
                           src={`/Combat_${myDiscardCard.force}${myDiscardCard.blood}${myDiscardCard.shields}.png`}
                           alt="" draggable={false}
-                          style={{ width: 112, height: 'auto', borderRadius: 8, border: '2px solid #b91c1c', display: 'block' }}
+                          style={{ width: 'clamp(100px, 14vw, 220px)', height: 'auto', borderRadius: 8, border: '2px solid #b91c1c', display: 'block' }}
                         />
                       )}
                     </div>
@@ -1404,7 +1406,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                   const totalBlood   = (card?.blood ?? 0) + (bonus?.blood ?? 0) + tasetiBloodPid;
 
                   return (
-                    <div key={pid} className={`bg-gray-800 border rounded-xl p-4 text-center w-48 ${pid === winnerId ? "border-green-500" : "border-gray-600"}`}>
+                    <div key={pid} className={`bg-gray-800 border rounded-xl p-4 text-center w-[clamp(220px,24vw,400px)] ${pid === winnerId ? "border-green-500" : "border-gray-600"}`}>
                       <p className="font-bold text-white mb-1">{getPlayerName(pid)}</p>
                       <p className="text-gray-400 text-xs mb-3">{pid === attacker ? "Attaquant" : "Defenseur"}</p>
 
@@ -1430,7 +1432,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                             style={{ width: '100%', borderRadius: 6, marginBottom: 8, display: 'block' }}
                           />
                           {/* Force = unités + carte + créature */}
-                          <p className="text-yellow-400 font-bold text-3xl">{force}</p>
+                          <p className="text-yellow-400 font-bold text-3xl md:text-5xl">{force}</p>
                           <p className="text-gray-400 text-xs">
                             {units} unites + {card.force} carte
                             {(bonus?.force ?? 0) > 0 && !bonus?.nullified && ` + ${bonus.force} crea`}

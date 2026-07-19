@@ -5,8 +5,12 @@ import { buildIdDeck, dealCards } from "../../utils/deck";
 import { INITIAL_PLAYER_STATE } from "../../constants/game";
 import { POWER_TILES } from "../../constants/powerTiles";
 import { useSyncedMusic } from "../../hooks/useSyncedMusic";
+import { ROOT_TRACKS } from "virtual:radios";
 
-const LOBBY_MUSIC = ["/MP3/Ancient Egyptian Music – Thoth.mp3"];
+// Musique de la page d'accueil : les mp3 posés directement à la racine de
+// public/MP3 (ex: "Ancient Egyptian Music – Thoth.mp3"), générés automatiquement
+// depuis le dossier (voir vite.config.js).
+const LOBBY_MUSIC = { "Accueil": ROOT_TRACKS };
 
 const COLORS = ["Rouge", "Bleu", "Vert", "Blanc", "Noir"];
 const AI_NAMES = ["Anubis", "Râ", "Osiris", "Seth"];

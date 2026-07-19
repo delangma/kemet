@@ -40,18 +40,7 @@ import VolumeControl from "../ui/VolumeControl";
 import { aiChooseSetup, aiChooseDraftTile, aiChoosePlacement, aiDecideAction, aiFindCerbereTarget, aiDecideTakeTokens, describeMovePoints } from "../../ai/aiPlayer";
 import { computeTempVP } from "../../utils/vp";
 import VictoryScreen from "./VictoryScreen";
-
-const RADIOS = {
-  "Radio Chacal": [
-    "/MP3/Radio Chacal/Ancient Egyptian Music - Valley of the Kings.mp3",
-    "/MP3/Radio Chacal/Ancient Egyptian Music – Horus.mp3",
-    "/MP3/Radio Chacal/Ancient Egyptian Music – Ra.mp3",
-    "/MP3/Radio Chacal/Ancient Egyptian Music – Thoth.mp3",
-  ],
-  "Retro New Wave": [
-    "/MP3/Retro New Wave/New Order - Blue Monday.mp3",
-  ],
-};
+import { RADIOS } from "virtual:radios";
 
 const PLAYER_COLOR_BG = {
   Rouge: "bg-red-600", Bleu: "bg-blue-600", Vert: "bg-emerald-600",
@@ -198,6 +187,9 @@ export default function GameScreen({ session }) {
   const [showSoundModal, setShowSoundModal] = useState(false);
   const [showCombat, setShowCombat] = useState(false);
   const [combatData, setCombatData] = useState(null);
+  // Réduction volontaire de la modale combat plein écran (voir plateau/Ta-Seti/tuiles) —
+  // remise à false à chaque nouveau combat pour rester "obligatoire" par défaut.
+  const [combatMinimized, setCombatMinimized] = useState(false);
   const [showDawn, setShowDawn] = useState(false);
   const [currentPlayers, setCurrentPlayers] = useState(allPlayers);
   const [showNight, setShowNight] = useState(false);
@@ -578,6 +570,9 @@ export default function GameScreen({ session }) {
 	  const unsubscribe = onValue(ref(db, `rooms/${roomCode}/combat`), snapshot => {
 		if (snapshot.exists()) {
 		  const data = snapshot.val();
+		  // Nouveau combat (il n'y en avait pas avant) : la modale plein écran
+		  // redevient prioritaire même si un combat précédent avait été réduit.
+		  if (prevCombatRef.current === null) setCombatMinimized(false);
 		  prevCombatRef.current = data;
 		  setCombatData(data);
 		  setShowCombat(true);
@@ -586,6 +581,7 @@ export default function GameScreen({ session }) {
 		  prevCombatRef.current = null;
 		  setCombatData(null);
 		  setShowCombat(false);
+		  setCombatMinimized(false);
 		}
 	  });
 	  return () => unsubscribe();
@@ -3933,6 +3929,11 @@ export default function GameScreen({ session }) {
       })
     : [];
 
+  // Étapes de repli/rapatriement post-combat : la modale de combat n'a plus besoin
+  // de couvrir tout l'écran — les joueurs/IA choisissent une zone directement sur
+  // le plateau (repli) ou via un petit panneau non bloquant (rapatriement).
+  const isPostCombatPhase = combatData?.status === "post_combat";
+
   // Zones de retraite post-combat : cliquables directement sur le plateau
   const retreatZones = (() => {
     if (!combatData || combatData.status !== "post_combat") return [];
@@ -4226,12 +4227,13 @@ export default function GameScreen({ session }) {
         ))}
       </div>
 
-	  {/* Panneau latéral droit — combat + journal */}
+	  {/* Panneau latéral droit — journal seul (le combat vit désormais dans sa
+	      propre modale plein écran, voir plus bas) */}
 	  {/* Desktop: sidebar fixe | Mobile: overlay plein écran */}
 	  <div
 	    className={`overflow-hidden flex flex-col z-40 ${
 	      isMobile
-	        ? `fixed inset-0 ${(showCombat || showMobileLog) ? 'flex' : 'hidden'}`
+	        ? `fixed inset-0 ${showMobileLog ? 'flex' : 'hidden'}`
 	        : 'absolute top-0 right-0 w-72 h-full'
 	    }`}
 	    style={{ background: 'rgba(8,6,4,0.97)', borderLeft: isMobile ? 'none' : '1px solid #4a3410' }}
@@ -4241,41 +4243,96 @@ export default function GameScreen({ session }) {
 	      <div className="flex items-center gap-3">
 	        <span style={{ color: '#C9973A', fontSize: 18, lineHeight: 1 }}>𓂀</span>
 	        <span style={{ color: '#C9973A', fontWeight: 700, fontSize: 13, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
-	          {showCombat ? 'Combat' : 'Journal'}
+	          Journal
 	        </span>
 	      </div>
 	      {isMobile && (
 	        <button
-	          onClick={() => { setShowMobileLog(false); if (!combatData) setShowCombat(false); }}
+	          onClick={() => setShowMobileLog(false)}
 	          style={{ color: '#6B4C1E', fontSize: 22, lineHeight: 1, padding: '0 4px', background: 'none', border: 'none', cursor: 'pointer' }}
 	        >
 	          ✕
 	        </button>
 	      )}
 	    </div>
-	    {showCombat && (
-		  <CombatModal
-		    session={effectiveSession}
-		    effectivePlayerId={effectivePlayerId}
-		    gameState={gameState}
-		    isTestMode={isTestMode}
-		    testPlayers={isTestMode ? currentPlayers : null}
-		    testViewPlayerId={testViewPlayerId}
-		    onSwitchTestPlayer={id => setTestViewPlayerId(id)}
-		    logAction={logAction}
-		  />
-	    )}
 	    <ActionLogPanel roomCode={roomCode} />
 	  </div>
 
 	  {/* Mobile: bouton flottant Journal (visible quand overlay fermé) */}
-	  {isMobile && !showCombat && !showMobileLog && (
+	  {isMobile && !showMobileLog && (
 	    <button
 	      onClick={() => setShowMobileLog(true)}
 	      className="absolute bottom-3 right-3 z-20 text-xs font-bold px-3 py-2 rounded-lg"
 	      style={{ background: '#1a1200', border: '1px solid #4a3410', color: '#C9973A', boxShadow: '0 2px 12px rgba(0,0,0,0.7)' }}
 	    >
 	      📋 Journal
+	    </button>
+	  )}
+
+	  {/* Combat — modale plein écran obligatoire pour les 3 joueurs (humain ou IA),
+	      persistante tant que le combat n'est pas terminé (pilotée par Firebase,
+	      donc reconstruite à l'identique après un rafraîchissement de la page).
+	      Réductible pour consulter le plateau, Ta-Seti ou les tuiles adverses.
+	      NB : toujours montée dès que showCombat est vrai (visibilité pilotée par
+	      CSS, pas par un démontage conditionnel) pour que les effets IA de
+	      CombatModal (sélection de carte, décisions post-combat...) continuent de
+	      s'exécuter même quand elle est réduite ou en mode compact. */}
+	  {showCombat && (
+	    <div
+	      className={
+	        combatMinimized
+	          ? "hidden"
+	          : isPostCombatPhase
+	            // Repli/rapatriement : petit panneau non bloquant — le plateau reste
+	            // visible et cliquable (choix de zone de repli directement dessus).
+	            ? "fixed bottom-3 left-1/2 -translate-x-1/2 z-50 w-full max-w-md rounded-xl overflow-hidden shadow-2xl flex flex-col max-h-[70vh]"
+	            : "fixed inset-0 z-50 flex flex-col"
+	      }
+	      style={{
+	        background: isPostCombatPhase ? '#0a0806' : 'rgba(8,6,4,0.97)',
+	        border: isPostCombatPhase ? '1px solid #4a3410' : 'none',
+	      }}
+	    >
+	      <div className="flex items-center justify-between gap-3 px-4 py-3 shrink-0" style={{ borderBottom: '1px solid #4a3410', background: '#0a0806' }}>
+	        <div className="flex items-center gap-3">
+	          <span style={{ color: '#C9973A', fontSize: 18, lineHeight: 1 }}>⚔</span>
+	          <span style={{ color: '#C9973A', fontWeight: 700, fontSize: 13, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
+	            {isPostCombatPhase ? 'Après le combat' : 'Combat'}
+	          </span>
+	        </div>
+	        <button
+	          onClick={() => setCombatMinimized(true)}
+	          className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0"
+	          style={{ background: '#1a1508', border: '1px solid #3d2e0f', color: '#a88a40' }}
+	          title="Réduire pour voir le plateau, Ta-Seti ou les tuiles adverses"
+	        >
+	          ⤡ Réduire
+	        </button>
+	      </div>
+	      <div className="flex-1 overflow-y-auto">
+	        <CombatModal
+	          session={effectiveSession}
+	          effectivePlayerId={effectivePlayerId}
+	          gameState={gameState}
+	          isTestMode={isTestMode}
+	          testPlayers={isTestMode ? currentPlayers : null}
+	          testViewPlayerId={testViewPlayerId}
+	          onSwitchTestPlayer={id => setTestViewPlayerId(id)}
+	          logAction={logAction}
+	        />
+	      </div>
+	    </div>
+	  )}
+
+	  {/* Combat réduit : bouton flottant pour ré-agrandir — le plateau, Ta-Seti et
+	      les tuiles adverses restent utilisables tant que réduit. */}
+	  {showCombat && combatMinimized && (
+	    <button
+	      onClick={() => setCombatMinimized(false)}
+	      className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 text-sm font-bold px-4 py-2.5 rounded-full animate-pulse"
+	      style={{ background: '#7f1d1d', border: '1px solid #dc2626', color: '#fecaca', boxShadow: '0 2px 16px rgba(0,0,0,0.8)' }}
+	    >
+	      ⚔ Combat en cours — Agrandir
 	    </button>
 	  )}
 
