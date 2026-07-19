@@ -8,7 +8,7 @@ import IdDraftModal from "../Cards/IdDraftModal";
 import IdRefreshModal from "../Cards/IdRefreshModal";
 import PyramidEvolveModal from "./PyramidEvolveModal";
 import PowerTileModal from "./PowerTileModal";
-import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
+import { POWER_TILES, TILE_COLOR_STYLE } from "../../constants/powerTiles";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { BOARD_ZONES } from "../../constants/board";
 import { db } from "../../firebase";
@@ -899,33 +899,7 @@ export default function MyZone({
           </div>
         ))}
 
-        {/* Tuiles possédées (hors créatures) — masquées sur mobile */}
-        {ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.type !== "creature") && (
-          <>
-            <div className="hidden md:block w-px h-5 mx-1" style={{ background: '#3a2a0c' }} />
-            <div className="hidden md:flex gap-1 flex-wrap">
-              {ownedTileIds.map(id => {
-                const tile = POWER_TILES.find(t => t.id === id);
-                if (!tile || tile.type === "creature") return null;
-                const style = TILE_COLOR_STYLE[tile.color] || TILE_COLOR_STYLE.Noir;
-                const typeInfo = TYPE_LABEL[tile.type] || { icon: "?" };
-                return (
-                  <div
-                    key={id}
-                    title={`${tile.name} — Niv.${tile.level}`}
-                    className={`flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-semibold ${style.bg} ${style.border} ${style.text}`}
-                  >
-                    {getTileImageUrl(id)
-                      ? <img src={getTileImageUrl(id)} alt={tile.name} className="w-5 h-5 object-cover rounded" />
-                      : <span>{typeInfo.icon}</span>
-                    }
-                    <span className="max-w-[80px] truncate">{tile.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
-        )}
+
 
         {/* Créatures — masquées sur mobile */}
         {creatureIds.length > 0 && (
