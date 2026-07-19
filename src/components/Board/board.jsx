@@ -11,7 +11,7 @@ import { PYRAMID_SLOTS } from "../../constants/pyramids";
 import PyramidMarker from "./PyramidMarker";
 import { BOARD_STATIC_IMAGES } from "../../constants/boardStaticImages";
 
-export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, renfortsZones = [], onRenfortsClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm }) {
+export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, renfortsZones = [], onRenfortsClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm, creatureEquipZones = [], onCreatureEquipZoneClick }) {
   const { roomCode, playerId } = session;
   const [selectedZone, setSelectedZone] = useState(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -206,6 +206,9 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
     const state = snapshot.val();
     const currentUnits = state.boardUnits?.[zoneId]?.[playerColor] || 0;
     const reserveUnits = state.players?.[playerId]?.unitsReserve ?? 0;
+    // Plafond de zone : Légion (+2 partout), Bouliste (7 fixe), JP_legion (+2 localisé)
+    const zoneMax = getZoneMaxUnits(zoneId, playerColor, state.creatureAssignments || {}, state.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, state.boardPriests || {});
+    if (currentUnits >= zoneMax) return;
 
     if (actionMode === "recruit" || actionMode === "recruit_golden") {
       const cityZoneIds = BOARD_ZONES.filter(z => z.id.startsWith(`J${myJoinOrder}C`)).map(z => z.id);
@@ -406,7 +409,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         const sf = Math.min(1, Math.max(0.44, containerSize.width / 900));
         const unitPx     = Math.round(33 * sf);  // 15–33
         const emptyPx    = Math.round(32 * sf);  // 16–32
-        const creaturePx = Math.round(28 * sf);  // 14–28
+        const creaturePx = unitPx;                // même taille que la pastille d'unité
         const fontPx     = Math.max(8, Math.round(14 * sf));
         return BOARD_ZONES.map(zone => {
         const zoneUnits = boardUnits[zone.id] || {};
@@ -420,6 +423,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         const isDestroyUnitZone = destroyUnitZones.includes(zone.id);
         const isPlacementZone = placementZones.includes(zone.id);
         const isPlacementSelected = placementSelected.includes(zone.id);
+        const isCreatureEquipZone = creatureEquipZones.includes(zone.id);
 
         const myUnitsHere = boardUnits[zone.id]?.[playerColor] || 0;
         const isMoveSourceZone = isMoveSourcePhase && myUnitsHere > 0;
@@ -428,19 +432,20 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         const moveCount = moveState?.count || 0;
         const movingCreatureId = moveState?.creatureGoes ? moveState?.creatureId : null;
         const movingCreatureName = movingCreatureId ? POWER_TILES.find(t => t.id === movingCreatureId)?.name : null;
-        const destMax = getZoneMaxUnits(zone.id, playerColor, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE);
+        const destMax = getZoneMaxUnits(zone.id, playerColor, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
         const enemyCerbereHere = hasEnemyCerbereInZone(zone.id, playerColor, creatureAssignments, POWER_TILES);
         const isMoveDestZone = isMoveMovingPhase && !teleportPending && (moveState?.pointsRemaining ?? 0) > 0
           && adjToCurrentZone.includes(zone.id)
           && (wallPassActive || existingPlayerUnits + moveCount <= destMax) && !enemyCerbereHere;
         const isTeleportTarget = teleportPending && TELEPORT_TARGETS.has(zone.id) && !enemyCerbereHere;
 
-        if (entries.length === 0 && !isRecruitZone && !isRenforcementZone && !isMoveDestZone && !isTeleportTarget && !isRetreatZone && !isVictoryRecruitZone && !isTasetiRecruitZone && !isRenfortsZone && !isDestroyUnitZone && !isPlacementZone) return null;
+        if (entries.length === 0 && !isRecruitZone && !isRenforcementZone && !isMoveDestZone && !isTeleportTarget && !isRetreatZone && !isVictoryRecruitZone && !isTasetiRecruitZone && !isRenfortsZone && !isDestroyUnitZone && !isPlacementZone && !isCreatureEquipZone) return null;
 
         const { left, top } = getZonePosition(zone);
 
         let ringClass = "";
         if (isDestroyUnitZone) ringClass = "outline outline-2 outline-red-400 rounded-full p-0.5 animate-pulse";
+        else if (isCreatureEquipZone) ringClass = "outline outline-2 outline-fuchsia-400 rounded-full p-0.5 animate-pulse";
         else if (isRenfortsZone) ringClass = "outline outline-2 outline-emerald-400 rounded-full p-0.5 animate-pulse";
         else if (isTasetiRecruitZone) ringClass = "outline outline-2 outline-amber-400 rounded-full p-0.5 animate-pulse";
         else if (isVictoryRecruitZone) ringClass = "outline outline-2 outline-lime-400 rounded-full p-0.5 animate-pulse";
@@ -454,10 +459,11 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         else if (isPlacementSelected) ringClass = "outline outline-2 outline-yellow-400 rounded-full p-0.5";
         else if (isPlacementZone) ringClass = "outline outline-2 outline-yellow-400 rounded-full p-0.5 animate-pulse";
 
-        const isClickable = isRecruitZone || isRenforcementZone || isMoveSourceZone || isMoveDestZone || isTeleportTarget || isRetreatZone || isVictoryRecruitZone || isTasetiRecruitZone || isRenfortsZone || isDestroyUnitZone || isPlacementZone;
+        const isClickable = isRecruitZone || isRenforcementZone || isMoveSourceZone || isMoveDestZone || isTeleportTarget || isRetreatZone || isVictoryRecruitZone || isTasetiRecruitZone || isRenfortsZone || isDestroyUnitZone || isPlacementZone || isCreatureEquipZone;
 
         function handleClick() {
-          if (isDestroyUnitZone && onDestroyUnitClick) onDestroyUnitClick(zone.id);
+          if (isCreatureEquipZone && onCreatureEquipZoneClick) onCreatureEquipZoneClick(zone.id);
+          else if (isDestroyUnitZone && onDestroyUnitClick) onDestroyUnitClick(zone.id);
           else if (isRenfortsZone && onRenfortsClick) onRenfortsClick(zone.id);
           else if (isTasetiRecruitZone && onTasetiRecruitClick) onTasetiRecruitClick(zone.id);
           else if (isVictoryRecruitZone && onVictoryRecruitClick) onVictoryRecruitClick(zone.id);
@@ -480,6 +486,11 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
             {isMoveDestZone && entries.length > 0 && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-blue-300 text-xs font-bold pointer-events-none select-none animate-bounce">
                 ▼
+              </div>
+            )}
+            {isCreatureEquipZone && entries.length > 0 && (
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-fuchsia-300 text-xs font-bold pointer-events-none select-none animate-bounce">
+                🐉
               </div>
             )}
             <div className={`flex gap-0.5 ${ringClass}`}>

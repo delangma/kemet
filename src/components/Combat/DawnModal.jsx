@@ -627,7 +627,7 @@ async function handleChoosePosition(position) {
       <div className="flex flex-col gap-3">
         <p className="text-green-400 font-bold">C'est votre tour — choisissez votre position :</p>
         <div className="flex gap-3 justify-center">
-          {[1, 2, 3].filter(pos => {
+          {[1, 2, 3, 4, 5].slice(0, allPlayers.length).filter(pos => {
             const taken = Object.values(dawn?.chosenPositions || {});
             return !taken.includes(pos);
           }).map(pos => (

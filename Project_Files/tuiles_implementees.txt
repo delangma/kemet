@@ -1,0 +1,580 @@
+AUDIT DES TUILES POUVOIR — RÈGLES RÉELLEMENT IMPLÉMENTÉES DANS LE CODE
+========================================================================
+Ce fichier liste, pour CHAQUE tuile pouvoir du jeu, ce que le code fait
+RÉELLEMENT (pas ce que dit la règle papier). Objectif : vérifier tuile par
+tuile que le comportement codé correspond à la règle voulue.
+
+Sources analysées : src/constants/powerTiles.js, src/constants/creaturePowers.js,
+src/components/Game/GameScreen.jsx, src/components/Game/NightModal.jsx,
+src/components/Combat/CombatModal.jsx, src/components/Combat/DawnModal.jsx,
+src/ai/aiPlayer.js, src/utils/vp.js, et modales associées (CreatureEquipModal,
+IdDraftModal, IdRefreshModal, CombatCardSwapModal, PyramidEvolveModal).
+
+/!\ DawnModal.jsx ne référence AUCUNE tuile pouvoir : aucune tuile n'interagit
+    avec la phase d'Aube.
+
+------------------------------------------------------------------------
+PROBLÈMES TRANSVERSAUX REPÉRÉS (à vérifier en priorité)
+------------------------------------------------------------------------
+
+1) [CORRIGÉ] PROTECTION PLUIE DE FEU : hasFireRainProtection() est
+   désormais appelée (via le helper isFireRainProtected() dans
+   GameScreen.jsx) à chaque ciblage de Pluie de Feu — carte ID ET bonus
+   Ta-Seti, humain ET IA. Une troupe protégée (tuile "Protection pluie de
+   feu", valable pour toutes les troupes du joueur, OU Dévoreuse des Mondes
+   stationnée dans la zone) ne peut plus être sélectionnée comme cible.
+
+2) [CORRIGÉ] ACHAT PAR L'IA : le code d'achat de tuile de l'IA
+   (GameScreen.jsx, cas "buy_red"/"buy_blue"/...) applique désormais les
+   mêmes bonus ponctuels à l'achat que le joueur humain : unitsOnPurchase
+   (Recrutement +2, Renforcement 4 unités, placement immédiat dans la
+   cité), reserveOnPurchase (Unité supplémentaire), idCardsOnPurchase (+1
+   carte ID, Momie), taSetiAdvanceOnPurchase (Avancée sur taseti),
+   pyramidUpgradePending gratuit (Augmentation pyramide), et
+   idRefreshPending (Draft ID). Les effets nocturnes récurrents
+   fonctionnaient déjà pour l'IA (NightModal traite tous les joueurs
+   uniformément).
+   Note résiduelle : idRefreshPending (Draft ID) est bien posé pour l'IA
+   à l'achat et chaque nuit, mais aucune logique de RÉSOLUTION IA
+   (choix des cartes à défausser/piocher) n'existe — le flag reste donc
+   posé sans être consommé côté IA tant que cette décision n'est pas
+   implémentée séparément.
+
+3) [CORRIGÉ] JETONS JP "prescience" et "legion" : désormais branchés.
+   - "prescience" (JP_prescience / JP_ID_combat) : si un prêtre portant ce
+     jeton se trouve dans la zone de combat, déclenche la même révélation
+     anticipée de la force adverse que la tuile "Préscience" (vérifié aux
+     4 points de déclenchement de combat : téléportation, déplacement
+     normal x2, IA).
+   - "legion" (JP_legion) : getZoneMaxUnits() accepte maintenant
+     boardPriests et accorde +2 unités max, mais UNIQUEMENT dans la zone
+     où se trouve le prêtre porteur (contrairement à la tuile "Légion"
+     qui s'applique à toutes les zones du joueur). Les 3 points d'appel
+     (GameScreen.jsx x2, board.jsx) passent désormais boardPriests.
+   Seuls defenseVictoryVp, replacementUnit et wallPass restaient déjà
+   branchés par ailleurs (movementBonus l'était aussi).
+
+------------------------------------------------------------------------
+ROUGE
+------------------------------------------------------------------------
+
+R_1_1 — Déplacement (niv.1, coût 1, permanent)
+  - +1 point de déplacement par tour, cumulé avec "Furie Bestiale" (même
+    compteur, voir N_4_3). GameScreen.jsx computeMovePoints().
+
+R_1_2 / R_1_3 — Force en attaque (niv.1, coût 1 — 2 exemplaires marché)
+  - +1 force uniquement quand le possesseur est attaquant
+    (POWER_TILE_COMBAT_BONUSES). Un joueur ne peut posséder qu'un seul
+    exemplaire (restriction par nom à l'achat) → jamais cumulable à +2.
+
+R_1_4 — Réduction Téléportation (niv.1, coût 1, permanent)
+  - Coût de base de téléportation : 2→1 Ank (avant "Réduction d'ank" /
+    "Téléportation facile"). computeTeleportCost().
+
+R_2_2 — Passe muraille (niv.2, coût 2, permanent)
+  - Permet d'entrer dans une cité ennemie sans arriver d'une zone adjacente
+    au premier pas (contourne la règle de "Muraille"). hasParseMuraille().
+    Même effet obtenu via le jeton doré R_4_1 ou un jeton de prêtre
+    JP_passe_muraille.
+
+R_2_3 — Goutte de sang (niv.2, coût 2, permanent)
+  - +1 sang (dégât) dans tous les combats, attaquant ou défenseur.
+
+R_2_4 — Avancée sur taseti (niv.2, coût 2, permanent)
+  taSetiAdvanceOnPurchase:1, taSetiAdvancePerNight:1
+  - Achat : +1 immédiat à taSetiNightAdvancePending.
+  - Chaque nuit : +1 de plus, cumulatif avec d'autres exemplaires/tuiles.
+  - Consommé via le bouton "🌙 TS" (MyZone.jsx → GameScreen.jsx).
+  - IA : le +1 d'achat n'est PAS appliqué (voir point transversal #2), le +1
+    nocturne s'applique quand même.
+
+R_2_5 — Carte Sang 3*3 (niv.2, coût 2, permanent, combatCardSwapNewId:9)
+  - À l'achat : remplace une carte combat du deck par la carte #9
+    (Force3/Sang3/Bouclier0). Humain : choix via CombatCardSwapModal. IA :
+    remplace automatiquement sa carte la plus faible. Aucun effet passif
+    continu, uniquement une modification ponctuelle du deck.
+
+R_2_6 — Téléportation facile (niv.2, coût 2, permanent)
+  - -1 Ank sur le coût de téléportation (cumulable avec R_1_4/"Réduction
+    d'ank"). Permet aussi de LANCER une téléportation depuis un obélisque
+    du plateau principal (T1/T2/T3/TB/D12/D23 — rien à voir avec Ta-Seti),
+    pas seulement depuis une cité : permet donc d'enchaîner obélisque →
+    obélisque, comme le fait nativement le Sphinx Volant. Via
+    teleportFacileActive dans board.jsx (canTeleportFromHere).
+    (Le Temple Bleu est bien un obélisque dans ce jeu — TELEPORT_TARGETS
+    incluant "TB" est donc correct, malgré une mention contraire trouvée
+    dans un document de règles annexe.)
+
+R_2_7 — Cerbère : créature, voir section CRÉATURES.
+R_2_1 — Phoenix : créature, voir section CRÉATURES.
+
+R_3_1 — Scarabée : créature, voir section CRÉATURES.
+
+R_3_2 — Force (niv.3, coût 3, permanent)
+  - +1 force dans tous les combats (attaque ou défense).
+
+R_3_3 — Point Rouge Majeur (niv.3, coût 3, type vp, vpOnPurchase:1)
+  - +1 PV permanent à l'achat. Un seul type "vp" (toutes couleurs
+    confondues) par joueur — exclusif avec les 3 autres tuiles "Majeur".
+
+R_3_4 — Force par ID (niv.3, coût 3, permanent)
+  - Mécanique "Blessure Divine" : en combat, après révélation, le
+    possesseur peut défausser n'importe quel nombre de ses cartes ID pour
+    +1 force par carte défaussée (CombatModal.jsx hasBlessureDivine()).
+    Aucun effet hors combat.
+
+R_3_5 — Meduse : créature, voir section CRÉATURES.
+
+R_4_1 — Déplacement Passe/Muraille (niv.4, coût 4, jeton doré)
+  - 1 déplacement gratuit par jour (sans jeton/ank) qui force en plus le
+    passe-muraille (forcePaseMuraille). Comme tout jeton doré, marqué
+    utilisé (goldenTokenUsed=true) dès l'achat (inutilisable le jour même).
+
+R_4_2 — Scorpion : créature, voir section CRÉATURES.
+
+R_4_3 — Jeton gris (niv.4, coût 4, jeton)
+  - Un seul jeton gris par joueur (isGrayTokenTile, restriction à l'achat).
+  - Chaque nuit : tokens = 6 au lieu de 5 (NightModal.jsx). Aucun effet
+    immédiat le jour de l'achat, seulement à partir de la nuit suivante.
+  - [CORRIGÉ] Ce 6e jeton n'est PAS un tour indépendant comme les 5 de base :
+    il doit être joué en 2e action dans le MÊME tour qu'une action classique
+    (une seule fois par jour, canTakeAction()/MyZone.jsx canPlayAction côté
+    humain, aiDecideAction()/_executeAITurnInner côté IA). Flag grayBonusUsed,
+    remis à false chaque nuit (NightModal.jsx).
+
+R_4_4 — Force et Saignement (niv.4, coût 4, permanent)
+  - +1 force uniquement en attaque, +1 sang normal, +1 sang "inévitable"
+    (unblockableBlood : ignore les boucliers adverses ET les cartes ID
+    "aucun saignement si victoire").
+
+------------------------------------------------------------------------
+BLEU
+------------------------------------------------------------------------
+
+B_1_1 / B_1_2 — Force en défense (niv.1, coût 1 — 2 exemplaires)
+  - +1 force uniquement en défense. Même restriction "un seul par nom" que
+    Force en attaque → jamais cumulable à +2.
+
+B_1_3 — Protection pluie de feu (niv.1, coût 1, permanent)
+  - [CORRIGÉ] Protège désormais TOUTES les troupes du possesseur, partout
+    sur le plateau, contre la Pluie de Feu déclenchée par la carte ID
+    "Pluie de Feu" ou par un bonus Ta-Seti — vérifié à la fois côté
+    ciblage humain (zones cliquables + clic final) et côté sélection de
+    cible par l'IA. isFireRainProtected() (GameScreen.jsx).
+
+B_1_4 / B_1_5 — Recrutement + 2 (niv.1, coût 1 — 2 exemplaires,
+unitsOnPurchase:2)
+  - Achat : place immédiatement jusqu'à 2 unités de réserve dans les zones
+    de cité du joueur (réparties sur J{n}C1/C2/C3, plafond 5/zone). IA :
+    fixe recruitFreeRemaining mais ne fait PAS le placement immédiat.
+  - Chaque fois qu'une action "recruter" démarre : recruitFreeRemaining=2
+    → les 2 premières unités posées durant ce recrutement sont gratuites
+    (0 Ank au lieu de 1). board.jsx handleAdd.
+  - Un seul exemplaire par joueur (restriction par nom).
+  - TROU IA : le gestionnaire d'action "recruit" de l'IA (GameScreen.jsx)
+    calcule le coût uniquement depuis réserve/espace/ank restant et ne lit
+    JAMAIS recruitFreeRemaining → une IA possédant cette tuile ne bénéficie
+    d'aucune réduction quand elle recrute elle-même (bonus gaspillé côté
+    exécution de l'action, même si le placement immédiat à l'achat marche).
+
+B_2_1 — Éléphant : créature, voir section CRÉATURES.
+B_2_2 — Kraken : créature, voir section CRÉATURES.
+
+B_2_3 — Bouclier (niv.2, coût 2, permanent)
+  - +1 bouclier dans tous les combats.
+
+B_2_4 — Carte Bouclier 3*3 (niv.2, coût 2, permanent, combatCardSwapNewId:10)
+  - Même mécanique que R_2_5 mais insère la carte #10
+    (Force3/Sang0/Bouclier3).
+
+B_2_5 — Serpent : créature, voir section CRÉATURES.
+
+B_3_1 — Préscience (niv.3, coût 3, permanent)
+  - Dès que le possesseur attaque ou est attaqué, combat.prescience est
+    posé → CombatModal.jsx révèle la FORCE (pas le sang/boucliers) de la
+    carte combat choisie par l'adversaire dès qu'elle est sélectionnée,
+    avant la révélation officielle.
+  - [CORRIGÉ] Le jeton de prêtre JP_prescience/JP_ID_combat produit
+    désormais le même effet quand un prêtre qui le porte se trouve dans
+    la zone de combat, aux 4 points de déclenchement (téléportation,
+    déplacement normal x2, IA).
+
+B_3_2 — Victoire Défensive (niv.3, coût 3, permanent)
+  - Si le défenseur gagne le combat ET a ≥1 unité survivante : +1 PV
+    permanent (+1 vpCombat). Vérifié via la tuile (respecte le Sceau
+    Divin) OU le jeton JP_victoire_defensive (celui-ci EST bien branché,
+    contrairement à celui de Préscience).
+
+B_3_3 — Point Bleu Majeur — vp, même exclusivité que les autres "Majeur".
+
+B_3_4 — Légion (niv.3, coût 3, permanent)
+  - +2 au plafond d'unités par zone (5→7) pour ce joueur, dans TOUTES ses
+    zones — mais uniquement vérifié pour la validation de destination d'un
+    déplacement/téléportation (creaturePowers.js getZoneMaxUnits()).
+    Le recrutement lui-même n'a aucun contrôle de plafond de zone nulle
+    part dans le code → Légion n'a aucun effet sur le recrutement.
+    Si une créature stationnée a son propre plafond fixe (Bouliste=7),
+    cette valeur fixe prime et ne s'additionne PAS avec le +2 de Légion.
+  - [CORRIGÉ] Le jeton de prêtre JP_legion accorde désormais le même +2,
+    mais UNIQUEMENT dans la zone où le prêtre porteur se trouve (à la
+    différence de la tuile, valable partout pour le joueur).
+    getZoneMaxUnits() accepte maintenant boardPriests ; les 3 points
+    d'appel (GameScreen.jsx x2, board.jsx) le passent désormais.
+
+B_3_5 — Bouliste : créature, voir section CRÉATURES.
+
+B_4_1 — Sphinx : créature (vpOnPurchase:1 — fonctionne aussi pour l'IA,
+  car géré par le code générique creaturePower?.vpOnPurchase partagé avec
+  le joueur humain).
+
+B_4_2 — Jeton doré déplacement recrutement (niv.4, coût 4, jeton)
+  - Donne DEUX boutons de jeton doré séparés partageant une seule
+    utilisation quotidienne (goldenTokenUsed) : déplacement gratuit (sans
+    passe-muraille forcé) et recrutement gratuit (recruitFreeRemaining=2 si
+    "Recrutement + 2" est aussi possédée). Utiliser l'un des deux consomme
+    l'usage du jour → un seul des deux utilisable par jour.
+
+B_4_3 — Jeton gris Bleu — mécanique générique du jeton gris (voir R_4_3).
+
+B_4_4 — Renforcement 4 unités (niv.4, coût 4, permanent, unitsOnPurchase:4)
+  - Achat : jusqu'à 4 unités gratuites immédiates (même code générique que
+    "Recrutement + 2", ici avec unitsOnPurchase=4).
+  - Chaque NUIT : +4 à unitsReserve ET reinforcementPending=4 → une action
+    de placement gratuite (sans ank) de 4 unités disponible chaque jour via
+    le bouton "🔰 Renf.", de façon récurrente et indéfinie.
+
+------------------------------------------------------------------------
+BLANC
+------------------------------------------------------------------------
+
+W_1_1 / W_1_2 — Priere +1 ank (niv.1, coût 1 — 2 exemplaires, max 1/joueur)
+  - +1 Ank sur chaque action "prayer2"/"prayer3" (et le jeton doré prière
+    N_1_4), via un comptage `.filter().length` (défensif pour plusieurs
+    exemplaires, mais la restriction d'achat plafonne déjà à 1 en
+    pratique).
+
+W_1_3 / W_1_4 — Cout Pouvoir -1 (niv.1, coût 1 — 2 exemplaires)
+  - -1 Ank UNIQUEMENT sur le coût d'achat des tuiles pouvoir (pas la
+    pyramide, pas la téléportation), plancher 0. Vérifié à 3 points d'achat
+    (normal, jeton doré N_2_4, IA) + dans l'heuristique IA "rester après
+    victoire pour acheter Cerbère".
+
+W_2_1 — 2 Ank (niv.2, coût 2, permanent, ankOnPurchase:2)
+  - Achat : +2 Ank une fois.
+  - NightModal.jsx : +2 Ank CHAQUE NUIT en plus, indéfiniment
+    (ankTileBonus = filter(...).length * 2) — bonus nocturne récurrent, pas
+    seulement ponctuel à l'achat. À vérifier contre la règle papier.
+
+W_2_2 — Chiron : créature, voir section CRÉATURES.
+W_2_3 — Minotaure : créature, voir section CRÉATURES.
+
+W_2_4 — 1 Ank par unité tué (niv.2, coût 2, permanent)
+  - Après combat : +1 Ank par unité ennemie tuée par les dégâts de ce
+    joueur (attaquant ou défenseur, vérifié indépendamment), doublé si le
+    joueur possède aussi "+1 d'Ank en journée".
+
+W_2_5 — +1 carte ID (niv.2, coût 2, permanent, idCardsOnPurchase:1,
+idCardsPerNight:1)
+  - Achat : pioche 1 carte ID supplémentaire immédiatement.
+  - NightModal.jsx : pioche nocturne = 1 + nightIdBonus (cumule avec cette
+    tuile, Momie, etc.) — récurrent, +1 carte/nuit par exemplaire d'effet.
+  - ÉCRASÉ si le joueur possède aussi "Choix supplémentaire ID" : le tirage
+    nocturne bascule alors sur le mode draft 5-cartes-garder-1 et ignore
+    complètement nightIdBonus dans cette branche → combiner les deux
+    tuiles n'augmente PAS la taille du pool de draft.
+  - IA : le tirage ponctuel à l'achat n'est pas appliqué (point transversal
+    #2), le bonus nocturne s'applique quand même.
+
+W_2_6 — Réduction pyramide (niv.2, coût 2, permanent)
+  - Action "pyramid" : pour une NOUVELLE pyramide, réduction = le niveau
+    cible lui-même (-params.level Ank) ; pour une pyramide EXISTANTE
+    (amélioration), réduction = -1 Ank fixe. Cette asymétrie (réduction
+    proportionnelle au niveau pour une construction neuve, mais fixe pour
+    une amélioration) est exactement ce qui est codé — à revérifier contre
+    la règle physique.
+
+W_3_1 — Augmentation pyramide (niv.3, coût 3, permanent)
+  - Achat : +1 à pyramidUpgradePending (une amélioration de pyramide
+    gratuite, utilisable via PyramidEvolveModal en mode "gratuit").
+  - NightModal.jsx : +1 de plus à pyramidUpgradePending chaque nuit,
+    indéfiniment.
+  - IA : le bonus ponctuel d'achat est sauté (point transversal #2), le
+    bonus nocturne s'applique quand même à l'IA.
+
+W_3_2 — Choix supplémentaire ID (niv.3, coût 3, permanent)
+  - NightModal.jsx : au lieu du tirage normal, pioche un pool de 5 cartes
+    (ou moins si le deck est bas) via idDraftPending, le joueur doit en
+    garder exactement 1 (IdDraftModal.jsx), le reste retourne au deck.
+    L'achat lui-même n'a aucun effet immédiat — modifie seulement le
+    mécanisme de tirage nocturne.
+
+W_3_3 — Point Blanc Majeur — vp, même exclusivité que les autres "Majeur".
+
+W_3_4 — 4 ank en cas de victoire (niv.3, coût 3, permanent)
+  - CombatModal.jsx : le VAINQUEUR d'un combat reçoit +4 Ank (8 avec "+1
+    d'Ank en journée"), peu importe le rôle (attaquant/défenseur) et le
+    nombre de survivants.
+
+W_4_1 — Momie : créature, voir section CRÉATURES.
+W_4_2 — Jeton Gris Blanc — mécanique générique du jeton gris (voir R_4_3).
+
+W_4_3 — 5 ank (niv.4, coût 4, permanent, ankOnPurchase:5)
+  - Achat : +5 Ank une fois.
+  - NightModal.jsx : +5 Ank CHAQUE NUIT en plus, indéfiniment
+    (ank5TileBonus) — même schéma récurrent que "2 Ank", à revérifier.
+
+W_4_4 — Réduction d'ank (niv.4, coût 4, permanent)
+  - La tuile de réduction la plus large du code : -1 Ank sur l'achat de
+    tuile pouvoir (normal + jeton doré + IA), -1 Ank sur le coût de
+    pyramide (neuve ET amélioration, cumulable avec "Réduction pyramide"),
+    et -1 Ank sur la téléportation (cumulable avec R_1_4/R_2_6). Tout est
+    plafonné à 0.
+
+------------------------------------------------------------------------
+NOIR
+------------------------------------------------------------------------
+
+N_1_1 / N_1_2 — Unité supplémentaire (niv.1, coût 1 — 2 exemplaires,
+reserveOnPurchase:3)
+  - Achat uniquement : +3 à unitsReserve une fois. Aucun effet récurrent.
+  - IA : ce bonus est aussi sauté à l'achat (point transversal #2) — une
+    IA achetant cette tuile ne gagne actuellement aucune réserve du tout.
+
+N_1_3 — Recrutement Local (niv.1, coût 1, permanent)
+  - board.jsx : étend les zones de recrutement valides au-delà de la cité
+    du joueur, à N'IMPORTE QUELLE zone où il a déjà ≥1 unité.
+  - [CORRIGÉ] Le code d'exécution du recrutement de l'IA (GameScreen.jsx,
+    cas "recruit") applique désormais la même règle : si l'IA possède
+    "Recrutement Local", les zones éligibles incluent aussi toute zone où
+    elle a déjà des unités, pas seulement sa cité.
+
+N_1_4 — Jeton doré priére (niv.1, coût 1, jeton)
+  - Action "prière niv.2" gratuite équivalente (2 Ank + bonus "Priere +1
+    ank", doublé par "+1 d'Ank en journée"), utilisable une fois/jour sans
+    consommer de jeton/action.
+
+N_2_1 — Bouquetin : créature, voir section CRÉATURES.
+
+N_2_2 — Attaque 2 ank (niv.2, coût 2, permanent)
+  - Vérifié aux 2 points d'attaque humains (téléportation et déplacement
+    normal, GameScreen.jsx) : quand ce joueur attaque une zone occupée par
+    un ennemi, +2 Ank immédiatement (+1 de plus avec "+1 d'Ank en
+    journée").
+  - [CORRIGÉ] N'était PAS du tout appliqué côté attaque IA (case "attack"
+    de l'IA, GameScreen.jsx) — une IA possédant cette tuile n'en tirait
+    aucun bénéfice en attaquant. Désormais aligné sur le comportement
+    humain.
+
+N_2_3 — 1 ank par unité perdu (niv.2, coût 2, permanent)
+  - CombatModal.jsx : après combat, +1 Ank par unité PROPRE perdue face aux
+    dégâts ennemis (doublé avec "+1 d'Ank en journée"). Distinct de W_2_4
+    (qui compte les unités ennemies tuées).
+
+N_2_4 — Jeton doré achat *2 (niv.2, coût 2 — listé "permanent" mais
+fonctionne comme un jeton doré)
+  - Permet d'acheter UNE tuile pouvoir supplémentaire par jour (de
+    n'importe quelle couleur déjà achetée ce jour, boughtColorsToday), au
+    coût tile.cost + 1 Ank (avant réductions). Pose
+    goldenBuyBlockedThisTurn=true (débloqué le tour suivant plutôt qu'à la
+    nuit, contrairement aux autres jetons dorés qui suivent le reset
+    nocturne standard de goldenTokenUsed).
+
+N_2_5 — Double point temple (niv.2, coût 2, permanent)
+  - NightModal.jsx : le bonus nocturne standard "contrôler ≥2 temples non
+    bleus → +1 PV" devient +2 PV pour le possesseur de cette tuile.
+
+N_3_1 — Point Noir Majeur — vp, même exclusivité que les autres "Majeur".
+N_3_2 — Sphinx Volant : créature, voir section CRÉATURES.
+
+N_3_3 — Jeton Doré Déplacement (niv.3, coût 3, jeton)
+  - Réutilise exactement le même handler que R_4_1 (1 déplacement gratuit/
+    jour), MAIS le flag forcePaseMuraille n'est posé que si la tuile
+    possédée s'appelle précisément "Déplacement Passe/Muraille" (R_4_1) →
+    cette tuile donne le déplacement gratuit SANS le passe-muraille
+    automatique.
+
+N_3_4 — Defense Sang Noir (niv.3, coût 3, permanent)
+  - +1 force ET +1 sang, uniquement en défense.
+
+N_4_1 — Dévoreuse des Mondes : créature, voir section CRÉATURES (son flag
+  fireRainProtection est mort, comme B_1_3).
+
+N_4_2 — Jeton Gris Noir — mécanique générique du jeton gris (voir R_4_3).
+
+N_4_3 — Furie Bestiale (niv.4, coût 4, permanent)
+  - Double effet : +1 force ET +1 sang dans tous les combats, PLUS +1
+    point de déplacement par tour (compté avec "Déplacement", même
+    compteur). Combine effectivement "Force" + un bonus de sang + un
+    bonus de déplacement en une seule tuile.
+
+N_4_4 — +1 d'Ank en journée (niv.4, coût 4, permanent)
+  - [CORRIGÉ] Confirmé par le rulebook : c'est bien un +1 Ank FIXE (pas un
+    doublement) à chaque gain d'ank en journée déclenché par une autre
+    source. S'ajoute (+1, une seule fois par gain, peu importe son
+    montant) à : prayer2/prayer3, le jeton doré prière (N_1_4), "Attaque 2
+    ank", "4 ank en cas de victoire", "1 Ank par unité tué" et "1 ank par
+    unité perdu". N'affecte pas les gains d'ank nocturnes (+2/nuit de
+    base, bonus de temple, bonus des tuiles "2 Ank"/"5 ank"), ni les
+    cartes ID type "Butin de Guerre".
+  - [CORRIGÉ] Parité IA : la prière (prayer2/prayer3) et "Attaque 2 ank"
+    de l'IA n'appliquaient PAS du tout ce bonus auparavant (même pas
+    doublé) — désormais alignés sur le comportement humain.
+
+------------------------------------------------------------------------
+BICOLORES
+------------------------------------------------------------------------
+
+BI_1 — Prescience des IDs (Rouge niv.1, coût 2, secondaire Bleu niv.1)
+  - Même déclenchement que "Préscience" (combat.prescienceId posé aux 3
+    points d'attaque + miroir IA). CombatModal.jsx : révèle le NOM de
+    chaque carte ID jouée par les deux camps pendant le combat au
+    possesseur, au lieu d'afficher "Carte cachée" pour les cartes
+    adverses. Achat nécessite pyramide niv.1 en Rouge ET en Bleu.
+
+BI_2 — Draft ID (Blanc niv.2, coût 3, secondaire Rouge niv.1)
+  - Achat : idRefreshPending=true.
+  - NightModal.jsx : idRefreshPending=true de nouveau chaque nuit,
+    récurrent.
+  - Mécanique (IdRefreshModal.jsx + MyZone.jsx handleIdRefresh) : le
+    joueur défausse N cartes ID de sa main, puis pioche N+1 nouvelles
+    cartes. Achat nécessite Blanc niv.2 (primaire) + Rouge niv.1
+    (secondaire).
+  - IA : le déclenchement ponctuel à l'achat est sauté (point transversal
+    #2) ; le déclenchement nocturne se déclenche quand même pour l'IA,
+    mais AUCUN gestionnaire IA dédié à idRefreshPending n'a été trouvé
+    dans le code exécutant les actions IA → à vérifier si une IA
+    possédant cette tuile laisse ce rafraîchissement non consommé.
+
+BI_3 — Pyramide Niv.3 (Bleu niv.2, coût 4, secondaire Blanc niv.2)
+  - Implémenté dans src/utils/vp.js computeTempVP() (PAS dans les fichiers
+    de logique de jeu habituels) : abaisse de niveau 4 à niveau 3 le seuil
+    de pyramide nécessaire pour la règle "+1 PV temporaire par pyramide de
+    cité non contestée", pour LES 3 couleurs de pyramide du joueur
+    simultanément (pas seulement la couleur liée à la tuile). Cette
+    fonction alimente à la fois l'affichage PV en direct et le
+    départage du vainqueur final (pendingEndAtNight, NightModal.jsx).
+  - Bizarrerie structurelle à vérifier : le code lit
+    getPlayerPyramidLevel(playerId, color) (meilleure pyramide de cette
+    couleur du joueur, N'IMPORTE OÙ sur le plateau) mais vérifie ensuite
+    la présence ennemie seulement dans la cité DU JOUEUR pour ce slot de
+    couleur — si la pyramide qualifiante de cette couleur est en réalité
+    construite dans la cité d'un autre joueur, la vérification "pas
+    d'ennemi" regarde la mauvaise zone.
+
+------------------------------------------------------------------------
+CRÉATURES (CREATURE_POWERS)
+------------------------------------------------------------------------
+Toutes les valeurs de combat sont sommées dans getCombatCreatureBonus()/
+getCombatResult(). Toute créature achetée doit être équipée sur une troupe
+via CreatureEquipModal.jsx (action gratuite, sans jeton) sauf mention
+contraire.
+
+Serpent (B_2_5) : movementBonus 1 (PAS de combatForce — corrigé, n'a aucun
+  bonus de force propre), nullifiesEnemy:true — en combat, annule TOTALEMENT
+  les bonus (force/boucliers/sang) de la créature adverse dans cette zone
+  (annule aussi le bonus fleuve du Kraken adverse, puisque ce bonus est
+  neutralisé dès que "nullified" est vrai pour ce camp).
+  [CORRIGÉ] Annule aussi les POUVOIRS SPÉCIAUX de la créature adverse, pas
+  seulement ses stats : nullifiesEnemyShields (Méduse) et
+  nullifiesAllBloodExceptCards (Minotaure) adverses ne s'appliquent plus si
+  je possède un Serpent (getCombatCreatureBonus, flag myHasSerpent). Le
+  2e PV de la Dévoreuse des Mondes (onWinBloodBonus) était déjà
+  correctement annulé par winnerNullified, aucun changement nécessaire là.
+
+Dévoreuse des Mondes (N_4_1) : combatForce 2, movementBonus 1,
+  fireRainProtection:true (MORT — jamais vérifié), onWinBloodBonus
+  {minBlood:2, vp:1} — si le possesseur gagne le combat avec une carte
+  combat de sang ≥2, +1 PV (CombatModal.jsx handleApplyResults).
+
+Bouliste (B_3_5) : combatForce 1, movementBonus 1, zoneMaxUnits 7 — tant
+  qu'elle est stationnée dans une zone, le plafond d'unités de cette zone
+  devient fixé à 7 (vérifications de destination déplacement/téléportation
+  uniquement ; ne s'additionne pas avec le +2 de Légion).
+
+Éléphant (B_2_1) : combatForce 1, movementBonus 1, combatShields 1.
+
+Sphinx (B_4_1) : combatForce 2, movementBonus 1, vpOnPurchase 1 (+1 PV
+  immédiat à l'achat, fonctionne aussi pour l'IA car géré par le code
+  générique partagé avec l'humain).
+
+Scorpion (R_4_2) : combatForce 2, movementBonus 2, combatBlood 2.
+
+Scarabée (R_3_1) : combatForce 2, movementBonus 2.
+
+Momie (W_4_1) : combatForce 2, movementBonus 1, idCardsOnPurchase 1,
+  idCardsPerNight 1 (mêmes mécaniques de cartes ID achat/nuit que W_2_5,
+  en plus des bonus combat/déplacement propres à une créature).
+
+Sphinx Volant (N_3_2) : combatForce 2, teleportFromObelisk:true — la
+  troupe stationnée avec cette créature peut LANCER une téléportation
+  depuis un obélisque du plateau principal (T1/T2/T3/TB/D12/D23, rien à
+  voir avec Ta-Seti), pas seulement depuis une cité (board.jsx
+  canTeleportFromHere), à un coût FIXE de 4 Ank quelles que soient les
+  autres tuiles de réduction (computeTeleportCost
+  court-circuite à 4 quand la troupe qui bouge a cette créature).
+
+Meduse (R_3_5) : combatForce 1, combatBlood 1, nullifiesEnemyShields:true
+  — annule la totalité des boucliers adverses (carte + tuile + Ta-Seti +
+  JP) pour ce combat.
+
+Bouquetin (N_2_1) : combatForce 1, movementBonus 1, attackerAnkCost 2 —
+  toute troupe ennemie entrant dans la zone où cette créature est
+  stationnée (déplacement normal ou téléportation) doit payer 2 Ank
+  (getBouquetinAnkCost), vérifié comme un coût bloquant avant l'exécution
+  du déplacement/téléportation.
+
+Minotaure (W_2_3) : combatForce 1, movementBonus 1,
+  nullifiesAllBloodExceptCards:true — annule entièrement les bonus de sang
+  liés aux tuiles et aux créatures adverses (seul le sang des cartes ID et
+  des cartes combat adverses reste actif) ; annule aussi implicitement le
+  "sang inévitable" (unblockableBlood) de tuiles comme "Force et
+  Saignement"/R_4_4 pour le camp adverse.
+
+Chiron (W_2_2) : combatForce 1, movementBonus 1,
+  allowsSecondCreature:true — permet d'équiper une SECONDE créature dans
+  la même zone (slot creatureAssignments2), cumulant les bonus des deux
+  créatures (myPower/myPower2 sommés en combat et en déplacement).
+
+Kraken (B_2_2) : reserveOnly:true (jamais équipable sur une troupe —
+  exclu de la liste sélectionnable de CreatureEquipModal), riverBonus:true
+  — tant qu'elle est possédée (peu importe l'équipement puisqu'elle n'est
+  jamais équipée), +1 force de combat dans toute zone listée dans
+  RIVER_ZONES, sauf annulation par un Serpent adverse.
+
+Cerbère (R_2_7) : immovable:true, blockEnemyEntry:true, minUnitsInZone:1,
+  placeOnAnyZone:true, mustEquipOnPurchase:true, returnToMarketOnNight:true,
+  returnToMarketWhenTroopGone:true.
+  - Achat bloqué sauf si l'acheteur a ≥1 troupe sans créature assignée
+    n'importe où sur le plateau ; doit être placé IMMÉDIATEMENT via
+    CreatureEquipModal (mode "anyZone", modale forcée, non annulable).
+  - Tant qu'il est stationné : bloque tout déplacement/téléportation
+    ennemi vers cette zone (hasEnemyCerbereInZone), ne bouge JAMAIS avec sa
+    troupe, et la troupe où il se trouve ne peut pas descendre sous 1
+    unité tant qu'il y est (vérifié dans handleMoveHop).
+  - Retourne automatiquement à la boutique CHAQUE NUIT (NightModal.jsx) et
+    aussi immédiatement si sa troupe est anéantie (watcher dédié dans
+    GameScreen.jsx, ex : Pluie de Feu ou pertes de combat) — dans les deux
+    cas il est retiré de ownedTileIds et remis dans availableTileIds, donc
+    il doit être RACHETÉ pour être réutilisé.
+
+Phoenix (R_2_1) : combatForce 1, movementBonus 1, wallPass:true — une
+  troupe se déplaçant avec cette créature peut entrer dans une cité
+  ennemie en ignorant la règle de "Muraille" (adjacence au premier pas
+  seulement), même effet final que "Passe muraille" mais limité au
+  déplacement de cette créature spécifique plutôt qu'une tuile
+  permanente valable pour tout le joueur.
+
+Notes sur le cumul des annulations (getCombatCreatureBonus) : si l'un des
+deux emplacements de créature d'un joueur (activé par Chiron) porte un
+flag d'annulation, il s'applique ; nullified/shieldsNullifiedByEnemy/
+creatureBloodNullifiedByEnemy sont chacun calculés en OR sur les deux
+emplacements adverses.
+
+Flags morts/inutilisés annexes (non liés à une entrée POWER_TILES, mais
+pertinents pour l'audit) : nullifiesEnemyCreatureBlood est référencé dans
+getCombatCreatureBonus mais aucune créature de CREATURE_POWERS ne le pose
+(inaccessible sauf via la branche OR séparée nullifiesAllBloodExceptCards).
+Les champs prescience et legion de getJpTokenFlags() sont calculés pour
+les jetons de prêtre Ta-Seti mais jamais lus par aucun code consommateur
+(seuls defenseVictoryVp, replacementUnit, wallPass et movementBonus sont
+réellement branchés).

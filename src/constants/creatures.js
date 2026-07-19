@@ -15,6 +15,7 @@ const CREATURE_FILE_SLUGS = {
   "Chiron": "Chiron",
   "Meduse": "Meduse",
   "Kraken": "Kraken",
+  "Phoenix": "Phoenix",
 };
 
 export const CREATURE_NAMES = Object.keys(CREATURE_FILE_SLUGS);

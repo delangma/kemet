@@ -84,7 +84,6 @@ export function getPowerTileCombatBonus(ownedTileIds, isAttacker, powerTiles, di
 
 export const CREATURE_POWERS = {
   "Serpent": {
-    combatForce: 1,
     movementBonus: 1,
     nullifiesEnemy: true,
   },
@@ -207,10 +206,15 @@ export function getCombatCreatureBonus(playerId, enemyPlayerId, zoneId, creature
   const enemyPower  = enemyCreatureName  ? CREATURE_POWERS[enemyCreatureName]  : null;
   const enemyPower2 = enemyCreatureName2 ? CREATURE_POWERS[enemyCreatureName2] : null;
 
-  const nullified                    = !!(enemyPower?.nullifiesEnemy              || enemyPower2?.nullifiesEnemy);
-  const shieldsNullifiedByEnemy      = !!(enemyPower?.nullifiesEnemyShields       || enemyPower2?.nullifiesEnemyShields);
-  const allBloodNullifiedByEnemy     = !!(enemyPower?.nullifiesAllBloodExceptCards || enemyPower2?.nullifiesAllBloodExceptCards);
-  const creatureBloodNullifiedByEnemy = !!(
+  const nullified   = !!(enemyPower?.nullifiesEnemy || enemyPower2?.nullifiesEnemy);
+  // Si JE possède un Serpent, TOUTES les capacités de la créature adverse sont
+  // annulées (pas seulement ses stats de combat) : ses pouvoirs spéciaux comme
+  // "nullifiesEnemyShields" (Méduse) ou "nullifiesAllBloodExceptCards" (Minotaure)
+  // sont eux-mêmes neutralisés, ils ne doivent pas s'appliquer contre moi.
+  const myHasSerpent = !!(myPower?.nullifiesEnemy || myPower2?.nullifiesEnemy);
+  const shieldsNullifiedByEnemy      = !myHasSerpent && !!(enemyPower?.nullifiesEnemyShields       || enemyPower2?.nullifiesEnemyShields);
+  const allBloodNullifiedByEnemy     = !myHasSerpent && !!(enemyPower?.nullifiesAllBloodExceptCards || enemyPower2?.nullifiesAllBloodExceptCards);
+  const creatureBloodNullifiedByEnemy = !myHasSerpent && !!(
     enemyPower?.nullifiesEnemyCreatureBlood || enemyPower2?.nullifiesEnemyCreatureBlood ||
     allBloodNullifiedByEnemy
   );
@@ -256,8 +260,9 @@ export function getMovementCreatureBonus(creatureName) {
  * @param {Array}   powerTiles           - POWER_TILES
  * @param {string}  movingCreatureName   - nom de la créature en train de se déplacer vers cette zone (ou null)
  * @param {number}  defaultMax           - MAX_UNITS_PER_ZONE (5)
+ * @param {object}  boardPriests         - gameState.boardPriests (pour le jeton JP_legion)
  */
-export function getZoneMaxUnits(zoneId, playerColor, creatureAssignments, players, powerTiles, movingCreatureName, defaultMax) {
+export function getZoneMaxUnits(zoneId, playerColor, creatureAssignments, players, powerTiles, movingCreatureName, defaultMax, boardPriests = {}) {
   // Bouliste déjà dans la zone ?
   const tileId = creatureAssignments?.[zoneId]?.[playerColor];
   const existingName = tileId ? powerTiles.find(t => t.id === tileId)?.name : null;
@@ -268,13 +273,38 @@ export function getZoneMaxUnits(zoneId, playerColor, creatureAssignments, player
   const arriving = movingCreatureName ? CREATURE_POWERS[movingCreatureName]?.zoneMaxUnits : null;
   if (arriving) return arriving;
 
-  // Légion : +2 unités max pour ce joueur dans toutes ses zones
+  // Légion : +2 unités max pour ce joueur dans toutes ses zones (tuile, joueur entier)
   const playerEntry = Object.values(players || {}).find(p => p.color === playerColor);
-  const legionBonus = (playerEntry?.ownedTileIds || []).some(
+  const hasLegionTile = (playerEntry?.ownedTileIds || []).some(
     id => powerTiles.find(t => t.id === id)?.name === "Légion"
-  ) ? 2 : 0;
+  );
 
-  return defaultMax + legionBonus;
+  // Jeton de prêtre JP_legion : +2 unités max, mais seulement dans CETTE zone
+  // (le prêtre doit s'y trouver avec la troupe, contrairement à la tuile qui
+  // s'applique à toutes les zones du joueur).
+  const hasLegionJpToken = (boardPriests?.[zoneId]?.[playerColor]?.jpTokenIds || []).includes('JP_legion');
+
+  return defaultMax + ((hasLegionTile || hasLegionJpToken) ? 2 : 0);
+}
+
+/**
+ * Nombre maximum de troupes (plateau + réserve confondus) qu'un joueur peut
+ * posséder. Base 12, +3 par tuile "Unité supplémentaire" achetée.
+ */
+export function getMaxTotalUnits(ownedTileIds, powerTiles) {
+  const extraUnitTiles = (ownedTileIds || []).filter(
+    id => powerTiles.find(t => t.id === id)?.name === "Unité supplémentaire"
+  ).length;
+  return 12 + 3 * extraUnitTiles;
+}
+
+/**
+ * Total de troupes actuelles d'un joueur : unités sur le plateau (toutes zones)
+ * + réserve.
+ */
+export function getTotalTroopCount(boardUnits, playerColor, unitsReserve) {
+  const onBoard = Object.values(boardUnits || {}).reduce((s, z) => s + (z?.[playerColor] || 0), 0);
+  return onBoard + (unitsReserve || 0);
 }
 
 /**

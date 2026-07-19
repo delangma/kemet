@@ -114,7 +114,7 @@ export const TYPE_LABEL = {
 };
 
 const TILE_IMAGES = {
-  "R_2_1": "/Tile_R_2_8.jpeg",
+  "R_2_1": "/Tile_R_2_1.jpeg",
   ...Object.fromEntries([
     // Bleu
     "B_1_1","B_1_2","B_1_4","B_1_5",
@@ -146,6 +146,15 @@ export function getTileImageUrl(id) {
 // Jeton gris (une tuile par couleur, noms hétérogènes) — un seul par joueur
 export function isGrayTokenTile(tile) {
   return (tile?.name ?? "").toLowerCase().startsWith("jeton gris");
+}
+
+// Jeton doré (noms hétérogènes, R_4_1 n'a même pas "doré" dans son nom) —
+// un seul possédable par joueur ; toutes les actions jeton doré partagent
+// un seul usage/jour (goldenTokenUsed) et sont bloquées le tour de l'achat
+// (goldenBuyBlockedThisTurn).
+const GOLDEN_TOKEN_TILE_IDS = new Set(["R_4_1", "B_4_2", "N_1_4", "N_2_4", "N_3_3"]);
+export function isGoldenTokenTile(tile) {
+  return GOLDEN_TOKEN_TILE_IDS.has(tile?.id);
 }
 
 export function getPlayerPyramidLevel(playerId, color, pyramids) {

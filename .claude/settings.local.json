@@ -37,7 +37,15 @@
       "Bash(node *)",
       "Bash(npx firebase-tools *)",
       "Bash(grep -rn \"gameState/turn\\\\`\\\\]\\\\|turn: 0\\\\|turn:1\\\\|\\\\\"turn\\\\\"\" \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Lobby\\\\Lobby.jsx\" \"C:\\\\Users\\\\maxim\\\\Documents\\\\kemet\\\\src\\\\components\\\\Game\\\\GameScreen.jsx\")",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Bash(python3 -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "Bash(python -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "Bash(pip install *)",
+      "Bash(python \"C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-maxim-Documents-kemet\\\\9da8dfde-4b04-495a-b702-9c51baa8f009\\\\scratchpad\\\\build_tiles_excel.py\")",
+      "Bash(where python *)",
+      "Bash(where python3 *)",
+      "Bash(py --version)",
+      "Bash(C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe *)"
     ]
   }
 }

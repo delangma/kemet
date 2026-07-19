@@ -4,7 +4,7 @@ import { ref, update, get } from "firebase/database";
 import { dealCards, buildPuDeck, buildJiDeck, buildJpDeck } from "../../utils/deck";
 import { getJuPositionsForLayout, getJiPositionsForLayout, getJpPositionsForLayout } from "../../constants/taSetiPositions";
 import { POWER_TILES } from "../../constants/powerTiles";
-import { CREATURE_POWERS } from "../../constants/creaturePowers";
+import { CREATURE_POWERS, getMaxTotalUnits, getTotalTroopCount } from "../../constants/creaturePowers";
 import { computeTempVP } from "../../utils/vp";
 
 const PLAYER_COLOR_TEXT = {
@@ -152,6 +152,9 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       updates[`rooms/${roomCode}/gameState/players/${p.id}/actionsThisTurn`] = 0;
       updates[`rooms/${roomCode}/gameState/players/${p.id}/goldenTokenUsed`] = false;
       updates[`rooms/${roomCode}/gameState/players/${p.id}/goldenBuyBlockedThisTurn`] = false;
+      // Jeton gris : la 2e action bonus (jouée dans le même tour qu'une action
+      // classique) redevient disponible une fois par jour.
+      updates[`rooms/${roomCode}/gameState/players/${p.id}/grayBonusUsed`] = false;
     });
 
     if (t1Controller) ankBonus[t1Controller.id] += 2;
@@ -180,8 +183,11 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       const ownedIds = ps.ownedTileIds || [];
       if (ownedIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Renforcement 4 unités")) {
         const base = updates[`rooms/${roomCode}/gameState/players/${p.id}/unitsReserve`] ?? (ps.unitsReserve ?? 0);
-        updates[`rooms/${roomCode}/gameState/players/${p.id}/unitsReserve`] = base + 4;
-        updates[`rooms/${roomCode}/gameState/players/${p.id}/reinforcementPending`] = 4;
+        const maxTotal = getMaxTotalUnits(ownedIds, POWER_TILES);
+        const onBoard = getTotalTroopCount(state.boardUnits, p.color, 0);
+        const granted = Math.max(0, Math.min(4, maxTotal - onBoard - base));
+        updates[`rooms/${roomCode}/gameState/players/${p.id}/unitsReserve`] = base + granted;
+        updates[`rooms/${roomCode}/gameState/players/${p.id}/reinforcementPending`] = granted;
       }
     });
 

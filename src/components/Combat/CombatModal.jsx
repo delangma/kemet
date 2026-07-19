@@ -3,10 +3,10 @@ import { db } from "../../firebase";
 import { ref, onValue, update, remove, set } from "firebase/database";
 import { COMBAT_CARDS, getPlayerCombatDeck } from "../../constants/cards";
 import { POWER_TILES, getPlayerPyramidLevel } from "../../constants/powerTiles";
-import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags, getPowerTileCombatBonus } from "../../constants/creaturePowers";
+import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFlags, getPowerTileCombatBonus, getJpTokenCombatBonus, getMaxTotalUnits, getTotalTroopCount } from "../../constants/creaturePowers";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { ZONE_ADJACENCY } from "../../constants/board";
-import { aiChooseCombatCards, aiSelectCombatIdCard } from "../../ai/aiPlayer";
+import { aiChooseCombatCards, aiChooseCombatCardKnowingOpponent, aiSelectCombatIdCard } from "../../ai/aiPlayer";
 
 export default function CombatModal({ onClose, session, gameState, effectivePlayerId: epId, isTestMode, testPlayers, testViewPlayerId, onSwitchTestPlayer, logAction }) {
   const { roomCode, playerId: sessionPlayerId, allPlayers } = session;
@@ -107,7 +107,19 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       const available = aiState.availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
       const opponentId = pid === combat.attacker ? combat.defender : combat.attacker;
       const opponentAvailable = (gameState?.players?.[opponentId] || {}).availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
-      const cards = aiChooseCombatCards(available, opponentAvailable);
+
+      // Préscience : si l'IA la possède, elle attend de connaître la carte
+      // déjà choisie par l'adversaire avant de jouer la sienne, au lieu de
+      // choisir à l'aveugle en même temps. Rien à faire tant que l'adversaire
+      // n'a pas encore validé son choix — l'effet se redéclenchera dès que
+      // combat.choices change.
+      const iHavePrescience = combat.prescience === pid;
+      const opponentCardId = combat.choices?.[opponentId]?.combatCard;
+      if (iHavePrescience && !opponentCardId) return;
+
+      const cards = iHavePrescience
+        ? aiChooseCombatCardKnowingOpponent(gameState, available, opponentCardId, pid, opponentId, combat.zoneId)
+        : aiChooseCombatCards(available, opponentAvailable);
       if (!cards) return;
       setTimeout(() => {
         update(ref(db, `rooms/${roomCode}/combat/choices/${pid}`), {
@@ -118,7 +130,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
         });
         const cardDesc = (id) => { const c = COMBAT_CARDS.find(c => c.id === id); return c ? `#${id}[F${c.force}/${c.blood}sang/${c.shields}bou]` : `#${id}`; };
         const role = pid === combat.attacker ? "ATT" : "DEF";
-        logAction?.(pid, `COMBAT (${role}) choisit carte:${cardDesc(cards.combatCard)} défausse:${cardDesc(cards.discardCard)} — dispo:${available.length} cartes — en ${combat.zoneId}`);
+        const prescienceNote = iHavePrescience ? ` (Préscience : adversaire=${cardDesc(opponentCardId)})` : "";
+        logAction?.(pid, `COMBAT (${role}) choisit carte:${cardDesc(cards.combatCard)} défausse:${cardDesc(cards.discardCard)} — dispo:${available.length} cartes — en ${combat.zoneId}${prescienceNote}`);
       }, 800);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,6 +178,54 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [combat?.currentTurn, combat?.status]);
+
+  // ── IA : phase "swap_phase" (Changement de Stratégie) — décide d'échanger ──
+  useEffect(() => {
+    if (!combat || combat.status !== "swap_phase") return;
+    const swapPending = combat.swapPending || {};
+    const waitingAiIds = Object.entries(swapPending)
+      .filter(([pid, status]) => status === "pending" && allPlayers.find(p => p.id === pid)?.isAI)
+      .map(([pid]) => pid);
+    if (waitingAiIds.length === 0) return;
+    const t = setTimeout(async () => {
+      for (const pid of waitingAiIds) {
+        const opponentId = pid === combat.attacker ? combat.defender : combat.attacker;
+        const opponentColor = allPlayers.find(p => p.id === opponentId)?.color;
+        const myColorAI = allPlayers.find(p => p.id === pid)?.color;
+        const zoneUnits = gameState?.boardUnits?.[combat.zoneId] || {};
+        const myUnits = zoneUnits[myColorAI] || 0;
+        const opponentUnits = zoneUnits[opponentColor] || 0;
+        const myChoice = combat.choices?.[pid];
+        const myCombatCard = getCard(myChoice?.combatCard);
+        const myDiscardCard = getCard(myChoice?.discardCard);
+        // Préscience : carte adverse déjà connue avec certitude, pas besoin d'estimer
+        const knownOppCardSwap = (combat.prescience === pid) ? getCard(combat.choices?.[opponentId]?.combatCard) : null;
+        const opponentAvailable = (gameState?.players?.[opponentId] || {}).availableCombatCards || [1, 2, 3, 4, 5, 6, 7, 8];
+        const oppAvgForce = knownOppCardSwap
+          ? knownOppCardSwap.force
+          : (opponentAvailable.length > 0
+              ? opponentAvailable.reduce((s, id) => s + (getCard(id)?.force ?? 0), 0) / opponentAvailable.length
+              : 3);
+        // Jetons JP des prêtres présents dans la zone de combat
+        const myJpForceSwap = getJpTokenCombatBonus(gameState?.boardPriests, combat.zoneId, myColorAI, pid === combat.attacker).force;
+        const oppJpForceSwap = getJpTokenCombatBonus(gameState?.boardPriests, combat.zoneId, opponentColor, opponentId === combat.attacker).force;
+        const opponentEstimatedForce = opponentUnits + oppAvgForce + oppJpForceSwap;
+        const myForce = myUnits + (myCombatCard?.force ?? 0) + myJpForceSwap;
+        const discardForce = myUnits + (myDiscardCard?.force ?? 0) + myJpForceSwap;
+        const doSwap = discardForce > myForce && discardForce >= opponentEstimatedForce && myForce < opponentEstimatedForce;
+        const updates = { [`swapPending/${pid}`]: "done" };
+        if (doSwap) {
+          updates[`choices/${pid}/combatCard`]  = myChoice.discardCard;
+          updates[`choices/${pid}/discardCard`] = myChoice.combatCard;
+        }
+        await update(ref(db, `rooms/${roomCode}/combat`), updates);
+        const role = pid === combat.attacker ? "ATT" : "DEF";
+        logAction?.(pid, `Changement de Stratégie (${role}) : ${doSwap ? "échange sa carte combat" : "conserve sa carte combat"} en ${combat.zoneId}`);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [combat?.status, JSON.stringify(combat?.swapPending)]);
 
   // ── IA : applique les résultats si les 2 sont IA en phase "revealed" ────────
   useEffect(() => {
@@ -542,51 +603,49 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       const ws = gameState?.players?.[winnerId] || {};
       const has4AnkWin = hasActiveTile(winnerId, "4 ank en cas de victoire");
       if (has4AnkWin) {
-        const gain = 4 + (hasDayAnk(winnerId) ? 4 : 0);
+        const gain = 4 + (hasDayAnk(winnerId) ? 1 : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/ank`] ?? (ws.ank ?? 7);
         updates[`rooms/${roomCode}/gameState/players/${winnerId}/ank`] = Math.min(11, base + gain);
       }
     }
 
-    // 1 Ank par unité tuée
+    // 1 Ank par unité tuée — effet de résolution de combat, ne se cumule pas
+    // avec "+1 d'Ank en journée" (bonus réservé aux gains d'actions de journée).
     const attackerKills = (unitsD ?? 0) - defenderUnitsAfter;
     const defenderKills = (unitsA ?? 0) - attackerUnitsAfter;
     if (attackerKills > 0) {
       const ps = gameState?.players?.[combat.attacker] || {};
       const hasAnkPerKill = hasActiveTile(combat.attacker, "1 Ank par unité tué");
       if (hasAnkPerKill) {
-        const gain = attackerKills + (hasDayAnk(combat.attacker) ? attackerKills : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] ?? (ps.ank ?? 0);
-        updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] = Math.min(11, base + gain);
+        updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] = Math.min(11, base + attackerKills);
       }
     }
     if (defenderKills > 0) {
       const ps = gameState?.players?.[combat.defender] || {};
       const hasAnkPerKill = hasActiveTile(combat.defender, "1 Ank par unité tué");
       if (hasAnkPerKill) {
-        const gain = defenderKills + (hasDayAnk(combat.defender) ? defenderKills : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] ?? (ps.ank ?? 0);
-        updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] = Math.min(11, base + gain);
+        updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] = Math.min(11, base + defenderKills);
       }
     }
 
-    // 1 ank par unité perdue (N_2_3)
+    // 1 ank par unité perdue (N_2_3) — idem, effet de résolution de combat,
+    // ne se cumule pas avec "+1 d'Ank en journée".
     const attackerLosses = defenderKills;
     const defenderLosses = attackerKills;
     if (attackerLosses > 0) {
       const ps = gameState?.players?.[combat.attacker] || {};
       if (hasActiveTile(combat.attacker, "1 ank par unité perdu")) {
-        const gain = attackerLosses + (hasDayAnk(combat.attacker) ? attackerLosses : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] ?? (ps.ank ?? 0);
-        updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] = Math.min(11, base + gain);
+        updates[`rooms/${roomCode}/gameState/players/${combat.attacker}/ank`] = Math.min(11, base + attackerLosses);
       }
     }
     if (defenderLosses > 0) {
       const ps = gameState?.players?.[combat.defender] || {};
       if (hasActiveTile(combat.defender, "1 ank par unité perdu")) {
-        const gain = defenderLosses + (hasDayAnk(combat.defender) ? defenderLosses : 0);
         const base = updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] ?? (ps.ank ?? 0);
-        updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] = Math.min(11, base + gain);
+        updates[`rooms/${roomCode}/gameState/players/${combat.defender}/ank`] = Math.min(11, base + defenderLosses);
       }
     }
 
@@ -599,8 +658,21 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/ank`] ?? (ws.ank ?? 0);
       updates[`rooms/${roomCode}/gameState/players/${winnerId}/ank`] = Math.min(11, base + ankIfWin);
     }
+    // Plafond de troupes (12, +3 par tuile "Unité supplémentaire") : les recrutements
+    // gratuits en attente ne peuvent pas dépasser la place restante.
+    const winnerColorCap = allPlayers.find(p => p.id === winnerId)?.color;
+    const winnerRemainingCap = () => {
+      const ws = gameState?.players?.[winnerId] || {};
+      const maxTotal = getMaxTotalUnits(ws.ownedTileIds || [], POWER_TILES);
+      const current = getTotalTroopCount(gameState?.boardUnits, winnerColorCap, ws.unitsReserve ?? 0);
+      const pendingAlready = updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] ?? (ws.victoryRecruitPending ?? 0);
+      return Math.max(0, maxTotal - current - pendingAlready);
+    };
     if (unitsIfWin > 0) {
-      updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] = unitsIfWin;
+      const granted = Math.min(unitsIfWin, winnerRemainingCap());
+      if (granted > 0) {
+        updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] = granted;
+      }
     }
 
     // JP_replacement_unite : le gagnant récupère 1 unité perdue s'il en a encore
@@ -609,7 +681,7 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
       const winnerLosses = winnerIsAttacker ? attackerDamage : defenderDamage;
       const winnerUnitsLeft = winnerIsAttacker ? attackerUnitsAfter : defenderUnitsAfter;
       const winnerJpFlags = winnerIsAttacker ? jpFlagsA : jpFlagsD;
-      if (winnerJpFlags?.replacementUnit && winnerLosses > 0 && winnerUnitsLeft > 0) {
+      if (winnerJpFlags?.replacementUnit && winnerLosses > 0 && winnerUnitsLeft > 0 && winnerRemainingCap() > 0) {
         const ws = gameState?.players?.[winnerId] || {};
         const base = updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] ?? (ws.victoryRecruitPending ?? 0);
         updates[`rooms/${roomCode}/gameState/players/${winnerId}/victoryRecruitPending`] = base + 1;
@@ -906,14 +978,23 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
 
             {isParticipant && (
               <div className="flex flex-col gap-4">
-                {hasPrescience && combat?.choices?.[combat?.attacker === playerId ? combat?.defender : combat?.attacker]?.combatCard && (
-                  <div className="bg-purple-900 border border-purple-600 rounded-lg p-3 text-center">
-                    <p className="text-purple-300 text-sm font-bold">Prescience</p>
-                    <p className="text-gray-300 text-xs mt-1">
-                      Carte adverse : Force {getCard(combat.choices[combat.attacker === playerId ? combat.defender : combat.attacker].combatCard)?.force}
-                    </p>
-                  </div>
-                )}
+                {hasPrescience && combat?.choices?.[combat?.attacker === playerId ? combat?.defender : combat?.attacker]?.combatCard && (() => {
+                  const oppCard = getCard(combat.choices[combat.attacker === playerId ? combat.defender : combat.attacker].combatCard);
+                  return (
+                    <div className="bg-purple-900 border border-purple-600 rounded-lg p-3 text-center">
+                      <p className="text-purple-300 text-sm font-bold mb-2">Prescience</p>
+                      <p className="text-gray-400 text-xs mb-2">Carte adverse révélée :</p>
+                      {oppCard && (
+                        <img
+                          src={`/Combat_${oppCard.force}${oppCard.blood}${oppCard.shields}.png`}
+                          alt={`Force ${oppCard.force}`}
+                          draggable={false}
+                          style={{ width: 96, borderRadius: 8, display: 'block', margin: '0 auto' }}
+                        />
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {combat?.choices?.[playerId]?.ready ? (
                   <div className="text-center py-4">

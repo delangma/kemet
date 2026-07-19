@@ -20,10 +20,9 @@ import Board from "../Board/board";
 import SetupPhaseModal from "./SetupPhaseModal";
 import DraftPhaseModal from "./DraftPhaseModal";
 import MoveConfigModal from "./MoveConfigModal";
-import CreatureEquipModal from "./CreatureEquipModal";
-import { POWER_TILES, getPlayerPyramidLevel, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl, isGrayTokenTile } from "../../constants/powerTiles";
+import { POWER_TILES, getPlayerPyramidLevel, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl, isGrayTokenTile, isGoldenTokenTile } from "../../constants/powerTiles";
 import { ZONE_ADJACENCY } from "../../constants/board";
-import { getMovementCreatureBonus, getZoneMaxUnits, CREATURE_POWERS, hasEnemyCerbereInZone } from "../../constants/creaturePowers";
+import { getMovementCreatureBonus, getZoneMaxUnits, CREATURE_POWERS, hasEnemyCerbereInZone, hasFireRainProtection, getJpTokenFlags, getMaxTotalUnits, getTotalTroopCount } from "../../constants/creaturePowers";
 import { COMBAT_CARDS, getPlayerCombatDeck } from "../../constants/cards";
 import TaSetiBoard from "./TaSetiBoard";
 import AllTilesModal from "./AllTilesModal";
@@ -206,6 +205,7 @@ export default function GameScreen({ session }) {
   const [moveConfig, setMoveConfig] = useState(null);
   const [moveState, setMoveState] = useState(null);
   const [pendingCerbereId, setPendingCerbereId] = useState(null); // placement immédiat après achat
+  const [equipCreatureId, setEquipCreatureId] = useState(null); // équipement volontaire, choisi sur la carte
   const [sceauDivinPicker, setSceauDivinPicker] = useState(null); // choix de la tuile adverse à annuler
   const [testViewPlayerId, setTestViewPlayerId] = useState(playerId);
   // Mode test 3 IA : par défaut l'IA ne termine pas son tour automatiquement
@@ -513,7 +513,7 @@ export default function GameScreen({ session }) {
       const joinOrder = aiPlayer.joinOrder;
       const ps = gameState.players?.[aiId] || {};
 
-      for (const { key, usesReserve } of pendingTypes) {
+      for (const { key, usesReserve, free } of pendingTypes) {
         let pending = (updates[`rooms/${roomCode}/gameState/players/${aiId}/${key}`] ?? ps[key]) ?? 0;
         if (pending <= 0) continue;
         const reserve = updates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? ps.unitsReserve ?? 0;
@@ -521,10 +521,27 @@ export default function GameScreen({ session }) {
           updates[`rooms/${roomCode}/gameState/players/${aiId}/${key}`] = null;
           continue;
         }
-        // Zones valides : cité ou zones avec unités existantes
-        const validZones = BOARD_ZONES.filter(z =>
-          z.id.startsWith(`J${joinOrder}C`) || (boardUnits[z.id]?.[aiColor] || 0) > 0
-        );
+        // Plafond de troupes du joueur (12, +3 par tuile "Unité supplémentaire") :
+        // les recrutements gratuits (victoryRecruitPending) ne créent pas de
+        // nouvelle miniature au-delà du maximum.
+        if (free) {
+          const maxTotalAI = getMaxTotalUnits(ps.ownedTileIds || [], POWER_TILES);
+          const curBoardAI = BOARD_ZONES.reduce((s, z) => {
+            const v = updates[`rooms/${roomCode}/gameState/boardUnits/${z.id}/${aiColor}`] ?? (boardUnits[z.id]?.[aiColor] || 0);
+            return s + v;
+          }, 0);
+          const curReserveAI = updates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? ps.unitsReserve ?? 0;
+          if (curBoardAI + curReserveAI >= maxTotalAI) continue;
+        }
+        // Zones valides : cité ou zones avec unités existantes, avec de la place
+        // (plafond Légion/Bouliste/JP_legion inclus)
+        const validZones = BOARD_ZONES.filter(z => {
+          const isEligible = z.id.startsWith(`J${joinOrder}C`) || (boardUnits[z.id]?.[aiColor] || 0) > 0;
+          if (!isEligible) return false;
+          const curr = updates[`rooms/${roomCode}/gameState/boardUnits/${z.id}/${aiColor}`] ?? boardUnits[z.id]?.[aiColor] ?? 0;
+          const max = getZoneMaxUnits(z.id, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+          return curr < max;
+        });
         // Priorité à la zone avec le plus d'unités existantes
         const target = validZones.sort((a, b) =>
           (boardUnits[b.id]?.[aiColor] || 0) - (boardUnits[a.id]?.[aiColor] || 0)
@@ -533,7 +550,6 @@ export default function GameScreen({ session }) {
 
         const zId = target.id;
         const currentUnits = updates[`rooms/${roomCode}/gameState/boardUnits/${zId}/${aiColor}`] ?? boardUnits[zId]?.[aiColor] ?? 0;
-        if (currentUnits >= MAX_UNITS_PER_ZONE) continue;
         updates[`rooms/${roomCode}/gameState/boardUnits/${zId}/${aiColor}`] = currentUnits + 1;
         if (usesReserve) {
           const curReserve = updates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? ps.unitsReserve ?? 0;
@@ -789,9 +805,17 @@ export default function GameScreen({ session }) {
   function canTakeAction() {
     if (!gameState) return false;
     const s = gameState.players?.[effectivePlayerId] || {};
-    if ((s.actionsThisTurn ?? 0) >= 1) return false;
     if ((s.tokens ?? 5) <= 0) return false;
-    return true;
+    const actionsDone = s.actionsThisTurn ?? 0;
+    if (actionsDone === 0) return true;
+    // Jeton gris : le 6e jeton d'action n'est pas un tour indépendant — il ne peut
+    // être joué que dans le MÊME tour qu'un jeton classique (une 2e action, une
+    // seule fois par jour).
+    if (actionsDone === 1 && !s.grayBonusUsed) {
+      const hasGrayToken = (s.ownedTileIds || []).some(id => isGrayTokenTile(POWER_TILES.find(t => t.id === id)));
+      if (hasGrayToken) return true;
+    }
+    return false;
   }
 
   // True si le joueur (par couleur) a au moins une troupe sans créature —
@@ -929,6 +953,11 @@ export default function GameScreen({ session }) {
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`]: (myState.tokens ?? 5) - 1,
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/actionsThisTurn`]: (myState.actionsThisTurn ?? 0) + 1,
     };
+    // Jeton gris : l'action bonus (2e action du tour) consomme le jeton spécial —
+    // il ne peut être joué que dans le même tour qu'une action classique, jamais seul.
+    if ((myState.actionsThisTurn ?? 0) === 1) {
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/grayBonusUsed`] = true;
+    }
 
     // Fin d'action recruter : reset unités gratuites restantes
     if (actionId === "recruit") {
@@ -943,10 +972,10 @@ export default function GameScreen({ session }) {
     );
     if (actionId === "prayer2") {
       const gain = 2 + prayerBonus;
-      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, (myState.ank ?? 7) + gain + (hasDayAnk ? gain : 0));
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, (myState.ank ?? 7) + gain + (hasDayAnk ? 1 : 0));
     } else if (actionId === "prayer3") {
       const gain = 3 + prayerBonus;
-      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, (myState.ank ?? 7) + gain + (hasDayAnk ? gain : 0));
+      updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, (myState.ank ?? 7) + gain + (hasDayAnk ? 1 : 0));
     } else if (actionId === "pyramid") {
       const { slotId, color: newColor } = params;
       const pyr = gameState.pyramids?.[slotId] || {};
@@ -972,7 +1001,8 @@ export default function GameScreen({ session }) {
         const newLevel = params.level ?? (pyr.level ?? 0) + 1;
         if (newLevel > 4 || newLevel <= (pyr.level ?? 0)) return;
         const rawCost = pyramidCost(pyr.level ?? 0, newLevel);
-        const cost = Math.max(0, rawCost - (hasReductionPyramide ? 1 : 0) - (hasAnkReducPyr ? 1 : 0));
+        const levelsGained = newLevel - (pyr.level ?? 0);
+        const cost = Math.max(0, rawCost - (hasReductionPyramide ? levelsGained : 0) - (hasAnkReducPyr ? 1 : 0));
         if (currentAnk < cost) return;
         updates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = newLevel;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = currentAnk - cost;
@@ -1033,22 +1063,29 @@ export default function GameScreen({ session }) {
       updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ownedTileIds`] = [...ownedTileIds, tileId];
       updates[`rooms/${roomCode}/gameState/availableTileIds`] = availableTileIds.filter(id => id !== tileId);
 
-      // Unités gratuites à l'achat (ex : Recrutement +2) — placées dans la cité
+      // Unités gratuites à l'achat (ex : Recrutement +2) — placées en cité ou sur
+      // une troupe existante, en respectant le plafond de zone (Légion/Bouliste/JP_legion)
       if (tile.unitsOnPurchase) {
         const joinOrder = allPlayers.find(p => p.id === effectivePlayerId)?.joinOrder;
         if (joinOrder) {
           let reserve = myState.unitsReserve ?? 0;
           let toPlace = Math.min(tile.unitsOnPurchase, reserve);
-          for (const n of ['1', '2', '3']) {
+          const cityZoneIdsPurchase = ['1', '2', '3'].map(n => `J${joinOrder}C${n}`);
+          const otherZonesWithUnits = BOARD_ZONES
+            .map(z => z.id)
+            .filter(zid => !cityZoneIdsPurchase.includes(zid) && (gameState.boardUnits?.[zid]?.[myColor] || 0) > 0);
+          const targetZonesPurchase = [...cityZoneIdsPurchase, ...otherZonesWithUnits];
+          for (const zid of targetZonesPurchase) {
             if (toPlace <= 0) break;
-            const zid = `J${joinOrder}C${n}`;
-            const current = updates[`rooms/${roomCode}/gameState/boardUnits/${zid}/${myColor}`]
+            let current = updates[`rooms/${roomCode}/gameState/boardUnits/${zid}/${myColor}`]
               ?? (gameState.boardUnits?.[zid]?.[myColor] || 0);
-            if (current < MAX_UNITS_PER_ZONE) {
-              updates[`rooms/${roomCode}/gameState/boardUnits/${zid}/${myColor}`] = current + 1;
+            const zoneMaxPurchase = getZoneMaxUnits(zid, myColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+            while (toPlace > 0 && current < zoneMaxPurchase) {
+              current++;
               reserve--;
               toPlace--;
             }
+            updates[`rooms/${roomCode}/gameState/boardUnits/${zid}/${myColor}`] = current;
           }
           updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`] = reserve;
         }
@@ -1057,7 +1094,10 @@ export default function GameScreen({ session }) {
       // Unités supplémentaires en réserve à l'achat (ex : Unité supplémentaire)
       if (tile.reserveOnPurchase) {
         const base = updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`] ?? (myState.unitsReserve ?? 0);
-        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`] = base + tile.reserveOnPurchase;
+        const maxTotalPurchase = getMaxTotalUnits([...ownedTileIds, tileId], POWER_TILES);
+        const onBoardPurchase = getTotalTroopCount(gameState.boardUnits, myColor, 0);
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`] =
+          Math.min(base + tile.reserveOnPurchase, maxTotalPurchase - onBoardPurchase);
       }
 
       // Bonus VP à l'achat (créatures ex: Sphinx, ou tuiles vp ex: Point Rouge Majeur)
@@ -1097,14 +1137,14 @@ export default function GameScreen({ session }) {
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/idRefreshPending`] = true;
       }
 
-      // Jeton doré : interdit de l'utiliser le tour même de l'achat
-      if (tile.name.toLowerCase().includes('doré') || tile.id === 'R_4_1') {
-        if (tile.id === 'N_2_4') {
-          // Le jeton doré achat se débloque dès le tour suivant, pas la nuit
-          updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenBuyBlockedThisTurn`] = true;
-        } else {
-          updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`] = true;
-        }
+      // Jeton doré : l'achat du PREMIER pouvoir jeton doré interdit d'utiliser le
+      // jeton ce tour-ci (débloqué dès le tour suivant, pas la nuit) — le joueur
+      // n'a physiquement qu'un seul jeton doré, quel que soit le nombre de tuiles
+      // pouvoir qui l'utilisent. Acheter un pouvoir jeton doré SUPPLÉMENTAIRE alors
+      // qu'il en possède déjà un ne redéclenche pas ce blocage : le jeton existe
+      // déjà et n'est pas "tout neuf".
+      if (isGoldenTokenTile(tile) && !ownedTileIds.some(id => isGoldenTokenTile(POWER_TILES.find(t => t.id === id)))) {
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenBuyBlockedThisTurn`] = true;
       }
 
       // Avancée Ta-Seti à l'achat
@@ -1157,14 +1197,10 @@ export default function GameScreen({ session }) {
   }
 
   function computeTeleportCost(pid, currentZoneId = null) {
-    const col = me?.color ?? session.playerColor;
-    if (currentZoneId) {
-      const tileId = gameState?.creatureAssignments?.[currentZoneId]?.[col];
-      if (tileId) {
-        const name = POWER_TILES.find(t => t.id === tileId)?.name;
-        if (CREATURE_POWERS[name]?.teleportFromObelisk) return 4;
-      }
-    }
+    // Le Sphinx Volant permet de LANCER une téléportation depuis un obélisque
+    // (voir canTeleportFromHere/board.jsx), mais n'a pas de coût particulier :
+    // il suit exactement le coût normal de téléportation (2 Ank de base, réduit
+    // par les tuiles habituelles), comme confirmé par l'utilisateur.
     const ownedTileIds = activeOwnedTileIds(pid);
     const hasReduction = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction Téléportation");
     const hasAnkReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
@@ -1213,7 +1249,7 @@ export default function GameScreen({ session }) {
 
     const existingAtDest = boardUnits[toZoneId]?.[col] || 0;
     const movingCreatureName = creatureGoes && creatureId ? POWER_TILES.find(t => t.id === creatureId)?.name : null;
-    const destMax = getZoneMaxUnits(toZoneId, col, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE);
+    const destMax = getZoneMaxUnits(toZoneId, col, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
     if (!hasWallPass && existingAtDest + count > destMax) return;
 
     const fromCount = Math.max(0, (boardUnits[currentZoneId]?.[col] || 0) - count);
@@ -1278,7 +1314,7 @@ export default function GameScreen({ session }) {
       const myIds = gameState?.players?.[effectivePlayerId]?.ownedTileIds || [];
       if (myIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Attaque 2 ank")) {
         const baseAnk = updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] ?? currentAnk;
-        const dayAnkA = myIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 2 : 0;
+        const dayAnkA = myIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 1 : 0;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, baseAnk + 2 + dayAnkA);
       }
     }
@@ -1288,7 +1324,9 @@ export default function GameScreen({ session }) {
       const enemyPlayerId = currentPlayers.find(p => p.color === enemyColor)?.id;
       if (enemyPlayerId) {
         const hasTileT = (pid, name) => (gameState?.players?.[pid]?.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === name);
-        const prescienceT = [effectivePlayerId, enemyPlayerId].find(pid => hasTileT(pid, "Préscience")) ?? null;
+        // Jeton de prêtre JP_prescience/JP_ID_combat dans la zone de combat : même effet que la tuile
+        const hasJpPrescienceT = pid => getJpTokenFlags(gameState?.boardPriests || {}, toZoneId, gameState?.players?.[pid]?.color).prescience;
+        const prescienceT = [effectivePlayerId, enemyPlayerId].find(pid => hasTileT(pid, "Préscience") || hasJpPrescienceT(pid)) ?? null;
         const prescienceIdT = [effectivePlayerId, enemyPlayerId].find(pid => hasTileT(pid, "Prescience des IDs")) ?? null;
         updates[`rooms/${roomCode}/combat`] = {
           attacker: effectivePlayerId,
@@ -1350,7 +1388,7 @@ export default function GameScreen({ session }) {
     const isGoldenToken = actionMode === "move_golden";
     if (!isGoldenToken && !canTakeAction()) return;
     const myState = gameState.players?.[effectivePlayerId] || {};
-    if (isGoldenToken && myState.goldenTokenUsed) return;
+    if (isGoldenToken && (myState.goldenTokenUsed || myState.goldenBuyBlockedThisTurn)) return;
 
     const col = me?.color;
     const usedActions = myState.usedActions || [];
@@ -1366,6 +1404,10 @@ export default function GameScreen({ session }) {
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/usedActions`] = [...usedActions, actionMode];
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/tokens`] = (myState.tokens ?? 5) - 1;
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/actionsThisTurn`] = (myState.actionsThisTurn ?? 0) + 1;
+      // Jeton gris : marque l'action bonus comme consommée si c'est la 2e action du tour
+      if ((myState.actionsThisTurn ?? 0) === 1) {
+        fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/grayBonusUsed`] = true;
+      }
     }
     if ((myState.pendingMoveBonus ?? 0) > 0) {
       fbUpdates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingMoveBonus`] = null;
@@ -1396,7 +1438,8 @@ export default function GameScreen({ session }) {
     const zoneUnits = gameState?.boardUnits?.[toZoneId] || {};
     const enemyColor = Object.keys(zoneUnits).find(c => c !== attackerColor && (zoneUnits[c] || 0) > 0);
     if (!enemyColor) return 0;
-    const tileId = gameState?.creatureAssignments?.[toZoneId]?.[enemyColor];
+    const tileId = gameState?.creatureAssignments?.[toZoneId]?.[enemyColor]
+      || gameState?.creatureAssignments2?.[toZoneId]?.[enemyColor];
     const name = tileId ? POWER_TILES.find(t => t.id === tileId)?.name : null;
     return name ? (CREATURE_POWERS[name]?.attackerAnkCost ?? 0) : 0;
   }
@@ -1433,7 +1476,7 @@ export default function GameScreen({ session }) {
   // Active le jeton doré "Déplacement Passe/Muraille" (R_4_1)
   function handleGoldenTokenMoveActivate() {
     const myState = gameState?.players?.[effectivePlayerId] || {};
-    if (myState.goldenTokenUsed) return;
+    if (myState.goldenTokenUsed || myState.goldenBuyBlockedThisTurn) return;
     if (moveState) return;
     setActionMode("move_golden");
   }
@@ -1441,7 +1484,7 @@ export default function GameScreen({ session }) {
   // Active le jeton doré en mode recrutement (B_4_2 "Jeton doré déplacement recrutement")
   async function handleGoldenTokenRecruitActivate() {
     const myState = gameState?.players?.[effectivePlayerId] || {};
-    if (myState.goldenTokenUsed) return;
+    if (myState.goldenTokenUsed || myState.goldenBuyBlockedThisTurn) return;
     if (actionMode) return;
     const fbUpdates = { [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`]: true };
     if ((myState.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2")) {
@@ -1454,7 +1497,7 @@ export default function GameScreen({ session }) {
   // Jeton doré achat ×2 (N_2_4) — acheter une tuile supplémentaire (+1 coût)
   async function handleGoldenTokenBuyActivate() {
     const myState = gameState?.players?.[effectivePlayerId] || {};
-    if (myState.goldenTokenUsed) return;
+    if (myState.goldenTokenUsed || myState.goldenBuyBlockedThisTurn) return;
     if (actionMode) return;
     await update(ref(db, "/"), {
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`]: true,
@@ -1465,7 +1508,7 @@ export default function GameScreen({ session }) {
   // Jeton doré priére (N_1_4) — prayer2 gratuite
   async function handleGoldenTokenPrayerActivate() {
     const myState = gameState?.players?.[effectivePlayerId] || {};
-    if (myState.goldenTokenUsed) return;
+    if (myState.goldenTokenUsed || myState.goldenBuyBlockedThisTurn) return;
     if (actionMode) return;
     const prayerBonus = (myState.ownedTileIds || []).filter(
       id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank"
@@ -1474,7 +1517,7 @@ export default function GameScreen({ session }) {
       id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée"
     );
     const pGain = 2 + prayerBonus;
-    const newAnk = Math.min(11, (myState.ank ?? 7) + pGain + (hasDayAnkPr ? pGain : 0));
+    const newAnk = Math.min(11, (myState.ank ?? 7) + pGain + (hasDayAnkPr ? 1 : 0));
     await update(ref(db, "/"), {
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/goldenTokenUsed`]: true,
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`]: newAnk,
@@ -1575,7 +1618,7 @@ export default function GameScreen({ session }) {
     const hasWallPassMove = gameState?.players?.[effectivePlayerId]?.pendingWallPass ?? false;
 
     const existingAtDest = boardUnits[toZoneId]?.[col] || 0;
-    const destMax = getZoneMaxUnits(toZoneId, col, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE);
+    const destMax = getZoneMaxUnits(toZoneId, col, creatureAssignments, gameState?.players || {}, POWER_TILES, movingCreatureName, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
     if (!hasWallPassMove && existingAtDest + count > destMax) return;
 
     // Coût Bouquetin : l'attaquant paie 2 ank s'il entre dans une zone avec Bouquetin adverse
@@ -1641,7 +1684,7 @@ export default function GameScreen({ session }) {
       const myIds = gameState?.players?.[effectivePlayerId]?.ownedTileIds || [];
       if (myIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Attaque 2 ank")) {
         const baseAnk = updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] ?? (gameState?.players?.[effectivePlayerId]?.ank ?? 7);
-        const dayAnkB = myIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 2 : 0;
+        const dayAnkB = myIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 1 : 0;
         updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/ank`] = Math.min(11, baseAnk + 2 + dayAnkB);
       }
     }
@@ -1663,7 +1706,9 @@ export default function GameScreen({ session }) {
       const enemyPlayerId = currentPlayers.find(p => p.color === enemyColor)?.id;
       if (enemyPlayerId) {
         const hasTile = (pid, name) => (gameState?.players?.[pid]?.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === name);
-        const prescience = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Préscience")) ?? null;
+        // Jeton de prêtre JP_prescience/JP_ID_combat dans la zone de combat : même effet que la tuile
+        const hasJpPrescience = pid => getJpTokenFlags(gameState?.boardPriests || {}, toZoneId, gameState?.players?.[pid]?.color).prescience;
+        const prescience = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Préscience") || hasJpPrescience(pid)) ?? null;
         const prescienceId = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Prescience des IDs")) ?? null;
         updates[`rooms/${roomCode}/combat`] = {
           attacker: effectivePlayerId,
@@ -1747,7 +1792,9 @@ export default function GameScreen({ session }) {
       const enemyPlayerId = currentPlayers.find(p => p.color === enemyColor)?.id;
       if (enemyPlayerId) {
         const hasTile = (pid, name) => (gameState?.players?.[pid]?.ownedTileIds || []).some(id => POWER_TILES.find(t => t.id === id)?.name === name);
-        const prescience = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Préscience")) ?? null;
+        // Jeton de prêtre JP_prescience/JP_ID_combat dans la zone de combat : même effet que la tuile
+        const hasJpPrescience = pid => getJpTokenFlags(gameState?.boardPriests || {}, currentZoneId, gameState?.players?.[pid]?.color).prescience;
+        const prescience = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Préscience") || hasJpPrescience(pid)) ?? null;
         const prescienceId = [effectivePlayerId, enemyPlayerId].find(pid => hasTile(pid, "Prescience des IDs")) ?? null;
         updates[`rooms/${roomCode}/combat`] = {
           attacker: effectivePlayerId,
@@ -1961,6 +2008,7 @@ export default function GameScreen({ session }) {
     const aiTurnUpdates = {
       currentTurnPlayerId: next.id,
       [`players/${next.id}/actionsThisTurn`]: 0,
+      [`players/${aiId}/goldenBuyBlockedThisTurn`]: false,
     };
     // Sceau Divin : les tuiles annulées du joueur qui commence son tour sont réactivées
     Object.entries(gameState.disabledTileIds || {}).forEach(([tid, ownerPid]) => {
@@ -1969,8 +2017,14 @@ export default function GameScreen({ session }) {
     if (victoryCheck === "immediate") aiTurnUpdates.gameOver = { winnerId: next.id };
     else if (victoryCheck === "pending") aiTurnUpdates.pendingEndAtNight = true;
     await update(ref(db, `rooms/${roomCode}/gameState`), aiTurnUpdates);
-    const endState = gameState.players?.[aiId] || {};
-    const endUnits = Object.values(gameState.boardUnits || {}).reduce((s, z) => {
+    // Relit l'état depuis Firebase plutôt que la closure React `gameState`, qui peut
+    // être périmée (capturée au début du tour, avant l'action qui vient d'être jouée) —
+    // sinon le récap de fin de tour affiche les valeurs d'AVANT l'action (bug déjà vu
+    // pour le stateTag des actions, ici pour le message FIN DE TOUR).
+    const freshSnap = await get(ref(db, `rooms/${roomCode}/gameState`));
+    const freshState = freshSnap.exists() ? freshSnap.val() : gameState;
+    const endState = freshState.players?.[aiId] || {};
+    const endUnits = Object.values(freshState.boardUnits || {}).reduce((s, z) => {
       const col = currentPlayers.find(p => p.id === aiId)?.color;
       return s + (z?.[col] || 0);
     }, 0);
@@ -2003,7 +2057,8 @@ export default function GameScreen({ session }) {
       const zones = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`) || unitAt(z.id, aiColor) > 0)
         .sort((a, b) => unitAt(b.id, aiColor) - unitAt(a.id, aiColor));
       for (const z of zones) {
-        while (pending > 0 && reserve > 0 && unitAt(z.id, aiColor) < MAX_UNITS_PER_ZONE) {
+        const zoneMaxTaseti = getZoneMaxUnits(z.id, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+        while (pending > 0 && reserve > 0 && unitAt(z.id, aiColor) < zoneMaxTaseti) {
           updates[`rooms/${roomCode}/gameState/boardUnits/${z.id}/${aiColor}`] = unitAt(z.id, aiColor) + 1;
           reserve--;
           pending--;
@@ -2022,7 +2077,7 @@ export default function GameScreen({ session }) {
       Object.entries(bu).forEach(([zId, units]) => {
         Object.entries(units || {}).forEach(([c, n]) => {
           const cnt = unitAt(zId, c);
-          if (c !== aiColor && cnt > 0) enemyZones.push({ zId, color: c, count: cnt });
+          if (c !== aiColor && cnt > 0 && !isFireRainProtected(zId, c)) enemyZones.push({ zId, color: c, count: cnt });
         });
       });
       // Préférence : unité isolée sur temple > unité isolée > temple > premier venu
@@ -2047,9 +2102,129 @@ export default function GameScreen({ session }) {
     aiTurnInProgressRef.current = true;
     try {
       await _executeAITurnInner(aiId);
+    } catch (err) {
+      // Une exception ici laissait la partie bloquée en silence : currentTurnPlayerId
+      // ne change pas (pas d'update Firebase avant le throw), donc l'effet IA ne se
+      // redéclenche jamais (dépendances inchangées) et rien n'apparaît dans les logs.
+      // On rend l'erreur visible pour pouvoir diagnostiquer au lieu de deviner.
+      console.error("executeAITurn error:", err);
+      await logAction(aiId, `⚠️ ERREUR IA : ${err?.message || err} — tour bloqué, voir console`).catch(() => {});
     } finally {
       aiTurnInProgressRef.current = false;
     }
+  }
+
+  // Calcule les mises à jour Firebase + le fragment de log pour un bonus jeton
+  // doré (aucun jeton/case d'action consommé, 1x/jour). Retourne { updates, log }
+  // sans rien muter, pour être fusionné aussi bien dans les updates de l'action
+  // principale de l'IA que dans une mise à jour isolée (cas "fin de tour").
+  function computeGoldenActionUpdates(ga, ctx) {
+    const {
+      aiId, aiColor, aiPlayer, ownedTileIds, boardUnits, gameState, ank,
+      reserve, availableTileIds, vpPermanent, creatureAssignments,
+    } = ctx;
+    const updates = {};
+    let log = "";
+    if (ga.type === "golden_prayer") {
+      const prayerBonusG = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
+      const hasDayAnkG = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée");
+      const gainG = 2 + prayerBonusG + (hasDayAnkG ? 1 : 0);
+      updates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, ank + gainG);
+      updates[`rooms/${roomCode}/gameState/players/${aiId}/goldenTokenUsed`] = true;
+      log = `JETON DORÉ PRIÈRE : +${gainG} Ank`;
+    } else if (ga.type === "golden_move") {
+      const gSrc = ga.sourceZoneId, gDst = ga.targetZoneId;
+      const gSrcCurrent = boardUnits[gSrc]?.[aiColor] || 0;
+      const gDstCurrent = boardUnits[gDst]?.[aiColor] || 0;
+      const gCount = Math.min(ga.count, gSrcCurrent);
+      if (gCount > 0) {
+        updates[`rooms/${roomCode}/gameState/boardUnits/${gSrc}/${aiColor}`] = gSrcCurrent - gCount;
+        updates[`rooms/${roomCode}/gameState/boardUnits/${gDst}/${aiColor}`] = gDstCurrent + gCount;
+        updates[`rooms/${roomCode}/gameState/players/${aiId}/goldenTokenUsed`] = true;
+        log = `JETON DORÉ DÉPLACEMENT : ${gSrc}→${gDst} (${gCount} u.${ga.wallPass ? ", passe-muraille" : ""})`;
+      }
+    } else if (ga.type === "golden_recruit") {
+      const hasRecrutLocalG = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
+      const hasFree2G = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2");
+      const cityZonesG = BOARD_ZONES.filter(z =>
+        z.id.startsWith(`J${aiPlayer.joinOrder}C`) || (hasRecrutLocalG && (boardUnits[z.id]?.[aiColor] || 0) > 0)
+      ).map(z => z.id).sort((a, b) => (boardUnits[b]?.[aiColor] || 0) - (boardUnits[a]?.[aiColor] || 0));
+      let reserveG = reserve ?? 0;
+      let ankLeftG = ank;
+      let freeLeftG = hasFree2G ? 2 : 0;
+      let totalPlacedG = 0;
+      const zoneDetailsG = [];
+      for (const zId of cityZonesG) {
+        if (reserveG <= 0) break;
+        const current = boardUnits[zId]?.[aiColor] || 0;
+        const zoneMaxG = getZoneMaxUnits(zId, aiColor, creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+        let currentLocal = current;
+        while (reserveG > 0 && currentLocal < zoneMaxG && (freeLeftG > 0 || ankLeftG >= 1)) {
+          currentLocal++;
+          reserveG--;
+          totalPlacedG++;
+          if (freeLeftG > 0) freeLeftG--; else ankLeftG--;
+        }
+        if (currentLocal !== current) {
+          updates[`rooms/${roomCode}/gameState/boardUnits/${zId}/${aiColor}`] = currentLocal;
+          zoneDetailsG.push(`${zId}:+${currentLocal - current}`);
+        }
+      }
+      if (totalPlacedG > 0) {
+        updates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] = reserveG;
+        updates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ankLeftG;
+        updates[`rooms/${roomCode}/gameState/players/${aiId}/goldenTokenUsed`] = true;
+        log = `JETON DORÉ RECRUTEMENT : +${totalPlacedG} unité${totalPlacedG > 1 ? "s" : ""} (${zoneDetailsG.join(", ")})`;
+      }
+    } else if (ga.type === "golden_buy") {
+      const tileG = POWER_TILES.find(t => t.id === ga.tileId);
+      const curAvailableG = availableTileIds || [];
+      if (tileG && curAvailableG.includes(tileG.id) && !ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === tileG.name)) {
+        const hasCoutReducG2 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1");
+        const hasAnkReducG2 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
+        const costG = Math.max(0, tileG.cost + 1 - (hasCoutReducG2 ? 1 : 0) - (hasAnkReducG2 ? 1 : 0));
+        if (ank >= costG) {
+          updates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ank - costG;
+          updates[`rooms/${roomCode}/gameState/players/${aiId}/ownedTileIds`] = [...ownedTileIds, tileG.id];
+          updates[`rooms/${roomCode}/gameState/availableTileIds`] = curAvailableG.filter(id => id !== tileG.id);
+          updates[`rooms/${roomCode}/gameState/players/${aiId}/goldenTokenUsed`] = true;
+          const creaturePowerG = tileG.type === "creature" ? CREATURE_POWERS[tileG.name] : null;
+          const vpGainG = creaturePowerG?.vpOnPurchase ?? tileG.vpOnPurchase ?? 0;
+          if (vpGainG > 0) {
+            updates[`rooms/${roomCode}/gameState/players/${aiId}/vpPermanent`] = (vpPermanent ?? 0) + vpGainG;
+          }
+          const ankGainG = tileG.ankOnPurchase ?? 0;
+          if (ankGainG > 0) {
+            updates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, ank - costG + ankGainG);
+          }
+          // Créature : déploiement sur une troupe libre (comme un achat normal)
+          if (tileG.type === "creature" && creaturePowerG && !creaturePowerG.reserveOnly) {
+            const existingCAG = creatureAssignments || {};
+            let assignedZoneG = null;
+            if (creaturePowerG.mustEquipOnPurchase) {
+              assignedZoneG = aiFindCerbereTarget(aiColor, boardUnits, existingCAG);
+            } else if (creaturePowerG.placeOnAnyZone) {
+              const entry = Object.entries(boardUnits)
+                .filter(([zId, units]) => (units?.[aiColor] || 0) > 0 && !existingCAG[zId]?.[aiColor])
+                .sort(([, a], [, b]) => (b[aiColor] || 0) - (a[aiColor] || 0))[0];
+              assignedZoneG = entry?.[0] ?? null;
+            } else {
+              const cityZonesG2 = BOARD_ZONES.filter(z => z.id.startsWith(`J${aiPlayer.joinOrder}C`));
+              const z1 = cityZonesG2.find(z => (boardUnits[z.id]?.[aiColor] || 0) > 0 && !existingCAG[z.id]?.[aiColor]);
+              assignedZoneG = z1?.id ?? null;
+            }
+            if (assignedZoneG) {
+              updates[`rooms/${roomCode}/gameState/creatureAssignments/${assignedZoneG}/${aiColor}`] = tileG.id;
+            }
+          }
+          if (isGoldenTokenTile(tileG) && !ownedTileIds.some(id => isGoldenTokenTile(POWER_TILES.find(t => t.id === id)))) {
+            updates[`rooms/${roomCode}/gameState/players/${aiId}/goldenBuyBlockedThisTurn`] = true;
+          }
+          log = `JETON DORÉ ACHAT ×2 : "${tileG.name}" [coût:${costG} Ank]`;
+        }
+      }
+    }
+    return { updates, log };
   }
 
   async function _executeAITurnInner(aiId) {
@@ -2058,6 +2233,24 @@ export default function GameScreen({ session }) {
     if (!aiPlayer) return;
     const myState = gameState.players?.[aiId] || {};
     const aiColor = aiPlayer.color;
+
+    // Récupération d'ID (carte "Récupération d'ID") : résolution automatique pour
+    // l'IA, comme IdRecoverModal.jsx le fait pour l'humain (action gratuite).
+    if (myState.idRecoverPending) {
+      const idDiscardNow = gameState.idDiscard || [];
+      if (idDiscardNow.length > 0) {
+        const pick = idDiscardNow[0];
+        const newDiscardAI = idDiscardNow.filter((c, i) => i !== 0);
+        await update(ref(db, "/"), {
+          [`rooms/${roomCode}/gameState/players/${aiId}/idCards`]: [...(myState.idCards || []), { ...pick, instanceId: `${pick.id}_rec_${Date.now()}` }],
+          [`rooms/${roomCode}/gameState/idDiscard`]: newDiscardAI,
+          [`rooms/${roomCode}/gameState/players/${aiId}/idRecoverPending`]: null,
+        });
+        await logAction(aiId, `récupère "${pick.name}" depuis la défausse`);
+      } else {
+        await update(ref(db, "/"), { [`rooms/${roomCode}/gameState/players/${aiId}/idRecoverPending`]: null });
+      }
+    }
 
     // Deploy any creatures already in reserve but not yet assigned (free action)
     {
@@ -2190,6 +2383,26 @@ export default function GameScreen({ session }) {
     });
 
     if (decision.type === "endTurn") {
+      // Même sans autre action utile, un bonus jeton doré encore disponible
+      // reste gratuit (aucun jeton/case d'action consommé) : on le déclenche
+      // avant de terminer le tour plutôt que de le laisser inutilisé.
+      if (decision.goldenAction && !myState.goldenTokenUsed && !myState.goldenBuyBlockedThisTurn) {
+        const { updates: gUpdates, log: gLog } = computeGoldenActionUpdates(decision.goldenAction, {
+          aiId, aiColor, aiPlayer,
+          ownedTileIds: myState.ownedTileIds || [],
+          boardUnits: gameState.boardUnits || {},
+          gameState,
+          ank: myState.ank ?? 7,
+          reserve: myState.unitsReserve ?? 0,
+          availableTileIds: gameState.availableTileIds || [],
+          vpPermanent: myState.vpPermanent ?? 0,
+          creatureAssignments: gameState.creatureAssignments || {},
+        });
+        if (Object.keys(gUpdates).length > 0) {
+          await update(ref(db, "/"), gUpdates);
+          if (gLog) await logAction(aiId, gLog, { type: "golden" });
+        }
+      }
       await aiEndTurn(aiId);
       return;
     }
@@ -2205,6 +2418,10 @@ export default function GameScreen({ session }) {
       [`rooms/${roomCode}/gameState/players/${aiId}/tokens`]: tokens - 1,
       [`rooms/${roomCode}/gameState/players/${aiId}/actionsThisTurn`]: (myState.actionsThisTurn ?? 0) + 1,
     };
+    // Jeton gris : marque l'action bonus comme consommée si c'est la 2e action du tour
+    if ((myState.actionsThisTurn ?? 0) === 1) {
+      baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/grayBonusUsed`] = true;
+    }
 
     const vpPerm = myState.vpPermanent ?? 0;
     const totalOnBoard = Object.values(boardUnits).reduce((s, z) => s + (z?.[aiColor] || 0), 0);
@@ -2234,7 +2451,8 @@ export default function GameScreen({ session }) {
     switch (decision.type) {
       case "prayer2": {
         const prayerBonus = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
-        const gain = 2 + prayerBonus;
+        const hasDayAnkAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 1 : 0;
+        const gain = 2 + prayerBonus + hasDayAnkAI;
         const ankAfter = Math.min(11, ank + gain);
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ankAfter;
         logText = `PRIÈRE niv.2 : +${gain} Ank (${ank}→${ankAfter})${prayerBonus ? ` [bonus tuile x${prayerBonus}]` : ""}`;
@@ -2243,7 +2461,8 @@ export default function GameScreen({ session }) {
       }
       case "prayer3": {
         const prayerBonus3 = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
-        const gain3 = 3 + prayerBonus3;
+        const hasDayAnkAI3 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 1 : 0;
+        const gain3 = 3 + prayerBonus3 + hasDayAnkAI3;
         const ankAfter3 = Math.min(11, ank + gain3);
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ankAfter3;
         logText = `PRIÈRE niv.3 : +${gain3} Ank (${ank}→${ankAfter3})${prayerBonus3 ? ` [bonus tuile x${prayerBonus3}]` : ""}`;
@@ -2253,9 +2472,14 @@ export default function GameScreen({ session }) {
       case "recruit": {
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/recruitFreeRemaining`] = 0;
         const joinOrder = aiPlayer.joinOrder;
+        // Recrutement Local : autorise le recrutement dans n'importe quelle zone où
+        // l'IA a déjà des unités, pas seulement sa cité (même règle que board.jsx).
+        const hasRecrutLocalAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
         // Compléter en priorité la troupe la plus avancée avant d'en entamer une autre,
         // plutôt que d'éparpiller les unités recrutées sur plusieurs zones.
-        const cityZones = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`)).map(z => z.id)
+        const cityZones = BOARD_ZONES.filter(z =>
+          z.id.startsWith(`J${joinOrder}C`) || (hasRecrutLocalAI && (boardUnits[z.id]?.[aiColor] || 0) > 0)
+        ).map(z => z.id)
           .sort((a, b) => (boardUnits[b]?.[aiColor] || 0) - (boardUnits[a]?.[aiColor] || 0));
         let reserve = myState.unitsReserve ?? 0;
         let ankLeft = ank;
@@ -2263,7 +2487,9 @@ export default function GameScreen({ session }) {
         const zoneDetails = [];
         for (const zId of cityZones) {
           const current = boardUnits[zId]?.[aiColor] || 0;
-          const space = MAX_UNITS_PER_ZONE - current;
+          // Plafond de zone : Légion (+2 partout), Bouliste (7 fixe), JP_legion (+2 localisé)
+          const zoneMaxRecruit = getZoneMaxUnits(zId, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+          const space = zoneMaxRecruit - current;
           const toPlace = Math.min(reserve, space, Math.floor(ankLeft));
           if (toPlace <= 0) continue;
           baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${zId}/${aiColor}`] = current + toPlace;
@@ -2315,6 +2541,81 @@ export default function GameScreen({ session }) {
           const baseAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? (ank - effectiveCost);
           baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, baseAnk + ankGain);
         }
+
+        // Unités gratuites à l'achat (ex : Recrutement +2, Renforcement 4 unités) — placées
+        // en cité ou sur une troupe existante, en respectant le plafond de zone
+        // (Légion/Bouliste/JP_legion)
+        if (tile.unitsOnPurchase) {
+          const joinOrder = aiPlayer.joinOrder;
+          if (joinOrder) {
+            let reserveAI = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? (myState.unitsReserve ?? 0);
+            let toPlaceAI = Math.min(tile.unitsOnPurchase, reserveAI);
+            const cityZoneIdsAI = ['1', '2', '3'].map(n => `J${joinOrder}C${n}`);
+            const otherZonesWithUnitsAI = BOARD_ZONES
+              .map(z => z.id)
+              .filter(zid => !cityZoneIdsAI.includes(zid) && (boardUnits[zid]?.[aiColor] || 0) > 0);
+            const targetZonesAI = [...cityZoneIdsAI, ...otherZonesWithUnitsAI];
+            for (const zid of targetZonesAI) {
+              if (toPlaceAI <= 0) break;
+              let currentAI = baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${zid}/${aiColor}`]
+                ?? (boardUnits[zid]?.[aiColor] || 0);
+              const zoneMaxAI = getZoneMaxUnits(zid, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+              while (toPlaceAI > 0 && currentAI < zoneMaxAI) {
+                currentAI++;
+                reserveAI--;
+                toPlaceAI--;
+              }
+              baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${zid}/${aiColor}`] = currentAI;
+            }
+            baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] = reserveAI;
+          }
+        }
+
+        // Unités supplémentaires en réserve à l'achat (ex : Unité supplémentaire)
+        if (tile.reserveOnPurchase) {
+          const baseReserveAI = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? (myState.unitsReserve ?? 0);
+          const maxTotalPurchaseAI = getMaxTotalUnits([...ownedTileIds, decision.tileId], POWER_TILES);
+          const onBoardPurchaseAI = getTotalTroopCount(boardUnits, aiColor, 0);
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] =
+            Math.min(baseReserveAI + tile.reserveOnPurchase, maxTotalPurchaseAI - onBoardPurchaseAI);
+        }
+
+        // Bonus cartes ID à l'achat (ex : Momie, +1 carte ID)
+        const idCardsOnPurchaseAI = creaturePower?.idCardsOnPurchase ?? tile.idCardsOnPurchase ?? 0;
+        if (idCardsOnPurchaseAI > 0) {
+          const deckAI = [...(gameState.idDeck || [])];
+          if (deckAI.length > 0) {
+            const { hand, remaining } = dealCards(deckAI, idCardsOnPurchaseAI);
+            baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] = [...(myState.idCards || []), ...hand];
+            baseUpdates[`rooms/${roomCode}/gameState/idDeck`] = remaining;
+          }
+        }
+
+        // Avancée Ta-Seti à l'achat
+        const taSetiAdvOnPurchaseAI = tile.taSetiAdvanceOnPurchase ?? 0;
+        if (taSetiAdvOnPurchaseAI > 0) {
+          const baseTsAI = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/taSetiNightAdvancePending`] ?? (myState.taSetiNightAdvancePending ?? 0);
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/taSetiNightAdvancePending`] = baseTsAI + taSetiAdvOnPurchaseAI;
+        }
+
+        // Augmentation pyramide : +1 amélioration gratuite à l'achat
+        if (tile.name === "Augmentation pyramide") {
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/pyramidUpgradePending`] =
+            (myState.pyramidUpgradePending ?? 0) + 1;
+        }
+
+        // Draft ID : à l'achat, peut défausser des cartes et piocher le même nombre +1
+        if (tile.name === "Draft ID") {
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idRefreshPending`] = true;
+        }
+
+        // Jeton doré : seul l'achat du PREMIER pouvoir jeton doré bloque le jeton ce
+        // tour-ci (débloqué au tour suivant) — un pouvoir supplémentaire n'utilise
+        // que le jeton doré déjà possédé, sans redéclencher le blocage.
+        if (isGoldenTokenTile(tile) && !ownedTileIds.some(id => isGoldenTokenTile(POWER_TILES.find(t => t.id === id)))) {
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/goldenBuyBlockedThisTurn`] = true;
+        }
+
         // Carte Sang/Bouclier 3*3 : remplace automatiquement la carte combat la plus faible du deck
         let combatCardSwapDesc = null;
         if (tile.combatCardSwapNewId) {
@@ -2598,10 +2899,23 @@ export default function GameScreen({ session }) {
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${fromZoneId}/${aiColor}`] = sourceUnits - attackCount;
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${toZoneId}/${aiColor}`] = (toZoneUnits[aiColor] || 0) + attackCount;
 
+        // Attaque 2 ank : +2 ank au moment d'attaquer (+1 de plus avec "+1 d'Ank en journée")
+        if (ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Attaque 2 ank")) {
+          const dayAnkAtkAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée") ? 1 : 0;
+          const baseAnkAtkAI = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, baseAnkAtkAI + 2 + dayAnkAtkAI);
+        }
+
         // Attaque via téléportation : paiement du coût en Ank
         if (decision.isTeleport && (decision.teleportCost ?? 0) > 0) {
           const prevAnkTele = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
           baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = prevAnkTele - decision.teleportCost;
+        }
+
+        // Bouquetin adverse : coût d'entrée en ank (en plus du combat)
+        if ((decision.bouquetinCost ?? 0) > 0) {
+          const prevAnkBouq = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
+          baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.max(0, prevAnkBouq - decision.bouquetinCost);
         }
 
         // Marche Forcée jouée pour atteindre une cible hors de portée normale
@@ -2627,7 +2941,9 @@ export default function GameScreen({ session }) {
         const hasTileAI = (pid, name) => (gameState?.players?.[pid]?.ownedTileIds || []).some(
           id => POWER_TILES.find(t => t.id === id)?.name === name
         );
-        const prescience = [aiId, enemyPlayerId].find(pid => hasTileAI(pid, "Préscience")) ?? null;
+        // Jeton de prêtre JP_prescience/JP_ID_combat dans la zone de combat : même effet que la tuile
+        const hasJpPrescienceAI = pid => getJpTokenFlags(gameState?.boardPriests || {}, toZoneId, gameState?.players?.[pid]?.color).prescience;
+        const prescience = [aiId, enemyPlayerId].find(pid => hasTileAI(pid, "Préscience") || hasJpPrescienceAI(pid)) ?? null;
         const prescienceId = [aiId, enemyPlayerId].find(pid => hasTileAI(pid, "Prescience des IDs")) ?? null;
         baseUpdates[`rooms/${roomCode}/combat`] = {
           attacker: aiId,
@@ -2697,7 +3013,15 @@ export default function GameScreen({ session }) {
         if (!pyr || pyr.controllerId !== aiId) return;
         const fromLevel = pyr.level ?? 0;
         const pyramidCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
-        const cost = pyramidCost(fromLevel, targetLevel);
+        const rawPyrCost = pyramidCost(fromLevel, targetLevel);
+        const hasReductionPyramideAI = ownedTileIds.some(
+          id => POWER_TILES.find(t => t.id === id)?.name === "Réduction pyramide"
+        );
+        const hasAnkReducPyrAI = ownedTileIds.some(
+          id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank"
+        );
+        const levelsGainedAI = targetLevel - fromLevel;
+        const cost = Math.max(0, rawPyrCost - (hasReductionPyramideAI ? levelsGainedAI : 0) - (hasAnkReducPyrAI ? 1 : 0));
         if (ank < cost) return;
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/usedActions`] = [...usedActions, "pyramid"];
         baseUpdates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = targetLevel;
@@ -2710,37 +3034,58 @@ export default function GameScreen({ session }) {
         return;
     }
 
-    // Carte ID journée jouée en bonus avec l'action principale
+    // Carte ID journée jouée en bonus avec l'action principale — même mécanisme
+    // d'annulation que le joueur humain (handlePlayDayIdCard) : si un adversaire
+    // (humain OU IA) possède "Annulation d'ID", l'effet est différé le temps de
+    // lui laisser l'occasion de l'annuler, au lieu d'être appliqué immédiatement.
+    let idCardEffectToApply = null;
     if (decision.idCardToPlay) {
       const card = decision.idCardToPlay;
       const currentHand = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] ?? (myState.idCards || []);
       baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/idCards`] = currentHand.filter(
         c => c.instanceId !== card.instanceId
       );
-      const currentDiscard = gameState.idDiscard || [];
-      baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] = [...currentDiscard, card];
-      const eff = card.effect?.type;
-      const val = card.effect?.value ?? 0;
-      if (eff === 'ank') {
-        const currentAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
-        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, currentAnk + val);
-      } else if (eff === 'taxation') {
-        const currentAnk = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank;
-        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = Math.min(11, currentAnk + 1);
-        currentPlayers.filter(p => p.id !== aiId).forEach(p => {
-          const opKey = `rooms/${roomCode}/gameState/players/${p.id}/ank`;
-          const opCurrent = baseUpdates[opKey] ?? (gameState.players?.[p.id]?.ank ?? 0);
-          baseUpdates[opKey] = Math.max(0, opCurrent - 1);
-        });
-      } else if (eff === 'units') {
-        const currentReserve = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? (myState.unitsReserve ?? 0);
-        baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] = currentReserve + val;
+      const opponentsWithCancelAI = card.timing === "day" ? currentPlayers
+        .filter(p => p.id !== aiId)
+        .filter(p => (gameState?.players?.[p.id]?.idCards || []).some(c => c.id === "annulation_id")) : [];
+      if (opponentsWithCancelAI.length > 0) {
+        const pendingResponses = {};
+        opponentsWithCancelAI.forEach(p => { pendingResponses[p.id] = "waiting"; });
+        baseUpdates[`rooms/${roomCode}/pendingIdCard`] = { actorId: aiId, cardData: card, cancelled: false, pendingResponses };
+        logText += ` + CARTE ID "${card.name}" [en attente d'annulation possible]`;
+      } else {
+        const currentDiscard = gameState.idDiscard || [];
+        baseUpdates[`rooms/${roomCode}/gameState/idDiscard`] = [...currentDiscard, card];
+        idCardEffectToApply = card;
+        logText += ` + CARTE ID "${card.name}"`;
       }
-      const effDesc = card.effect?.type === 'ank' ? `+${card.effect.value} Ank`
-        : card.effect?.type === 'taxation' ? `+1 Ank / -1 adversaires`
-        : card.effect?.type === 'units' ? `+${card.effect.value} unité(s) réserve`
-        : card.effect?.type ?? "effet";
-      logText += ` + CARTE ID "${card.name}" [${effDesc}]`;
+    }
+
+    // Jeton doré : bonus gratuit attaché à l'action principale (aucun jeton ni
+    // case d'action consommés), même principe que la carte ID ci-dessus. Un seul
+    // usage par jour, partagé entre toutes les tuiles jeton doré (goldenTokenUsed).
+    // Les valeurs "courantes" tiennent compte de ce que l'action principale a
+    // déjà écrit dans baseUpdates (ank/réserve/unités/tuiles), pour ne rien écraser.
+    if (decision.goldenAction && !myState.goldenTokenUsed && !myState.goldenBuyBlockedThisTurn) {
+      const curOwnedTileIds = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ownedTileIds`] ?? ownedTileIds;
+      const curBoardUnits = { ...boardUnits };
+      for (const z of BOARD_ZONES) {
+        const k = `rooms/${roomCode}/gameState/boardUnits/${z.id}/${aiColor}`;
+        if (k in baseUpdates) curBoardUnits[z.id] = { ...(curBoardUnits[z.id] || {}), [aiColor]: baseUpdates[k] };
+      }
+      const { updates: gUpdates, log: gLog } = computeGoldenActionUpdates(decision.goldenAction, {
+        aiId, aiColor, aiPlayer,
+        ownedTileIds: curOwnedTileIds,
+        boardUnits: curBoardUnits,
+        gameState,
+        ank: baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] ?? ank,
+        reserve: baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/unitsReserve`] ?? (myState.unitsReserve ?? 0),
+        availableTileIds: baseUpdates[`rooms/${roomCode}/gameState/availableTileIds`] ?? (gameState.availableTileIds || []),
+        vpPermanent: baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/vpPermanent`] ?? (myState.vpPermanent ?? 0),
+        creatureAssignments: gameState.creatureAssignments || {},
+      });
+      Object.assign(baseUpdates, gUpdates);
+      if (gLog) logText += `${logText ? " + " : ""}${gLog}`;
     }
 
     // Trace du plan multi-coups de l'IA (recalculé à chaque tour)
@@ -2754,7 +3099,18 @@ export default function GameScreen({ session }) {
 
     await update(ref(db, "/"), baseUpdates);
     if (logText) await logAction(aiId, logText, logMeta);
+    if (idCardEffectToApply) await applyDayIdCardEffect(idCardEffectToApply, aiId);
     if (isTestMode && !aiAutoEndTurn) return;
+
+    // Jeton gris : si c'est la 1re action du tour et qu'une action bonus (même
+    // tour) est encore disponible, ne pas terminer le tour — l'effet IA se
+    // redéclenchera de lui-même (actionsThisTurn passe de 0 à 1, dépendance de
+    // l'effet) avec un état Firebase à jour pour décider de la 2e action.
+    const wasFirstAction = (myState.actionsThisTurn ?? 0) === 0;
+    const finalOwnedTileIds = baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ownedTileIds`] ?? ownedTileIds;
+    const hasGrayTokenNow = finalOwnedTileIds.some(id => isGrayTokenTile(POWER_TILES.find(t => t.id === id)));
+    if (wasFirstAction && hasGrayTokenNow && !myState.grayBonusUsed) return;
+
     await new Promise(res => setTimeout(res, 1500));
     await aiEndTurn(aiId);
   }
@@ -2802,7 +3158,9 @@ export default function GameScreen({ session }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState?.phase, JSON.stringify(gameState?.placements)]);
 
-  // IA : auto-pass pour les cartes ID (les IA ne cancellent jamais)
+  // IA : répond à une offre d'annulation de carte ID — annule si elle possède
+  // "Annulation d'ID" (comme le ferait un humain), sinon passe. Même mécanisme
+  // que handleCancelIdCard/handlePassCancelId côté humain.
   useEffect(() => {
     if (!pendingIdCard || pendingIdCard.cancelled) return;
     const responses = pendingIdCard.pendingResponses || {};
@@ -2810,12 +3168,30 @@ export default function GameScreen({ session }) {
       return status === "waiting" && currentPlayers.find(p => p.id === pid)?.isAI;
     });
     if (aiWaiting.length === 0) return;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
+      // Une IA annule dès qu'elle en a l'occasion (aucune raison de garder la
+      // carte : le tempo perdu par l'auteur du coup vaut toujours plus que
+      // conserver "Annulation d'ID" pour plus tard).
+      const cancellerId = aiWaiting.find(([pid]) =>
+        (gameState?.players?.[pid]?.idCards || []).some(c => c.id === "annulation_id")
+      )?.[0];
+      if (cancellerId) {
+        const aiCards = gameState?.players?.[cancellerId]?.idCards || [];
+        const annulCard = aiCards.find(c => c.id === "annulation_id");
+        const currentDiscard = gameState?.idDiscard || [];
+        await update(ref(db, "/"), {
+          [`rooms/${roomCode}/gameState/players/${cancellerId}/idCards`]: aiCards.filter(c => c.instanceId !== annulCard.instanceId),
+          [`rooms/${roomCode}/gameState/idDiscard`]: [...currentDiscard, annulCard, pendingIdCard.cardData].filter(Boolean),
+          [`rooms/${roomCode}/pendingIdCard/cancelled`]: true,
+        });
+        await logAction(cancellerId, `annule ${pendingIdCard.cardData?.name} de ${currentPlayers.find(p => p.id === pendingIdCard.actorId)?.name ?? "?"}`);
+        return;
+      }
       const updates = {};
       aiWaiting.forEach(([pid]) => {
         updates[`rooms/${roomCode}/pendingIdCard/pendingResponses/${pid}`] = "pass";
       });
-      update(ref(db, "/"), updates);
+      await update(ref(db, "/"), updates);
     }, simModeRef.current ? 100 : 500);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2836,7 +3212,16 @@ export default function GameScreen({ session }) {
     const t = setTimeout(() => executeAITurn(currentTurnPlayer.id), simModeRef.current ? 400 : 3000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.currentTurnPlayerId, gameState?.phase, combatData, showDawn]);
+  }, [
+    gameState?.currentTurnPlayerId,
+    gameState?.phase,
+    combatData,
+    showDawn,
+    // Jeton gris : re-déclenche l'IA après sa 1re action si une 2e action bonus
+    // (même tour) reste disponible — _executeAITurnInner ne termine alors pas
+    // le tour et attend ce nouveau rendu (état Firebase à jour) pour rejouer.
+    gameState?.players?.[gameState?.currentTurnPlayerId]?.actionsThisTurn,
+  ]);
 
   async function handleActionToggle(pid, actionId) {
     // Conservé pour PlayerSummary (lecture seule côté adversaires)
@@ -3315,7 +3700,6 @@ export default function GameScreen({ session }) {
     const filteredCards = myCards.filter(c => c.instanceId !== card.instanceId);
     const opponentsWithCancel = card.timing === "day" ? currentPlayers
       .filter(p => p.id !== effectivePlayerId)
-      .filter(p => !p.isAI)
       .filter(p => (gameState?.players?.[p.id]?.idCards || []).some(c => c.id === "annulation_id")) : [];
 
     if (opponentsWithCancel.length === 0) {
@@ -3384,10 +3768,38 @@ export default function GameScreen({ session }) {
     if (pending <= 0) return;
     const col = me?.color;
     const current = gameState?.boardUnits?.[zoneId]?.[col] || 0;
+    const zoneMaxVictory = getZoneMaxUnits(zoneId, col, gameState?.creatureAssignments || {}, gameState?.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
+    if (current >= zoneMaxVictory) return;
+    // Plafond de troupes du joueur (12, +3 par tuile "Unité supplémentaire") : pas de
+    // nouvelle unité si le joueur a déjà atteint son maximum de miniatures.
+    const maxTotalVictory = getMaxTotalUnits(gameState?.players?.[effectivePlayerId]?.ownedTileIds || [], POWER_TILES);
+    const totalVictory = getTotalTroopCount(gameState?.boardUnits, col, gameState?.players?.[effectivePlayerId]?.unitsReserve ?? 0);
+    if (totalVictory >= maxTotalVictory) return;
     await update(ref(db, "/"), {
       [`rooms/${roomCode}/gameState/boardUnits/${zoneId}/${col}`]: current + 1,
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/victoryRecruitPending`]: pending - 1,
     });
+  }
+
+  // Zone de Chiron : slot 1 déjà occupé par une créature qui autorise un second
+  // équipement (allowsSecondCreature), slot 2 encore libre.
+  function isChironZoneForEquip(zoneId, col) {
+    const slot1Id = gameState?.creatureAssignments?.[zoneId]?.[col];
+    const slot1Name = slot1Id ? POWER_TILES.find(t => t.id === slot1Id)?.name : null;
+    return !!(slot1Name && CREATURE_POWERS[slot1Name]?.allowsSecondCreature && !gameState?.creatureAssignments2?.[zoneId]?.[col]);
+  }
+
+  async function handleCreatureEquipZoneClick(zoneId) {
+    const activeId = pendingCerbereId ?? equipCreatureId;
+    if (!activeId) return;
+    const col = me?.color;
+    const slot = gameState?.creatureAssignments?.[zoneId]?.[col] ? "creatureAssignments2" : "creatureAssignments";
+    await update(ref(db, "/"), {
+      [`rooms/${roomCode}/gameState/${slot}/${zoneId}/${col}`]: activeId,
+    });
+    if (pendingCerbereId) setPendingCerbereId(null);
+    else setEquipCreatureId(null);
+    setActionMode(null);
   }
 
   async function handleTasetiRecruitClick(zoneId) {
@@ -3403,6 +3815,8 @@ export default function GameScreen({ session }) {
       return;
     }
     const current = gameState?.boardUnits?.[zoneId]?.[col] || 0;
+    const zoneMaxTasetiHuman = getZoneMaxUnits(zoneId, col, gameState?.creatureAssignments || {}, gameState?.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
+    if (current >= zoneMaxTasetiHuman) return;
     await update(ref(db, "/"), {
       [`rooms/${roomCode}/gameState/boardUnits/${zoneId}/${col}`]: current + 1,
       [`rooms/${roomCode}/gameState/players/${effectivePlayerId}/unitsReserve`]: reserve - 1,
@@ -3415,7 +3829,8 @@ export default function GameScreen({ session }) {
     if (pending <= 0) return;
     const col = me?.color;
     const current = gameState?.boardUnits?.[zoneId]?.[col] || 0;
-    if (current >= MAX_UNITS_PER_ZONE) return;
+    const zoneMaxRenforts = getZoneMaxUnits(zoneId, col, gameState?.creatureAssignments || {}, gameState?.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
+    if (current >= zoneMaxRenforts) return;
     const reserve = gameState?.players?.[effectivePlayerId]?.unitsReserve ?? 0;
     if (reserve <= 0) {
       await update(ref(db, "/"), {
@@ -3430,11 +3845,22 @@ export default function GameScreen({ session }) {
     });
   }
 
+  // Pluie de Feu (Ta-Seti et carte ID) : une troupe protégée par "Protection
+  // pluie de feu" (tuile, valable partout) ou par une Dévoreuse des Mondes
+  // stationnée dans la zone ne peut pas être ciblée.
+  function isFireRainProtected(zoneId, color) {
+    const targetPlayer = currentPlayers.find(p => p.color === color);
+    const ownedTileIds = targetPlayer ? (gameState?.players?.[targetPlayer.id]?.ownedTileIds || []) : [];
+    return hasFireRainProtection(
+      zoneId, color, gameState?.creatureAssignments || {}, gameState?.players || {}, POWER_TILES, ownedTileIds
+    );
+  }
+
   async function handleDestroyUnitClick(zoneId) {
     if (!gameState?.players?.[effectivePlayerId]?.pendingDestroyUnit) return;
     const col = me?.color;
     const units = gameState?.boardUnits?.[zoneId] || {};
-    const enemyEntry = Object.entries(units).find(([c, cnt]) => c !== col && (cnt || 0) > 0);
+    const enemyEntry = Object.entries(units).find(([c, cnt]) => c !== col && (cnt || 0) > 0 && !isFireRainProtected(zoneId, c));
     if (!enemyEntry) return;
     const [enemyColor, enemyCount] = enemyEntry;
     const enemyPlayerId = currentPlayers.find(p => p.color === enemyColor)?.id;
@@ -3450,40 +3876,53 @@ export default function GameScreen({ session }) {
     setActionMode(null);
   }
 
+  // Zone éligible pour un recrutement gratuit : cité, ou zone où le joueur a déjà
+  // des unités, ET encore de la place (plafond Légion/Bouliste/JP_legion inclus).
+  function isFreeRecruitZoneEligible(z) {
+    const current = gameState?.boardUnits?.[z.id]?.[me?.color] || 0;
+    const isEligible = z.id.startsWith(`J${myJoinOrderForRecruit}C`) || current > 0;
+    if (!isEligible) return false;
+    const zoneMax = getZoneMaxUnits(z.id, me?.color, gameState?.creatureAssignments || {}, gameState?.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState?.boardPriests || {});
+    return current < zoneMax;
+  }
+
   // Zones de recrutement de victoire (Recrutement de Victoire)
   const myJoinOrderForRecruit = currentPlayers.find(p => p.id === effectivePlayerId)?.joinOrder;
   const victoryRecruitPending = gameState?.players?.[effectivePlayerId]?.victoryRecruitPending ?? 0;
   const victoryRecruitZones = (actionMode === "victoryRecruit" && myJoinOrderForRecruit && victoryRecruitPending > 0)
-    ? BOARD_ZONES.filter(z =>
-        z.id.startsWith(`J${myJoinOrderForRecruit}C`) ||
-        (gameState?.boardUnits?.[z.id]?.[me?.color] || 0) > 0
-      ).map(z => z.id)
+    ? BOARD_ZONES.filter(isFreeRecruitZoneEligible).map(z => z.id)
     : [];
 
   // Zones de recrutement Ta-Seti (cité + troupes existantes partout, sans coût ank)
   const tasetiRecruitPending = gameState?.players?.[effectivePlayerId]?.tasetiRecruitPending ?? 0;
   const tasetiRecruitZones = (actionMode === "tasetiRecruit" && myJoinOrderForRecruit && tasetiRecruitPending > 0)
-    ? BOARD_ZONES.filter(z =>
-        z.id.startsWith(`J${myJoinOrderForRecruit}C`) ||
-        (gameState?.boardUnits?.[z.id]?.[me?.color] || 0) > 0
-      ).map(z => z.id)
+    ? BOARD_ZONES.filter(isFreeRecruitZoneEligible).map(z => z.id)
     : [];
 
   // Zones de renforts (carte Renforts) : cité ou troupe existante, sous le max
   const renfortsPending = gameState?.players?.[effectivePlayerId]?.pendingRenforts ?? 0;
   const renfortsZones = (actionMode === "renforts" && myJoinOrderForRecruit && renfortsPending > 0)
+    ? BOARD_ZONES.filter(isFreeRecruitZoneEligible).map(z => z.id)
+    : [];
+
+  // Zones éligibles pour équiper une créature (Cerbère : n'importe quelle troupe
+  // sans créature ; sinon : troupes de la cité, slot 2 possible sur une zone Chiron).
+  const activeEquipCreatureId = pendingCerbereId ?? (actionMode === "equip_creature" ? equipCreatureId : null);
+  const creatureEquipZones = activeEquipCreatureId
     ? BOARD_ZONES.filter(z => {
-        const current = gameState?.boardUnits?.[z.id]?.[me?.color] || 0;
-        if (current >= MAX_UNITS_PER_ZONE) return false;
-        return z.id.startsWith(`J${myJoinOrderForRecruit}C`) || current > 0;
+        const col = me?.color;
+        if ((gameState?.boardUnits?.[z.id]?.[col] || 0) === 0) return false;
+        if (pendingCerbereId) return !gameState?.creatureAssignments?.[z.id]?.[col];
+        return z.id.startsWith(`J${myJoinOrderForRecruit}C`) &&
+          (!gameState?.creatureAssignments?.[z.id]?.[col] || isChironZoneForEquip(z.id, col));
       }).map(z => z.id)
     : [];
 
-  // Zones de destruction (Pluie de Feu)
+  // Zones de destruction (Pluie de Feu) — exclut les troupes protégées
   const destroyUnitZones = actionMode === "destroyUnit"
     ? Object.keys(gameState?.boardUnits || {}).filter(zId => {
         const units = gameState.boardUnits[zId] || {};
-        return Object.entries(units).some(([c, cnt]) => c !== me?.color && (cnt || 0) > 0);
+        return Object.entries(units).some(([c, cnt]) => c !== me?.color && (cnt || 0) > 0 && !isFireRainProtected(zId, c));
       })
     : [];
 
@@ -3744,6 +4183,8 @@ export default function GameScreen({ session }) {
 		  onTasetiRecruitClick={handleTasetiRecruitClick}
 		  renfortsZones={renfortsZones}
 		  onRenfortsClick={handleRenfortsClick}
+		  creatureEquipZones={creatureEquipZones}
+		  onCreatureEquipZoneClick={handleCreatureEquipZoneClick}
 		  destroyUnitZones={destroyUnitZones}
 		  onDestroyUnitClick={handleDestroyUnitClick}
 		  placementZones={
@@ -3866,6 +4307,7 @@ export default function GameScreen({ session }) {
           onNightTaSetiAdvance={handleNightTaSetiAdvance}
           onUseJuToken={handleUseJuToken}
           onPlayDayIdCard={handlePlayDayIdCard}
+          onStartEquipCreature={tileId => { setEquipCreatureId(tileId); setActionMode("equip_creature"); }}
           onViewMyTiles={() => setViewTilesPlayer(me)}
           onCancelTurn={handleCancelTurn}
           canCancelTurn={
@@ -3962,25 +4404,28 @@ export default function GameScreen({ session }) {
       </div>
     )}
 
-    {/* Placement Cerbère après achat */}
+    {/* Placement Cerbère après achat — bandeau info, choix directement sur la carte */}
     {pendingCerbereId && (
-      <CreatureEquipModal
-        playerId={effectivePlayerId}
-        playerColor={me?.color}
-        joinOrder={allPlayers.find(p => p.id === effectivePlayerId)?.joinOrder}
-        gameState={gameState}
-        anyZone={true}
-        specificCreatureId={pendingCerbereId}
-        onConfirm={async assignments => {
-          const updates = {};
-          Object.entries(assignments).forEach(([creatureId, zoneId]) => {
-            updates[`rooms/${roomCode}/gameState/creatureAssignments/${zoneId}/${me?.color}`] = creatureId;
-          });
-          await update(ref(db, "/"), updates);
-          setPendingCerbereId(null);
-        }}
-        onClose={() => setPendingCerbereId(null)}
-      />
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-fuchsia-900/95 border border-fuchsia-400 rounded-xl px-6 py-3 shadow-2xl">
+        <p className="text-fuchsia-200 font-semibold text-sm">
+          🐉 Équipez {POWER_TILES.find(t => t.id === pendingCerbereId)?.name} — cliquez sur une troupe (n'importe quelle zone) sur la carte
+        </p>
+      </div>
+    )}
+
+    {/* Équipement volontaire d'une créature en réserve — bandeau info */}
+    {actionMode === "equip_creature" && equipCreatureId && (
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-fuchsia-900/95 border border-fuchsia-400 rounded-xl px-6 py-3 shadow-2xl flex items-center gap-3">
+        <p className="text-fuchsia-200 font-semibold text-sm">
+          🐉 Équipez {POWER_TILES.find(t => t.id === equipCreatureId)?.name} — cliquez sur une troupe de votre cité sur la carte
+        </p>
+        <button
+          onClick={() => { setEquipCreatureId(null); setActionMode(null); }}
+          className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded"
+        >
+          Annuler
+        </button>
+      </div>
     )}
 
     {/* Modale Ta-Seti — zoom plein écran */}

@@ -8,7 +8,6 @@ import IdDraftModal from "../Cards/IdDraftModal";
 import IdRefreshModal from "../Cards/IdRefreshModal";
 import PyramidEvolveModal from "./PyramidEvolveModal";
 import PowerTileModal from "./PowerTileModal";
-import CreatureEquipModal from "./CreatureEquipModal";
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { BOARD_ZONES } from "../../constants/board";
@@ -61,6 +60,7 @@ export default function MyZone({
   onGoldenTokenPrayerActivate, onGoldenTokenBuyActivate, onRenforcementActivate,
   onNightTaSetiAdvance, onUseJuToken,
   onPlayDayIdCard, onCancelTurn, canCancelTurn, onInfoEvent, onViewMyTiles,
+  onStartEquipCreature,
 }) {
   const [showCombat, setShowCombat] = useState(false);
   const [showIdModal, setShowIdModal] = useState(false);
@@ -110,9 +110,20 @@ export default function MyZone({
   });
   const canEquipCreature = equippableReserveIds.length > 0 && cityZonesAvailable.length > 0;
 
+  // Un seul choix possible : démarre directement le placement sur la carte.
+  // Sinon, une petite liste (pas une modale) permet de choisir laquelle équiper.
+  function handleOpenCreatureEquip() {
+    if (equippableReserveIds.length === 1) onStartEquipCreature?.(equippableReserveIds[0]);
+    else setLocalModal('creatures');
+  }
+
   const currentTurnPlayerId = gameState?.currentTurnPlayerId;
   const isMyTurn  = currentTurnPlayerId === player.id;
-  const canPlayAction = isMyTurn && actionsThisTurn < 1 && tokens > 0 && !actionMode;
+  // Jeton gris : une 2e action (bonus) est autorisée dans le même tour qu'une
+  // action classique, une seule fois par jour — jamais comme un tour indépendant.
+  const hasGrayTokenForBonus = ownedTileIds.some(id => (POWER_TILES.find(t => t.id === id)?.name ?? "").toLowerCase().startsWith("jeton gris"));
+  const canPlayGrayBonus = actionsThisTurn === 1 && !state.grayBonusUsed && hasGrayTokenForBonus;
+  const canPlayAction = isMyTurn && (actionsThisTurn < 1 || canPlayGrayBonus) && tokens > 0 && !actionMode;
   const canEndTurn = canEndTurnProp !== undefined ? canEndTurnProp : (isMyTurn && actionsThisTurn >= 1);
 
   // Couleurs d'achat disponibles : pyramides possédées + pyramides adverses sur nos zones
@@ -134,23 +145,25 @@ export default function MyZone({
   const availableBuyColors = new Set([...ownPyramidColors, ...enemyPyramidColors]);
 
   // Jeton doré — R_4_1 "Déplacement Passe/Muraille"
+  // goldenTokenUsed = usage du jour déjà consommé (partagé entre TOUS les jetons dorés).
+  // goldenBuyBlockedThisTurn = tuile achetée ce tour-ci, utilisable seulement au tour suivant.
   const goldenTokenUsed = state.goldenTokenUsed ?? false;
+  const goldenBuyBlockedThisTurn = state.goldenBuyBlockedThisTurn ?? false;
   const hasGoldenTokenMove = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Déplacement Passe/Muraille");
-  const canUseGoldenToken = isMyTurn && hasGoldenTokenMove && !goldenTokenUsed && !actionMode;
+  const canUseGoldenToken = isMyTurn && hasGoldenTokenMove && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode;
   // Jeton doré — B_4_2 "Jeton doré déplacement recrutement"
   const hasGoldenTokenMoveRecruit = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré déplacement recrutement");
-  const canUseGoldenTokenMR = isMyTurn && hasGoldenTokenMoveRecruit && !goldenTokenUsed && !actionMode;
+  const canUseGoldenTokenMR = isMyTurn && hasGoldenTokenMoveRecruit && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode;
   // Jeton doré — N_1_4 "Jeton doré priére"
   const hasGoldenTokenPrayer = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré priére");
-  const canUseGoldenTokenPrayer = isMyTurn && hasGoldenTokenPrayer && !goldenTokenUsed && !actionMode;
+  const canUseGoldenTokenPrayer = isMyTurn && hasGoldenTokenPrayer && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode;
   // Jeton doré — N_3_3 "Jeton Doré Déplacement"
   const hasGoldenTokenMove3 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton Doré Déplacement");
-  const canUseGoldenTokenMove3 = isMyTurn && hasGoldenTokenMove3 && !goldenTokenUsed && !actionMode;
+  const canUseGoldenTokenMove3 = isMyTurn && hasGoldenTokenMove3 && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode;
   // Jeton doré — N_2_4 "Jeton doré achat ×2"
   // Disponible pour la (les) couleur(s) d'achat sur lesquelles un jeton a été posé ce jour
   const hasGoldenTokenBuy = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré achat *2");
   const boughtColorsToday = usedActions.filter(a => a.startsWith("buy_"));
-  const goldenBuyBlockedThisTurn = state.goldenBuyBlockedThisTurn ?? false;
   const canUseGoldenTokenBuy = isMyTurn && hasGoldenTokenBuy && !goldenTokenUsed && !goldenBuyBlockedThisTurn && !actionMode && boughtColorsToday.length > 0;
   const hasGoldenToken = hasGoldenTokenMove || hasGoldenTokenMoveRecruit || hasGoldenTokenPrayer || hasGoldenTokenMove3 || hasGoldenTokenBuy;
   const hasGrayToken   = ownedTileIds.some(id => (POWER_TILES.find(t => t.id === id)?.name ?? "").toLowerCase().startsWith("jeton gris"));
@@ -218,19 +231,6 @@ export default function MyZone({
     if ((card.timing === "day" || card.timing === "any") && onPlayDayIdCard) {
       await onPlayDayIdCard(card);
     }
-  }
-
-  async function handleEquipCreatures(assignments) {
-    const updates = {};
-    Object.entries(assignments).forEach(([creatureId, zoneId]) => {
-      const slot1 = creatureAssignments[zoneId]?.[player.color];
-      if (slot1 && slot1 !== creatureId) {
-        updates[`rooms/${session.roomCode}/gameState/creatureAssignments2/${zoneId}/${player.color}`] = creatureId;
-      } else {
-        updates[`rooms/${session.roomCode}/gameState/creatureAssignments/${zoneId}/${player.color}`] = creatureId;
-      }
-    });
-    await update(ref(db, "/"), updates);
   }
 
   async function handlePickDraftCard(card) {
@@ -438,7 +438,7 @@ export default function MyZone({
           {/* Boutons rapides */}
           <div className="w-px h-4 bg-gray-700 shrink-0" />
           {creatureIds.length > 0 && (
-            <button onClick={() => setLocalModal('creatures')} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 border-gray-700 ${canEquipCreature ? 'text-amber-400' : 'text-gray-400'}`}>
+            <button onClick={handleOpenCreatureEquip} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-gray-800/60 border-gray-700 ${canEquipCreature ? 'text-amber-400' : 'text-gray-400'}`}>
               🐉{equippableReserveIds.length > 0 && <span className="ml-1 bg-amber-700 text-white text-[9px] font-bold px-1 rounded-full">{equippableReserveIds.length}</span>}
             </button>
           )}
@@ -719,7 +719,7 @@ export default function MyZone({
         <div className="flex items-center gap-1.5 flex-wrap shrink-0">
           {creatureIds.length > 0 && (
             <button
-              onClick={() => setLocalModal("creatures")}
+              onClick={handleOpenCreatureEquip}
               className={`kmt-btn-ghost ${canEquipCreature ? "text-amber-400" : ""}`}
             >
               🐉 Créatures
@@ -1030,18 +1030,40 @@ export default function MyZone({
         />
       )}
 
+      {/* Choix de la créature à équiper (uniquement si plusieurs en réserve) — la
+          zone se choisit ensuite directement sur la carte, pas dans une liste. */}
       {localModal === "creatures" && (
-        <CreatureEquipModal
-          playerId={player.id}
-          playerColor={player.color}
-          joinOrder={myJoinOrder}
-          gameState={gameState}
-          onConfirm={async assignments => {
-            await handleEquipCreatures(assignments);
-            setLocalModal(null);
-          }}
-          onClose={() => setLocalModal(null)}
-        />
+        <div className="kmt-overlay" onClick={() => setLocalModal(null)}>
+          <div className="kmt-panel w-80" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-800">
+              <h2 className="kmt-title text-base">🐉 Quelle créature équiper ?</h2>
+              <button onClick={() => setLocalModal(null)} className="kmt-close">✕</button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {equippableReserveIds.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-2">Aucune créature en réserve.</p>
+              ) : (
+                equippableReserveIds.map(id => {
+                  const tile = POWER_TILES.find(t => t.id === id);
+                  const style = TILE_COLOR_STYLE[tile.color] || TILE_COLOR_STYLE.Noir;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => { onStartEquipCreature?.(id); setLocalModal(null); }}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-lg border ${style.bg} ${style.border} hover:brightness-110`}
+                    >
+                      <div style={getCreatureSpriteStyle(tile.name, 32) || {}} />
+                      <div className="text-left">
+                        <p className={`font-bold text-sm ${style.text}`}>{tile.name}</p>
+                        <p className="text-gray-500 text-xs">{tile.color} · Niv.{tile.level}</p>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

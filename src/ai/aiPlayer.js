@@ -3,7 +3,7 @@ import { PYRAMID_SLOTS, PYRAMID_COLORS } from "../constants/pyramids";
 import { ZONE_ADJACENCY, BOARD_ZONES, TELEPORT_TARGETS } from "../constants/board";
 import { MAX_UNITS_PER_ZONE } from "../constants/game";
 import { COMBAT_CARDS } from "../constants/cards";
-import { CREATURE_POWERS, getPowerTileCombatBonus } from "../constants/creaturePowers";
+import { CREATURE_POWERS, getPowerTileCombatBonus, getZoneMaxUnits, getCombatCreatureBonus, getJpTokenCombatBonus } from "../constants/creaturePowers";
 import { getValidPriestDestinations } from "../constants/taSetiGraph";
 import { TASETI_E_BONUSES } from "../constants/taSetiBonuses";
 import { E_TO_TOKENS } from "../constants/taSetiPositions";
@@ -93,6 +93,9 @@ export const AI_WEIGHTS = {
   id_ank_low:            45,   // jouer gain_ank si ank <= 4
   id_taxation:           30,   // jouer taxation_divine si ank <= 5
   id_renforts:           40,   // jouer renforts si réserve faible
+  id_teleport:           25,   // jouer téléportation (téléportation gratuite ce tour)
+  id_pluiedefeu:         35,   // jouer pluie de feu si une cible valable existe
+  id_recuperation:       20,   // jouer récupération d'ID si la défausse contient une carte
 
   // ── Carte combat — sélection ────────────────────────────────────────────
   combatCard_force4:     30,   // force >= 4
@@ -322,19 +325,17 @@ function computeMovePointsDetail(aiPlayerId, gameState, fromZoneId = null) {
     sources.push(`tuile Déplacement/Furie Bestiale x${tileBonusCount}`);
   }
 
-  // Jetons JP capacité déplacement portés par les prêtres sur le plateau
+  // Jeton JP capacité déplacement : ne s'applique que si le prêtre porteur est
+  // dans LA ZONE de la troupe qui bouge (fromZoneId), pas n'importe où sur le
+  // plateau — même règle que pour tous les autres jetons JP (getJpTokenFlags).
   const aiColor = myState.color;
-  const boardPriests = gameState.boardPriests || {};
-  let jpCount = 0;
-  Object.values(boardPriests).forEach(zoneColors => {
-    const priest = zoneColors?.[aiColor];
-    if (priest?.jpTokenIds) {
-      jpCount += priest.jpTokenIds.filter(id => id === 'JP_capacite_deplacement').length;
+  if (fromZoneId) {
+    const jpIdsHere = gameState.boardPriests?.[fromZoneId]?.[aiColor]?.jpTokenIds || [];
+    const jpCount = jpIdsHere.filter(id => id === 'JP_capacite_deplacement').length;
+    if (jpCount > 0) {
+      pts += jpCount;
+      sources.push(`jeton JP déplacement x${jpCount}`);
     }
-  });
-  if (jpCount > 0) {
-    pts += jpCount;
-    sources.push(`jeton JP déplacement x${jpCount}`);
   }
 
   if (fromZoneId) {
@@ -455,7 +456,7 @@ function getReachableEnemyZones(fromZoneId, maxPts, boardUnits, aiColor) {
 // ─── Sélection de carte ID jour à jouer en bonus ─────────────────────────────
 // Retourne la meilleure carte ID "day" à jouer gratuitement avec l'action principale.
 // Cartes simples uniquement (effet direct, pas de pending state complex).
-function selectBestDayIdCard(myState, boardUnits, aiColor) {
+function selectBestDayIdCard(myState, boardUnits, aiColor, gameState = {}) {
   const dayCards = (myState.idCards || []).filter(c => c.timing === "day");
   if (dayCards.length === 0) return null;
 
@@ -474,6 +475,22 @@ function selectBestDayIdCard(myState, boardUnits, aiColor) {
         break;
       case "renforts":
         if (reserve <= 1) candidates.push({ card, weight: AI_WEIGHTS.id_renforts });
+        break;
+      case "teleportation":
+        if (!(myState.pendingFreeAnyTeleport)) candidates.push({ card, weight: AI_WEIGHTS.id_teleport });
+        break;
+      case "pluie_de_feu": {
+        // Cible potentielle : au moins une unité ennemie existe quelque part sur le
+        // plateau (la protection pluie de feu et le choix précis sont filtrés au
+        // moment de la résolution, resolveAiTaSetiPendings).
+        const hasEnemyTarget = Object.values(boardUnits || {}).some(
+          zone => Object.entries(zone || {}).some(([c, n]) => c !== aiColor && (n || 0) > 0)
+        );
+        if (hasEnemyTarget) candidates.push({ card, weight: AI_WEIGHTS.id_pluiedefeu });
+        break;
+      }
+      case "recuperation_id":
+        if ((gameState.idDiscard || []).length > 0) candidates.push({ card, weight: AI_WEIGHTS.id_recuperation });
         break;
       default:
         break;
@@ -607,8 +624,16 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   const aiColor = aiPlayer?.color;
   const joinOrder = aiPlayer?.joinOrder;
 
-  if ((myState.actionsThisTurn ?? 0) >= 1 || (myState.tokens ?? 5) <= 0) {
+  const actionsDone = myState.actionsThisTurn ?? 0;
+  if ((myState.tokens ?? 5) <= 0) {
     return { type: "endTurn" };
+  }
+  if (actionsDone >= 1) {
+    // Jeton gris : une 2e action est autorisée dans le même tour, une seule fois
+    // par jour — jamais comme un tour indépendant.
+    const hasGrayToken = actionsDone === 1 && !myState.grayBonusUsed &&
+      (myState.ownedTileIds || []).some(id => isGrayTokenTile(POWER_TILES.find(t => t.id === id)));
+    if (!hasGrayToken) return { type: "endTurn" };
   }
 
   const ank          = myState.ank ?? 7;
@@ -688,7 +713,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
     // plusieurs cases de distance, en ligne droite, tant qu'aucune autre zone
     // ennemie n'est traversée en chemin. Marche Forcée peut aussi étendre la
     // portée, mais seulement si elle est réellement jouée (marquée sur la décision).
-    const attackBasePts = computeMaxMovePoints(aiPlayerId, gameState) + movementBonusInZone(fromZoneId, aiColor, gameState);
+    const attackBasePts = computeMaxMovePoints(aiPlayerId, gameState, fromZoneId);
     const attackMarcheForcee = getMarcheForceeAvailable(aiPlayerId, gameState);
     const reachableEnemyZones = getReachableEnemyZones(fromZoneId, attackBasePts + attackMarcheForcee, boardUnits, aiColor);
 
@@ -705,6 +730,9 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const enemyCreature = getCreatureInZone(adjZoneId, enemy.color, gameState);
       // Zone protégée par une créature bloquante (Kraken, Cerbère) → inattaquable
       if (getCreaturePowerById(enemyCreature)?.blockEnemyEntry) continue;
+      // Bouquetin adverse : coût d'entrée en ank, à payer en plus du combat
+      const bouquetinCost = getCreaturePowerById(enemyCreature)?.attackerAnkCost ?? 0;
+      if (bouquetinCost > 0 && ank < bouquetinCost) continue;
       const adjToEmpty    = hasEmptyTempleAdjacent(adjZoneId, boardUnits);
 
       let weight = 1 + AI_WEIGHTS.attack_base;
@@ -722,10 +750,12 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       if (adjToEmpty)        weight += AI_WEIGHTS.attack_adjTemple;
       if (hasCombatTile)     weight += AI_WEIGHTS.attack_hasCombatTile;
       if (distance > 1)      weight -= (distance - 1) * 5; // légère préférence pour la cible la plus proche à mérite égal
+      if (bouquetinCost > 0) weight -= bouquetinCost * 5; // coût d'entrée, dissuasion légère
 
       candidates.push({
         type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight,
         ...(marcheForceeNeeded > 0 && { marcheForceeUsed: marcheForceeNeeded }),
+        ...(bouquetinCost > 0 && { bouquetinCost }),
       });
 
       // Force de base : unités + tuiles pouvoir + créature (annulations Serpent comprises)
@@ -737,10 +767,16 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const enemyCreatP = getCreaturePowerById(enemyCreature);
       const myCreatForce = enemyCreatP?.nullifiesEnemy ? 0 : (myCreatP?.combatForce ?? 0);
       const enemyCreatForce = myCreatP?.nullifiesEnemy ? 0 : (enemyCreatP?.combatForce ?? 0);
-      const myBaseForce = attackCount + myTilesCombat.force + myCreatForce;
-      const enemyBaseForce = enemy.count + enemyTilesCombat.force + enemyCreatForce;
-      // Gouttes de sang potentielles adverses (tuiles + créature + ~2 d'une carte combat)
-      const enemyBloodPotential = enemyTilesCombat.blood + (enemyCreatP?.combatBlood ?? 0) + 2;
+      // Jetons JP des prêtres présents dans les zones concernées (force_attaque/
+      // force_defense) — comme pour les tuiles et créatures, ils s'ajoutent à
+      // l'estimation de force avant même de déclencher le combat.
+      const myJpForce = getJpTokenCombatBonus(gameState.boardPriests, fromZoneId, aiColor, true).force;
+      const enemyJpForce = getJpTokenCombatBonus(gameState.boardPriests, adjZoneId, enemy.color, false).force;
+      const myBaseForce = attackCount + myTilesCombat.force + myCreatForce + myJpForce;
+      const enemyBaseForce = enemy.count + enemyTilesCombat.force + enemyCreatForce + enemyJpForce;
+      // Gouttes de sang potentielles adverses (tuiles + créature + jeton JP + ~2 d'une carte combat)
+      const enemyJpBlood = getJpTokenCombatBonus(gameState.boardPriests, adjZoneId, enemy.color, false).blood;
+      const enemyBloodPotential = enemyTilesCombat.blood + (enemyCreatP?.combatBlood ?? 0) + enemyJpBlood + 2;
       const forceFavorable = myBaseForce > enemyBaseForce && attackCount > enemyBloodPotential;
       if (forceFavorable) anyFavorableAttack = true;
 
@@ -752,6 +788,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         bestEasyAttack = {
           type: "attack", fromZoneId, toZoneId: adjZoneId, count: attackCount, weight,
           ...(marcheForceeNeeded > 0 && { marcheForceeUsed: marcheForceeNeeded }),
+          ...(bouquetinCost > 0 && { bouquetinCost }),
         };
       }
     }
@@ -904,7 +941,6 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   const aiOrder = aiPlayer?.order ?? 0;
   const isLastToPlay = allPlayers.every(p => p.id === aiPlayerId || (p.order ?? 0) <= aiOrder);
   const hasOnlyOneGroup = myZones.length === 1;
-  const maxMovePts = computeMaxMovePoints(aiPlayerId, gameState);
   const move1Used = usedActions.includes('move1');
   const move2Used = usedActions.includes('move2');
 
@@ -936,8 +972,9 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const myUnits = (boardUnits[fromZoneId]?.[aiColor] || 0) - minKeep;
       if (myUnits < 1) continue;
 
-      // Points de déplacement propres à cette troupe (bonus de créature inclus, ex: Scarabée +2)
-      const movePtsHere = maxMovePts + movementBonusInZone(fromZoneId, aiColor, gameState);
+      // Points de déplacement propres à cette troupe (bonus de créature + jeton
+      // JP_capacite_deplacement local inclus, ex: Scarabée +2)
+      const movePtsHere = computeMaxMovePoints(aiPlayerId, gameState, fromZoneId);
       // Marche Forcée en main : portée potentielle si la carte est jouée (voir plus bas)
       const marcheForceeHere = getMarcheForceeAvailable(aiPlayerId, gameState);
 
@@ -958,7 +995,9 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         const keepBack = (canSplitForTemple && destIsEmptyTemple) ? 1 : 0;
 
         const intendedMove = myUnits - keepBack;
-        const canAdd = Math.min(intendedMove, MAX_UNITS_PER_ZONE - existingFriendly);
+        // Plafond de zone : Légion (+2 partout), Bouliste (7 fixe), JP_legion (+2 localisé)
+        const zoneMax = getZoneMaxUnits(adjZoneId, aiColor, gameState.creatureAssignments, gameState.players, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests);
+        const canAdd = Math.min(intendedMove, zoneMax - existingFriendly);
         if (canAdd <= 0) continue;
 
         const isTemple   = TEMPLES.includes(adjZoneId);
@@ -1037,7 +1076,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         const myUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
         if (myUnits < 1) continue;
 
-        const movePtsHereTele = maxMovePts + movementBonusInZone(fromZoneId, aiColor, gameState);
+        const movePtsHereTele = computeMaxMovePoints(aiPlayerId, gameState, fromZoneId);
         // Inclut Marche Forcée dans la portée "gratuite" : si une carte (coût 0)
         // suffit à atteindre la cible, pas besoin de payer une téléportation (Ank).
         const reachableNormal = new Set(
@@ -1056,6 +1095,9 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
             if (myUnits < 2) continue;
             const enemyCreatureTele = getCreatureInZone(teleTarget, enemyTele.color, gameState);
             if (getCreaturePowerById(enemyCreatureTele)?.blockEnemyEntry) continue;
+            // Bouquetin adverse : coût d'entrée en ank, en plus du coût de téléportation
+            const bouquetinCostTele = getCreaturePowerById(enemyCreatureTele)?.attackerAnkCost ?? 0;
+            if (bouquetinCostTele > 0 && ank < effectiveTeleportCost + bouquetinCostTele) continue;
             const attackCount = Math.min(myUnits - 1, 5);
             if (attackCount < enemyTele.count) continue;
 
@@ -1075,6 +1117,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
             if (enemyCreatureTele) weight += AI_WEIGHTS.attack_enemyCreature;
             if (hasCombatTile)     weight += AI_WEIGHTS.attack_hasCombatTile;
             weight += effectiveTeleportCost * AI_WEIGHTS.teleport_ankPenalty;
+            if (bouquetinCostTele > 0) weight -= bouquetinCostTele * 5;
 
             if (weight > 0) {
               candidates.push({
@@ -1085,6 +1128,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
                 weight,
                 isTeleport: true,
                 teleportCost: effectiveTeleportCost,
+                ...(bouquetinCostTele > 0 && { bouquetinCost: bouquetinCostTele }),
               });
             }
             continue;
@@ -1094,7 +1138,8 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
           if (Object.values(adjUnits).some(n => n > 0)) continue; // temple non vide (allié déjà dessus)
 
           const existingFriendly = adjUnits[aiColor] || 0;
-          const canAdd = Math.min(myUnits, MAX_UNITS_PER_ZONE - existingFriendly);
+          const zoneMaxTele = getZoneMaxUnits(teleTarget, aiColor, gameState.creatureAssignments, gameState.players, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests);
+          const canAdd = Math.min(myUnits, zoneMaxTele - existingFriendly);
           if (canAdd <= 0) continue;
 
           const wouldControl2 = (myTemples + 1) >= 2;
@@ -1131,7 +1176,14 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
       const from = pyr.level ?? 0;
       if (from >= 4) continue;
       const to   = from + 1;
-      const cost = (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+      const rawCost = (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+      const hasReductionPyramideCand = ownedTileIds.some(
+        id => POWER_TILES.find(t => t.id === id)?.name === "Réduction pyramide"
+      );
+      const hasAnkReducPyrCand = ownedTileIds.some(
+        id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank"
+      );
+      const cost = Math.max(0, rawCost - (hasReductionPyramideCand ? (to - from) : 0) - (hasAnkReducPyrCand ? 1 : 0));
       if (ank < cost) continue;
 
       const noTilesInColor = !ownedTileIds.some(
@@ -1161,8 +1213,17 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
 
   const prayerBonusCount = ownedTileIds.filter(id => POWER_TILES.find(t => t.id === id)?.name === "Priere +1 ank").length;
   const hasDayAnkTile = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "+1 d'Ank en journée");
-  const prayerGainOf = base => (base + prayerBonusCount) * (hasDayAnkTile ? 2 : 1);
-  const triCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+  const prayerGainOf = base => base + prayerBonusCount + (hasDayAnkTile ? 1 : 0);
+  const triCostRaw = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
+  const hasReductionPyramidePlan = ownedTileIds.some(
+    id => POWER_TILES.find(t => t.id === id)?.name === "Réduction pyramide"
+  );
+  const hasAnkReducPyrPlan = ownedTileIds.some(
+    id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank"
+  );
+  const triCost = (from, to) => Math.max(0, triCostRaw(from, to)
+    - (hasReductionPyramidePlan ? (to - from) : 0)
+    - (hasAnkReducPyrPlan ? 1 : 0));
 
   // Pyramides contrôlées améliorables + tuiles légales (pré-calculées pour la recherche)
   const myPyrSlots = Object.entries(pyramids)
@@ -1280,7 +1341,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   const plan = planSearch({ ank, used: initialUsed, pyr: {}, bought: new Set(), isFirst: true }, planDepth);
 
   // ── Sélection de la carte ID à jouer gratuitement avec l'action ──────────
-  const idCardToPlay = selectBestDayIdCard(myState, boardUnits, aiColor);
+  const idCardToPlay = selectBestDayIdCard(myState, boardUnits, aiColor, gameState);
 
   // Victoire facile : attaque immédiate, prioritaire sur tout plan
   if (bestEasyAttack) {
@@ -1321,6 +1382,71 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
   // Filet de sécurité : aucun plan → ancien tirage pondéré
   if (!decision) decision = weightedSelect(candidates) ?? { type: "endTurn" };
 
+  // ── Jeton doré : bonus gratuit (aucun jeton d'action ni case consommés) ────
+  // Toutes les tuiles "jeton doré" d'un joueur partagent un seul usage par jour
+  // (goldenTokenUsed) et sont bloquées le tour de leur achat (goldenBuyBlockedThisTurn).
+  // Chaque variante est évaluée avec les mêmes pondérations que son équivalent
+  // normal, et la meilleure est attachée à la décision principale comme bonus
+  // (même mécanisme que idCardToPlay), qu'elle soit ou non de même type.
+  let goldenAction = null;
+  if (!myState.goldenTokenUsed && !myState.goldenBuyBlockedThisTurn) {
+    const goldenOptions = [];
+
+    const hasGoldenPrayer = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré priére");
+    if (hasGoldenPrayer && ank < 11) {
+      const gain = prayerGainOf(2);
+      goldenOptions.push({ type: "golden_prayer", weight: (bestOf('prayer2')?.weight ?? 1) * 0.4 + gain });
+    }
+
+    const hasGoldenMove  = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Déplacement Passe/Muraille");
+    const hasGoldenMove3 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton Doré Déplacement");
+    if ((hasGoldenMove || hasGoldenMove3) && bestMoveCand) {
+      goldenOptions.push({ type: "golden_move", ...bestMoveCand, wallPass: hasGoldenMove, weight: bestMoveCand.weight });
+    }
+
+    const hasGoldenRecruit = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré déplacement recrutement");
+    if (hasGoldenRecruit && unitsReserve > 0 && joinOrder) {
+      const hasRecrutLocalG = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement Local");
+      const cityZoneIdsG = BOARD_ZONES.filter(z => z.id.startsWith(`J${joinOrder}C`) || (hasRecrutLocalG && (boardUnits[z.id]?.[aiColor] || 0) > 0)).map(z => z.id);
+      const hasFree2 = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Recrutement + 2");
+      const hasSpaceG = cityZoneIdsG.some(zId => {
+        const max = getZoneMaxUnits(zId, aiColor, gameState.creatureAssignments || {}, gameState.players || {}, POWER_TILES, null, MAX_UNITS_PER_ZONE, gameState.boardPriests || {});
+        return (boardUnits[zId]?.[aiColor] || 0) < max;
+      });
+      // Gratuit si "Recrutement + 2" (2 premières unités), sinon coûte 1 ank/unité comme un recrutement normal.
+      if (hasSpaceG && (hasFree2 || ank >= 1)) {
+        goldenOptions.push({ type: "golden_recruit", weight: (recruitCand?.weight ?? 1) * 0.8 });
+      }
+    }
+
+    const hasGoldenBuy = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Jeton doré achat *2");
+    if (hasGoldenBuy) {
+      const hasAnkReducG = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
+      const boughtColorsTodayAI = usedActions.filter(a => a.startsWith("buy_"));
+      const secondBuyTiles = POWER_TILES.filter(t => {
+        if (!boughtColorsTodayAI.includes(colorToAction[t.color])) return false;
+        if (!availableIds.includes(t.id)) return false;
+        const ownedNames = ownedTileIds.map(id => POWER_TILES.find(x => x.id === id)?.name).filter(Boolean);
+        if (ownedNames.includes(t.name)) return false;
+        if (getPlayerPyramidLevel(aiPlayerId, t.color, pyramids) < t.level) return false;
+        if (t.secondaryColor && getPlayerPyramidLevel(aiPlayerId, t.secondaryColor, pyramids) < t.secondaryLevel) return false;
+        const power = t.type === 'creature' ? CREATURE_POWERS[t.name] : null;
+        if (power?.mustEquipOnPurchase && !aiFindCerbereTarget(aiColor, boardUnits, gameState.creatureAssignments || {})) return false;
+        if (t.type === 'vp' && ownedTileIds.some(id => POWER_TILES.find(x => x.id === id)?.type === 'vp')) return false;
+        if (isGrayTokenTile(t) && ownedTileIds.some(id => isGrayTokenTile(POWER_TILES.find(x => x.id === id)))) return false;
+        const cost = Math.max(0, t.cost + 1 - (hasCoutReduc ? 1 : 0) - (hasAnkReducG ? 1 : 0));
+        return ank >= cost;
+      });
+      const bestSecondBuy = secondBuyTiles.map(t => ({ tile: t, weight: scoreTileCached(t) })).sort((a, b) => b.weight - a.weight)[0];
+      if (bestSecondBuy) {
+        goldenOptions.push({ type: "golden_buy", tileId: bestSecondBuy.tile.id, weight: bestSecondBuy.weight });
+      }
+    }
+
+    goldenAction = goldenOptions.sort((a, b) => b.weight - a.weight)[0] ?? null;
+  }
+
+  if (goldenAction) decision = { ...decision, goldenAction };
   if (decision.type === "endTurn" || !idCardToPlay) return decision;
   return { ...decision, idCardToPlay };
 }
@@ -1386,6 +1512,85 @@ export function aiChooseCombatCards(availableCards, opponentAvailableCards = [])
   return { combatCard: combatCardId, discardCard: discardCardId };
 }
 
+// ─── Combat : choix de carte SACHANT la carte adverse (Préscience) ──────────
+// Utilisé uniquement quand l'IA possède la Préscience (tuile ou jeton JP) ET
+// que l'adversaire a déjà choisi sa carte combat. Calcule la force réelle des
+// deux camps (unités + créatures + tuiles) et choisit la carte qui maximise la
+// marge de victoire, en réservant une marge de sécurité pour d'éventuelles
+// cartes ID "force" que l'adversaire pourrait encore jouer en phase ID.
+// Si gagner n'est pas atteignable, bascule sur la limitation des pertes
+// (privilégie les boucliers pour absorber le sang adverse).
+export function aiChooseCombatCardKnowingOpponent(gameState, availableCards, opponentCardId, myPlayerId, opponentPlayerId, zoneId) {
+  if (!availableCards || availableCards.length < 2) return null;
+
+  const players = gameState?.players || {};
+  const myColor = players[myPlayerId]?.color;
+  const opponentColor = players[opponentPlayerId]?.color;
+  const boardUnits = gameState?.boardUnits || {};
+  const myUnits = boardUnits[zoneId]?.[myColor] || 0;
+  const opponentUnits = boardUnits[zoneId]?.[opponentColor] || 0;
+
+  const disabledTileIds = gameState?.disabledTileIds || {};
+  const creatureAssignments  = gameState?.creatureAssignments  || {};
+  const creatureAssignments2 = gameState?.creatureAssignments2 || {};
+
+  const myCreatBonus  = getCombatCreatureBonus(myPlayerId, opponentPlayerId, zoneId, creatureAssignments, players, POWER_TILES, creatureAssignments2, disabledTileIds);
+  const oppCreatBonus = getCombatCreatureBonus(opponentPlayerId, myPlayerId, zoneId, creatureAssignments, players, POWER_TILES, creatureAssignments2, disabledTileIds);
+  const myTilesBonus  = getPowerTileCombatBonus(players[myPlayerId]?.ownedTileIds, true,  POWER_TILES, disabledTileIds);
+  const oppTilesBonus = getPowerTileCombatBonus(players[opponentPlayerId]?.ownedTileIds, false, POWER_TILES, disabledTileIds);
+  // Jetons JP des prêtres présents dans la zone de combat (force_attaque/force_defense)
+  const myJpBonus  = getJpTokenCombatBonus(gameState?.boardPriests, zoneId, myColor, true);
+  const oppJpBonus = getJpTokenCombatBonus(gameState?.boardPriests, zoneId, opponentColor, false);
+
+  const opponentCard = COMBAT_CARDS.find(c => c.id === opponentCardId);
+  const opponentBaseForce = opponentUnits + (opponentCard?.force ?? 0) + oppCreatBonus.force + oppTilesBonus.force + oppJpBonus.force;
+
+  // Marge de sécurité : l'adversaire peut encore ajouter une carte ID "force"
+  // (+1 à +2 en général) en phase ID — viser une marge au-dessus plutôt que
+  // gagner "tout juste" et se faire renverser.
+  const ID_FORCE_BUFFER = 2;
+  const opponentPossibleForce = opponentBaseForce + ID_FORCE_BUFFER;
+
+  const candidates = availableCards.map(id => {
+    const card = COMBAT_CARDS.find(c => c.id === id);
+    const myForce = myUnits + (card?.force ?? 0) + myCreatBonus.force + myTilesBonus.force + myJpBonus.force;
+    const marginWithBuffer = myForce - opponentPossibleForce;
+    const marginNoBuffer = myForce - opponentBaseForce;
+    let weight = 1;
+    if (marginWithBuffer >= 0) {
+      // Gagne même si l'adversaire boost sa force au maximum attendu : la carte
+      // la plus sobre suffisant à cette marge est privilégiée (garder les
+      // meilleures cartes en réserve pour un futur combat).
+      weight += 200 - (card?.force ?? 0) * 5;
+    } else if (marginNoBuffer > 0) {
+      // Gagne sans boost adverse, mais resterait à risque s'il en joue un :
+      // préférer plus de force, boucliers en soutien pour amortir un sang boosté.
+      weight += 100 + (card?.force ?? 0) * 10 + (card?.shields ?? 0) * 5;
+    } else {
+      // Ne peut probablement pas gagner : limiter les pertes — boucliers
+      // d'abord (absorbe le sang adverse), force ensuite en solution de repli.
+      weight += (card?.shields ?? 0) * 15 + (card?.force ?? 0) * 3;
+    }
+    return { id, weight };
+  });
+
+  const combatCardId = weightedSelect(candidates)?.id ?? candidates[0].id;
+
+  // Défausse : la carte la plus faible parmi celles restantes
+  const remaining = availableCards.filter(id => id !== combatCardId);
+  const discardChoices = remaining.map(id => {
+    const card = COMBAT_CARDS.find(c => c.id === id);
+    let weight = 1;
+    if ((card?.force ?? 0) <= 2)   weight += AI_WEIGHTS.discard_lowForce;
+    if ((card?.force ?? 0) === 1)  weight += AI_WEIGHTS.discard_force1;
+    if ((card?.shields ?? 0) >= 3) weight += AI_WEIGHTS.discard_highShields;
+    return { id, weight };
+  });
+  const discardCardId = weightedSelect(discardChoices)?.id ?? remaining[0];
+
+  return { combatCard: combatCardId, discardCard: discardCardId };
+}
+
 // ─── Combat : sélection de carte ID à jouer en phase ID ──────────────────────
 // combatIdCards : cartes ID de timing "combat" ou "any" disponibles pour l'IA
 // Retourne la meilleure carte à jouer ou null si passer est préférable.
@@ -1407,22 +1612,32 @@ export function aiSelectCombatIdCard(combatIdCards, combat, gameState, allPlayer
   const myUnits      = zoneUnits[aiColor]      || 0;
   const opponentUnits = zoneUnits[opponentColor] || 0;
 
-  // Potentiel de l'adversaire (sang et boucliers depuis ses cartes disponibles)
-  const opponentAvailable   = opponentState.availableCombatCards || [1,2,3,4,5,6,7,8];
-  const opponentMaxBlood    = Math.max(0, ...opponentAvailable.map(id => COMBAT_CARDS.find(c => c.id === id)?.blood   ?? 0));
-  const opponentMaxShields  = Math.max(0, ...opponentAvailable.map(id => COMBAT_CARDS.find(c => c.id === id)?.shields ?? 0));
+  // Préscience : la carte adverse est déjà connue avec certitude — utilisée
+  // pour la force, le sang et les boucliers réels plutôt que d'estimer depuis
+  // son pool de cartes disponibles.
+  const opponentAvailable = opponentState.availableCombatCards || [1,2,3,4,5,6,7,8];
+  const opponentCombatCardId = combat.choices?.[opponentId]?.combatCard;
+  const knownOpponentCard = (combat.prescience === aiPlayerId) ? COMBAT_CARDS.find(c => c.id === opponentCombatCardId) : null;
+
+  const opponentMaxBlood    = knownOpponentCard ? (knownOpponentCard.blood ?? 0)   : Math.max(0, ...opponentAvailable.map(id => COMBAT_CARDS.find(c => c.id === id)?.blood   ?? 0));
+  const opponentMaxShields  = knownOpponentCard ? (knownOpponentCard.shields ?? 0) : Math.max(0, ...opponentAvailable.map(id => COMBAT_CARDS.find(c => c.id === id)?.shields ?? 0));
   const opponentHasBlood    = opponentMaxBlood >= 2;
   const opponentHasShields  = opponentMaxShields >= 2;
+
+  // Jetons JP des prêtres présents dans la zone de combat (force_attaque/force_defense)
+  const myJpForceCombat  = getJpTokenCombatBonus(gameState?.boardPriests, combat.zoneId, aiColor, aiPlayerId === combat.attacker).force;
+  const oppJpForceCombat = getJpTokenCombatBonus(gameState?.boardPriests, combat.zoneId, opponentColor, opponentId === combat.attacker).force;
 
   // Force estimée de chaque camp (unités + carte combat choisie)
   const myCombatCardId    = combat.choices?.[aiPlayerId]?.combatCard;
   const myCombatCard      = COMBAT_CARDS.find(c => c.id === myCombatCardId);
-  const myForce           = myUnits + (myCombatCard?.force ?? 0);
-  // Estimation prudente de la force adverse (unités + force médiane des cartes dispo)
-  const oppAvgForce = opponentAvailable.length > 0
-    ? opponentAvailable.reduce((s, id) => s + (COMBAT_CARDS.find(c => c.id === id)?.force ?? 0), 0) / opponentAvailable.length
-    : 3;
-  const opponentEstimatedForce = opponentUnits + oppAvgForce;
+  const myForce           = myUnits + (myCombatCard?.force ?? 0) + myJpForceCombat;
+  const oppAvgForce = knownOpponentCard
+    ? knownOpponentCard.force
+    : (opponentAvailable.length > 0
+        ? opponentAvailable.reduce((s, id) => s + (COMBAT_CARDS.find(c => c.id === id)?.force ?? 0), 0) / opponentAvailable.length
+        : 3);
+  const opponentEstimatedForce = opponentUnits + oppAvgForce + oppJpForceCombat;
 
   const candidates = [];
 
@@ -1468,6 +1683,19 @@ export function aiSelectCombatIdCard(combatIdCards, combat, gameState, allPlayer
         // Recrutement victoire si je gagne clairement
         if (myForce > opponentEstimatedForce + 1) weight = 30;
         break;
+      case "swap_combat_card": {
+        // Changement de Stratégie : n'a d'intérêt que si la carte en défausse est
+        // clairement meilleure que la carte choisie face à la force adverse estimée.
+        const myDiscardCardId = combat.choices?.[aiPlayerId]?.discardCard;
+        const myDiscardCard = COMBAT_CARDS.find(c => c.id === myDiscardCardId);
+        if (myDiscardCard) {
+          const discardForce = myUnits + (myDiscardCard.force ?? 0) + myJpForceCombat;
+          if (discardForce > myForce && discardForce >= opponentEstimatedForce && myForce < opponentEstimatedForce) {
+            weight = 45;
+          }
+        }
+        break;
+      }
       default:
         break;
     }
