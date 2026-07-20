@@ -306,9 +306,12 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         });
       })()}
 
-      {/* Placement initial HUD */}
+      {/* Placement initial HUD — position "fixed" (pas "absolute") pour rester
+          visible même si le conteneur du plateau est écrasé verticalement
+          (petite fenêtre / grand zoom navigateur) : ce message bloquant ne
+          doit jamais dépendre de l'espace restant dans la zone du plateau. */}
       {placementZones.length > 0 && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-4 py-2 flex items-center gap-3 pointer-events-auto">
+        <div className="fixed top-12 md:top-[70px] left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 border border-amber-500/60 rounded-lg px-4 py-2 flex items-center gap-3 pointer-events-auto flex-wrap justify-center max-w-[92vw]">
           <span className="text-amber-300 text-sm font-semibold">
             {placementSelected.length < 2
               ? `Cliquez sur ${2 - placementSelected.length} zone${2 - placementSelected.length > 1 ? 's' : ''} de votre cité (surlignées)`
@@ -327,9 +330,11 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         </div>
       )}
 
-      {/* Retreat zone selection HUD */}
+      {/* Retreat zone selection HUD — même raison que le HUD de placement
+          ci-dessus : "fixed" pour rester visible quel que soit l'espace
+          réellement disponible dans la zone du plateau. */}
       {retreatZones.length > 0 && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 bg-gray-900/90 border border-orange-500/60 rounded-lg px-4 py-2 pointer-events-none">
+        <div className="fixed top-12 md:top-[70px] left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 border border-orange-500/60 rounded-lg px-4 py-2 pointer-events-none max-w-[92vw] text-center">
           <span className="text-orange-300 text-sm font-semibold">Cliquez sur une zone orange pour placer le perdant</span>
         </div>
       )}

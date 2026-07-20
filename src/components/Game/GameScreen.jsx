@@ -16,6 +16,7 @@ import { getValidPriestDestinations, getTraversedINode, getTraversedCNode } from
 import { TASETI_I_BONUSES, TASETI_E_BONUSES, TASETI_C_BONUSES } from "../../constants/taSetiBonuses";
 import DawnModal from "../Combat/DawnModal";
 import NightModal from "./NightModal";
+import { computeNightTempleChoices } from "../../utils/night";
 import Board from "../Board/board";
 import SetupPhaseModal from "./SetupPhaseModal";
 import DraftPhaseModal from "./DraftPhaseModal";
@@ -746,6 +747,16 @@ export default function GameScreen({ session }) {
 		} else {
 		  setShowDawn(false);
 		}
+	  });
+	  return () => unsubscribe();
+	}, [roomCode]);
+
+	// Ouvre/ferme automatiquement la modale Nuit — pilotée par le noeud partagé
+	// rooms/{roomCode}/night, comme showDawn/showCombat, pour que tous les
+	// clients voient la phase de nuit en même temps.
+	useEffect(() => {
+	  const unsubscribe = onValue(ref(db, `rooms/${roomCode}/night`), snapshot => {
+		setShowNight(snapshot.exists());
 	  });
 	  return () => unsubscribe();
 	}, [roomCode]);
@@ -1996,6 +2007,18 @@ export default function GameScreen({ session }) {
     await update(ref(db, "/"), updates);
   }
 
+  // Crée le noeud partagé rooms/{roomCode}/night qui pilote la modale de nuit
+  // pour tous les clients (comme rooms/{roomCode}/dawn et /combat). L'écriture
+  // est déterministe : si plusieurs clients détectent "allDone" en même temps
+  // (ce qui arrive déjà avec les tours IA, exécutés sur chaque client), le
+  // second appel écrase le premier avec un contenu équivalent — sans risque.
+  async function openNightPhase(boardUnits) {
+    const nightSnap = await get(ref(db, `rooms/${roomCode}/night`));
+    if (nightSnap.exists()) return;
+    const { t3, tb } = computeNightTempleChoices(boardUnits || gameState.boardUnits, currentPlayers);
+    await set(ref(db, `rooms/${roomCode}/night`), { status: "open", t3, tb });
+  }
+
   async function aiEndTurn(aiId) {
     const sorted = [...currentPlayers].sort((a, b) => a.order - b.order);
     const idx = sorted.findIndex(p => p.id === aiId);
@@ -2032,7 +2055,7 @@ export default function GameScreen({ session }) {
     if (snap.exists()) {
       const players = snap.val();
       const allDone = currentPlayers.every(p => (players[p.id]?.tokens ?? 5) === 0);
-      if (allDone) setShowNight(true);
+      if (allDone) await openNightPhase(freshState.boardUnits);
     }
   }
 
@@ -3584,7 +3607,10 @@ export default function GameScreen({ session }) {
 
     if (victoryCheck === "immediate") return;
     const allDone = currentPlayers.every(p => (gameState.players?.[p.id]?.tokens ?? 5) === 0);
-    if (allDone) setShowNight(true);
+    if (allDone) {
+      const freshBoard = await get(ref(db, `rooms/${roomCode}/gameState/boardUnits`));
+      await openNightPhase(freshBoard.exists() ? freshBoard.val() : gameState.boardUnits);
+    }
   }
 
   const effectiveSession = {
@@ -4359,7 +4385,6 @@ export default function GameScreen({ session }) {
           }
           onOpenTaSeti={() => setShowTaSeti(true)}
           onOpenCombat={() => setShowCombat(true)}
-		  onOpenNight={() => setShowNight(true)}
 		  onOpenDawn={() => setShowDawn(true)}
 		  session={effectiveSession}
 		  onMoveCancel={handleMoveCancel}
@@ -4817,7 +4842,9 @@ export default function GameScreen({ session }) {
 		onClose={() => setShowNight(false)}
 		session={effectiveSession}
 		gameState={gameState}
-		autoProcess={allPlayersAI}
+		isTestMode={isTestMode}
+		testPlayers={isTestMode ? currentPlayers : null}
+		onSwitchTestPlayer={id => { setTestViewPlayerId(id); setActionMode(null); setMoveState(null); setMoveConfig(null); }}
 		logAction={logAction}
 	  />
 	)}

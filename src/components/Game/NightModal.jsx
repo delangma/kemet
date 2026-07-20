@@ -1,22 +1,31 @@
 import { useState, useEffect } from "react";
 import { db } from "../../firebase";
-import { ref, update, get } from "firebase/database";
+import { ref, onValue, update, get, remove } from "firebase/database";
 import { dealCards, buildPuDeck, buildJiDeck, buildJpDeck } from "../../utils/deck";
 import { getJuPositionsForLayout, getJiPositionsForLayout, getJpPositionsForLayout } from "../../constants/taSetiPositions";
 import { POWER_TILES } from "../../constants/powerTiles";
 import { CREATURE_POWERS, getMaxTotalUnits, getTotalTroopCount } from "../../constants/creaturePowers";
 import { computeTempVP } from "../../utils/vp";
+import { getZoneController } from "../../utils/night";
 
 const PLAYER_COLOR_TEXT = {
   Rouge: "text-red-400", Bleu: "text-blue-400",
   Vert: "text-emerald-400", Blanc: "text-gray-200", Noir: "text-gray-400",
 };
 
+const TEST_BADGES = {
+  Rouge: { on: "bg-red-600 text-white border-yellow-400", off: "bg-red-900/50 text-red-300 border-transparent hover:bg-red-800/60" },
+  Bleu:  { on: "bg-blue-600 text-white border-yellow-400", off: "bg-blue-900/50 text-blue-300 border-transparent hover:bg-blue-800/60" },
+  Vert:  { on: "bg-emerald-600 text-white border-yellow-400", off: "bg-emerald-900/50 text-emerald-300 border-transparent hover:bg-emerald-800/60" },
+  Blanc: { on: "bg-gray-300 text-gray-900 border-yellow-400", off: "bg-gray-700/50 text-gray-300 border-transparent hover:bg-gray-600/60" },
+  Noir:  { on: "bg-gray-600 text-white border-yellow-400", off: "bg-gray-900/50 text-gray-400 border-transparent hover:bg-gray-800/60" },
+};
+
 function PlayerName({ player }) {
   return <span className={`font-bold ${PLAYER_COLOR_TEXT[player?.color] || "text-white"}`}>{player?.name ?? "?"}</span>;
 }
 
-function TempleRow({ icon, label, controller, bonus, isBlue }) {
+function TempleRow({ icon, label, controller, bonus }) {
   return (
     <div className={`flex items-center justify-between text-sm ${controller ? "text-gray-200" : "text-gray-600"}`}>
       <span>{icon} {label}</span>
@@ -28,52 +37,54 @@ function TempleRow({ icon, label, controller, bonus, isBlue }) {
   );
 }
 
-export default function NightModal({ onClose, session, gameState, autoProcess = false, logAction }) {
-  const { roomCode, allPlayers } = session;
+export default function NightModal({ onClose, session, gameState, isTestMode, testPlayers, onSwitchTestPlayer, logAction }) {
+  const { roomCode, playerId, allPlayers } = session;
+  const [night, setNight] = useState(null);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [t3Sacrifice, setT3Sacrifice] = useState(false);
-  const [tbSacrifice, setTbSacrifice] = useState(false);
+  const [t3Checked, setT3Checked] = useState(false);
+  const [tbChecked, setTbChecked] = useState(false);
 
-  // Simulation : résoudre la nuit automatiquement (sans sacrifice) quand tous les joueurs sont IA
+  // La phase de nuit est pilotée par le noeud partagé rooms/{roomCode}/night —
+  // exactement comme /dawn et /combat — pour que tous les clients voient les
+  // mêmes choix (contrôleurs T3/TB) et la même résolution en même temps.
   useEffect(() => {
-    if (!autoProcess || done || loading) return;
-    const t = setTimeout(() => handleNightPhase(), 800);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoProcess, done, loading]);
-
-  // Simulation : fermer automatiquement après résolution
-  useEffect(() => {
-    if (!autoProcess || !done) return;
-    const t = setTimeout(() => onClose(), 600);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoProcess, done]);
+    const unsubscribe = onValue(ref(db, `rooms/${roomCode}/night`), snapshot => {
+      setNight(snapshot.exists() ? snapshot.val() : null);
+    });
+    return () => unsubscribe();
+  }, [roomCode]);
 
   const boardUnits = gameState?.boardUnits || {};
 
-  function getController(zoneId) {
-    const units = boardUnits[zoneId] || {};
-    for (const p of allPlayers) {
-      if ((units[p.color] || 0) > 0) return p;
-    }
-    return null;
-  }
-
-  const t1Controller = getController("T1");
-  const t2Controller = getController("T2");
-  const t3Controller = getController("T3");
-  const tbController = getController("TB");
+  const t1Controller = getZoneController(boardUnits, "T1", allPlayers);
+  const t2Controller = getZoneController(boardUnits, "T2", allPlayers);
+  const t3Controller = getZoneController(boardUnits, "T3", allPlayers);
+  const tbController = getZoneController(boardUnits, "TB", allPlayers);
 
   const t3Units = t3Controller ? (boardUnits["T3"]?.[t3Controller.color] || 0) : 0;
   const tbUnits = tbController ? (boardUnits["TB"]?.[tbController.color] || 0) : 0;
   const canT3Sacrifice = t3Units >= 1;
   const canTbSacrifice = tbUnits >= 2;
-  // L'IA sacrifie systématiquement (le gain en Ank/PV vaut toujours plus qu'une
+
+  const t3Choice = night?.t3 || null;
+  const tbChoice = night?.tb || null;
+  const isT3Controller = !!t3Choice && playerId === t3Choice.controllerId;
+  const isTbController = !!tbChoice && playerId === tbChoice.controllerId;
+
+  // IA : sacrifie systématiquement (le gain en Ank/PV vaut toujours plus qu'une
   // unité) — le choix par case à cocher ne s'applique qu'aux joueurs humains.
-  const t3Effective = canT3Sacrifice && (t3Controller?.isAI || t3Sacrifice);
-  const tbEffective = canTbSacrifice && (tbController?.isAI || tbSacrifice);
+  useEffect(() => {
+    if (!t3Choice || t3Choice.ready || !t3Controller?.isAI) return;
+    update(ref(db, `rooms/${roomCode}/night/t3`), { sacrifice: true, ready: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomCode, t3Choice?.ready, t3Controller?.id, t3Controller?.isAI]);
+
+  useEffect(() => {
+    if (!tbChoice || tbChoice.ready || !tbController?.isAI) return;
+    update(ref(db, `rooms/${roomCode}/night/tb`), { sacrifice: true, ready: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomCode, tbChoice?.ready, tbController?.id, tbController?.isAI]);
 
   function get2TempleWinners(t3Sacrificed) {
     const t3After = (t3Sacrificed && t3Units <= 1) ? null : t3Controller;
@@ -86,17 +97,45 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       .filter(Boolean);
   }
 
-  const twoTempleWinners = get2TempleWinners(t3Effective);
+  // Aperçu affiché avant résolution : la valeur en cours de saisie pour le
+  // contrôleur qui décide, sinon le choix déjà confirmé.
+  const t3PreviewSacrifice = !t3Choice ? false : (isT3Controller && !t3Choice.ready ? t3Checked : !!t3Choice.sacrifice);
+  const twoTempleWinners = get2TempleWinners(t3PreviewSacrifice);
+
+  async function handleValidateT3() {
+    if (!isT3Controller || t3Choice.ready) return;
+    await update(ref(db, `rooms/${roomCode}/night/t3`), { sacrifice: t3Checked, ready: true });
+  }
+
+  async function handleValidateTb() {
+    if (!isTbController || tbChoice.ready) return;
+    await update(ref(db, `rooms/${roomCode}/night/tb`), { sacrifice: tbChecked, ready: true });
+  }
 
   async function handleNightPhase() {
     setLoading(true);
+
+    // Verrou : seul le premier client à passer "open" → "resolving" effectue
+    // le calcul (additif, doit s'exécuter une seule fois).
+    const lockSnap = await get(ref(db, `rooms/${roomCode}/night/status`));
+    if (!lockSnap.exists() || lockSnap.val() !== "open") { setLoading(false); return; }
+    await update(ref(db, `rooms/${roomCode}/night`), { status: "resolving" });
+
     const snapshot = await get(ref(db, `rooms/${roomCode}/gameState`));
     if (!snapshot.exists()) { setLoading(false); return; }
     const state = snapshot.val();
 
-    // Guard : si un joueur a déjà des tokens > 0, la nuit a déjà été résolue
+    // Garde-fou supplémentaire : si un joueur a déjà des tokens > 0, la nuit a déjà été résolue
     const alreadyResolved = Object.values(state.players || {}).some(ps => (ps.tokens ?? 0) > 0);
-    if (alreadyResolved) { setDone(true); setLoading(false); return; }
+    if (alreadyResolved) {
+      await remove(ref(db, `rooms/${roomCode}/night`));
+      setDone(true);
+      setLoading(false);
+      return;
+    }
+
+    const t3Effective = !!night?.t3 && !!night.t3.sacrifice;
+    const tbEffective = !!night?.tb && !!night.tb.sacrifice;
 
     const updates = {};
     const deck = [...(state.idDeck || [])];
@@ -330,6 +369,7 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       updates[`rooms/${roomCode}/gameState/gameOver`] = { winnerId: winner.id };
       updates[`rooms/${roomCode}/gameState/pendingEndAtNight`] = null;
       await update(ref(db, "/"), updates);
+      await remove(ref(db, `rooms/${roomCode}/night`));
       setDone(true);
       setLoading(false);
       return;
@@ -381,9 +421,28 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
       [`rooms/${roomCode}/dawn`]: { status: "selecting", currentTurn: null, choices: dawnChoices },
     });
 
+    // Ferme la modale de nuit pour tous les clients — l'Aube prend le relais.
+    await remove(ref(db, `rooms/${roomCode}/night`));
+
     setDone(true);
     setLoading(false);
   }
+
+  // Résolution automatique dès que tous les choix requis (T3/TB) sont validés
+  // — mirroir des useEffect "allReady" de DawnModal. Le verrou status "open" →
+  // "resolving" (dans handleNightPhase) évite que plusieurs clients, dont cet
+  // effet tourne simultanément, ne résolvent la nuit deux fois.
+  useEffect(() => {
+    if (!night || night.status !== "open" || done || loading) return;
+    const t3Ready = !night.t3 || night.t3.ready;
+    const tbReady = !night.tb || night.tb.ready;
+    if (!t3Ready || !tbReady) return;
+    const t = setTimeout(() => handleNightPhase(), 0);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [night?.status, night?.t3?.ready, night?.tb?.ready, done, loading]);
+
+  if (!night || done) return null;
 
   return (
     <div className="kmt-overlay">
@@ -395,121 +454,136 @@ export default function NightModal({ onClose, session, gameState, autoProcess = 
           <button onClick={onClose} className="kmt-close">✕</button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
-          {!done ? (
-            <>
-              {/* Effets automatiques */}
-              <div className="kmt-section p-4 space-y-2">
-                <p className="kmt-label mb-3">Effets automatiques</p>
-                <p className="text-sm text-gray-300">🪙 +2 Or pour chaque joueur</p>
-                <p className="text-sm text-gray-300">🃏 +1 carte ID pour chaque joueur</p>
-                <p className="text-sm text-gray-300">🎯 Réinitialisation des jetons</p>
-                {t1Controller && <TempleRow icon="🏛️" label="Temple 1 →" controller={t1Controller} bonus="+2 Ank" />}
-                {t2Controller && <TempleRow icon="🏛️" label="Temple 2 →" controller={t2Controller} bonus="+3 Ank" />}
-              </div>
+        {isTestMode && testPlayers && (
+          <div className="flex items-center gap-2 px-4 py-1.5 bg-yellow-950/80 border-b border-yellow-700/40">
+            <span className="text-yellow-400 text-xs font-bold shrink-0">Vue :</span>
+            {testPlayers.map(p => {
+              const b = TEST_BADGES[p.color] || TEST_BADGES.Noir;
+              const isSelected = p.id === playerId;
+              return (
+                <button key={p.id} onClick={() => onSwitchTestPlayer(p.id)}
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold border transition-all ${isSelected ? b.on : b.off}`}>
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-              {/* T3 sacrifice */}
-              <div className={`kmt-section p-4 ${!t3Controller ? "opacity-50" : ""}`}>
-                <p className="kmt-label mb-3">Temple 3 — Sacrifice optionnel</p>
-                {t3Controller ? (
+        <div className="px-6 py-5 space-y-4">
+          {/* Effets automatiques */}
+          <div className="kmt-section p-4 space-y-2">
+            <p className="kmt-label mb-3">Effets automatiques</p>
+            <p className="text-sm text-gray-300">🪙 +2 Or pour chaque joueur</p>
+            <p className="text-sm text-gray-300">🃏 +1 carte ID pour chaque joueur</p>
+            <p className="text-sm text-gray-300">🎯 Réinitialisation des jetons</p>
+            {t1Controller && <TempleRow icon="🏛️" label="Temple 1 →" controller={t1Controller} bonus="+2 Ank" />}
+            {t2Controller && <TempleRow icon="🏛️" label="Temple 2 →" controller={t2Controller} bonus="+3 Ank" />}
+          </div>
+
+          {/* T3 sacrifice */}
+          <div className={`kmt-section p-4 ${!t3Controller ? "opacity-50" : ""}`}>
+            <p className="kmt-label mb-3">Temple 3 — Sacrifice optionnel</p>
+            {t3Controller ? (
+              <>
+                <p className="text-sm text-gray-300 mb-3">
+                  <PlayerName player={t3Controller} /> contrôle T3 ({t3Units} unité{t3Units > 1 ? "s" : ""})
+                </p>
+                {!canT3Sacrifice ? (
+                  <p className="text-red-400 text-xs">Il faut au moins 1 unité sur T3</p>
+                ) : t3Choice?.ready ? (
+                  <p className="text-sm text-amber-300">
+                    {t3Choice.sacrifice ? "✅ Sacrifice → +5 Ank" : "❌ Pas de sacrifice"}
+                  </p>
+                ) : isT3Controller ? (
                   <>
-                    <p className="text-sm text-gray-300 mb-3">
-                      <PlayerName player={t3Controller} /> contrôle T3 ({t3Units} unité{t3Units > 1 ? "s" : ""})
-                    </p>
-                    <label className={`flex items-center gap-3 select-none ${!canT3Sacrifice ? "opacity-40" : t3Controller.isAI ? "cursor-default" : "cursor-pointer"}`}>
+                    <label className={`flex items-center gap-3 select-none ${t3Controller.isAI ? "cursor-default" : "cursor-pointer"}`}>
                       <input
-                        type="checkbox" checked={t3Effective}
-                        onChange={e => canT3Sacrifice && !t3Controller.isAI && setT3Sacrifice(e.target.checked)}
-                        disabled={!canT3Sacrifice || t3Controller.isAI}
+                        type="checkbox" checked={t3Checked}
+                        onChange={e => !t3Controller.isAI && setT3Checked(e.target.checked)}
+                        disabled={t3Controller.isAI}
                         className="w-4 h-4 accent-amber-500 rounded"
                       />
                       <span className="text-sm text-amber-300">
                         Sacrifier 1 unité → <strong>+5 Ank</strong>
-                        {t3Controller.isAI && <span className="text-amber-500/70 text-xs ml-2">(automatique — IA)</span>}
-                        {t3Units === 1 && t3Effective && <span className="text-red-400 text-xs ml-2">(perd le contrôle)</span>}
+                        {t3Units === 1 && t3Checked && <span className="text-red-400 text-xs ml-2">(perd le contrôle)</span>}
                       </span>
                     </label>
+                    <button
+                      onClick={handleValidateT3}
+                      className="mt-3 w-full py-2 rounded-lg font-semibold text-sm kmt-btn-gold"
+                    >
+                      ✅ Valider mon choix
+                    </button>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">Aucun joueur ne contrôle T3</p>
+                  <p className="text-yellow-400 text-sm">⏳ En attente du choix de <PlayerName player={t3Controller} /></p>
                 )}
-              </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500 italic">Aucun joueur ne contrôle T3</p>
+            )}
+          </div>
 
-              {/* TB sacrifice */}
-              <div className={`kmt-section p-4 ${!tbController ? "opacity-50" : ""}`}>
-                <p className="kmt-label mb-3 text-blue-400/80">Temple Bleu — Sacrifice optionnel</p>
-                {tbController ? (
+          {/* TB sacrifice */}
+          <div className={`kmt-section p-4 ${!tbController ? "opacity-50" : ""}`}>
+            <p className="kmt-label mb-3 text-blue-400/80">Temple Bleu — Sacrifice optionnel</p>
+            {tbController ? (
+              <>
+                <p className="text-sm text-gray-300 mb-3">
+                  <PlayerName player={tbController} /> contrôle TB ({tbUnits} unité{tbUnits > 1 ? "s" : ""})
+                </p>
+                {!canTbSacrifice ? (
+                  <p className="text-red-400 text-xs">Il faut au moins 2 unités sur TB</p>
+                ) : tbChoice?.ready ? (
+                  <p className="text-sm text-blue-300">
+                    {tbChoice.sacrifice ? "✅ Sacrifice → +1 PV permanent" : "❌ Pas de sacrifice"}
+                  </p>
+                ) : isTbController ? (
                   <>
-                    <p className="text-sm text-gray-300 mb-3">
-                      <PlayerName player={tbController} /> contrôle TB ({tbUnits} unité{tbUnits > 1 ? "s" : ""})
-                    </p>
-                    <label className={`flex items-center gap-3 select-none ${!canTbSacrifice ? "opacity-40" : tbController.isAI ? "cursor-default" : "cursor-pointer"}`}>
+                    <label className={`flex items-center gap-3 select-none ${tbController.isAI ? "cursor-default" : "cursor-pointer"}`}>
                       <input
-                        type="checkbox" checked={tbEffective}
-                        onChange={e => canTbSacrifice && !tbController.isAI && setTbSacrifice(e.target.checked)}
-                        disabled={!canTbSacrifice || tbController.isAI}
+                        type="checkbox" checked={tbChecked}
+                        onChange={e => !tbController.isAI && setTbChecked(e.target.checked)}
+                        disabled={tbController.isAI}
                         className="w-4 h-4 accent-blue-500 rounded"
                       />
                       <span className="text-sm text-blue-300">
                         Sacrifier 2 unités → <strong>+1 PV permanent</strong>
-                        {tbController.isAI && <span className="text-blue-400/70 text-xs ml-2">(automatique — IA)</span>}
                       </span>
                     </label>
-                    {!canTbSacrifice && (
-                      <p className="text-red-400 text-xs mt-2">Il faut au moins 2 unités sur TB</p>
-                    )}
+                    <button
+                      onClick={handleValidateTb}
+                      className="mt-3 w-full py-2 rounded-lg font-semibold text-sm kmt-btn-gold"
+                    >
+                      ✅ Valider mon choix
+                    </button>
                   </>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">Aucun joueur ne contrôle TB</p>
+                  <p className="text-yellow-400 text-sm">⏳ En attente du choix de <PlayerName player={tbController} /></p>
                 )}
-              </div>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500 italic">Aucun joueur ne contrôle TB</p>
+            )}
+          </div>
 
-              {/* Bonus 2 temples */}
-              <div className="kmt-section p-3">
-                <p className="kmt-label mb-2">Bonus contrôle — 2+ temples (hors TB)</p>
-                {twoTempleWinners.length > 0
-                  ? twoTempleWinners.map(p => (
-                      <p key={p.id} className="text-sm text-amber-300">
-                        ⭐ <PlayerName player={p} /> → <strong>+1 PV permanent</strong>
-                      </p>
-                    ))
-                  : <p className="text-sm text-gray-600 italic">Aucun joueur n'atteint le seuil</p>
-                }
-              </div>
+          {/* Bonus 2 temples */}
+          <div className="kmt-section p-3">
+            <p className="kmt-label mb-2">Bonus contrôle — 2+ temples (hors TB)</p>
+            {twoTempleWinners.length > 0
+              ? twoTempleWinners.map(p => (
+                  <p key={p.id} className="text-sm text-amber-300">
+                    ⭐ <PlayerName player={p} /> → <strong>+1 PV permanent</strong>
+                  </p>
+                ))
+              : <p className="text-sm text-gray-600 italic">Aucun joueur n'atteint le seuil</p>
+            }
+          </div>
 
-              <button
-                onClick={handleNightPhase}
-                disabled={loading}
-                className={`w-full py-3 rounded-lg font-bold transition-colors ${
-                  loading ? "kmt-btn-disabled" : "kmt-btn-gold"
-                }`}
-              >
-                {loading ? "Résolution en cours…" : "✅ Résoudre la nuit"}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="kmt-section p-5 text-center space-y-2">
-                <p className="text-green-400 font-bold text-lg">✅ Nuit résolue</p>
-                <p className="text-gray-400 text-sm">Chaque joueur a reçu +2 Ank et +1 carte ID.</p>
-                {(t1Controller || t2Controller) && <p className="text-amber-300 text-sm">Bonus temples T1/T2 distribués.</p>}
-                {t3Effective && t3Controller && (
-                  <p className="text-amber-300 text-sm">{t3Controller.name} a sacrifié sur T3 → +5 Ank.</p>
-                )}
-                {tbEffective && tbController && (
-                  <p className="text-blue-300 text-sm">{tbController.name} a sacrifié sur TB → +1 PV.</p>
-                )}
-                {twoTempleWinners.length > 0 && (
-                  <p className="text-amber-300 text-sm">{twoTempleWinners.map(p => p.name).join(", ")} → +1 PV (2 temples).</p>
-                )}
-              </div>
-
-              <p className="text-orange-300 text-sm text-center">🌅 Phase de l'Aube lancée automatiquement…</p>
-              <button onClick={onClose} className="w-full text-center text-gray-500 hover:text-gray-300 text-sm transition-colors py-1">
-                Fermer sans lancer l'Aube
-              </button>
-            </>
-          )}
+          <p className="text-center text-sm text-gray-400">
+            {loading || night.status === "resolving" ? "🌙 Résolution en cours…" : "⏳ En attente des choix restants…"}
+          </p>
         </div>
       </div>
     </div>

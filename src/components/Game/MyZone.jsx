@@ -55,7 +55,7 @@ const ACTION_IMG = {
 
 export default function MyZone({
   player, gameState, onActionActivate, onSetActionMode, actionMode,
-  onEndTurn, canEndTurn: canEndTurnProp, onOpenTaSeti, onOpenCombat, onOpenDawn, onOpenNight, session,
+  onEndTurn, canEndTurn: canEndTurnProp, onOpenTaSeti, onOpenCombat, onOpenDawn, session,
   onMoveCancel, onGoldenTokenMoveActivate, onGoldenTokenRecruitActivate,
   onGoldenTokenPrayerActivate, onGoldenTokenBuyActivate, onRenforcementActivate,
   onNightTaSetiAdvance, onUseJuToken,
@@ -179,8 +179,10 @@ export default function MyZone({
   // Draft ID (Choix supplémentaire)
   const idDraftPending = state.idDraftPending || null;
   const hasIdDraft = Array.isArray(idDraftPending) && idDraftPending.length > 0;
+  const canIdDraft = isMyTurn && hasIdDraft;
   // Draft ID BI_2 (refresh)
   const idRefreshPending = state.idRefreshPending ?? false;
+  const canIdRefresh = isMyTurn && idRefreshPending;
   // Carte Sang/Bouclier 3*3 : échange de carte combat en attente
   const pendingCombatCardSwap = state.pendingCombatCardSwap ?? null;
   // Jetons JU (PU cards) en main — disponibilité selon le type :
@@ -427,10 +429,10 @@ export default function MyZone({
             );
           })}
           {hasIdDraft && (
-            <button onClick={() => setLocalModal('id_draft')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-purple-700/80 text-purple-100 border-purple-500">🃏 Choisir({idDraftPending.length})</button>
+            <button onClick={() => canIdDraft && setLocalModal('id_draft')} disabled={!canIdDraft} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canIdDraft ? 'bg-purple-700/80 text-purple-100 border-purple-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🃏 Choisir({idDraftPending.length})</button>
           )}
           {idRefreshPending && (
-            <button onClick={() => setLocalModal('id_refresh')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-teal-700/80 text-teal-100 border-teal-500">🔄 Draft ID</button>
+            <button onClick={() => canIdRefresh && setLocalModal('id_refresh')} disabled={!canIdRefresh} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canIdRefresh ? 'bg-teal-700/80 text-teal-100 border-teal-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🔄 Draft ID</button>
           )}
           {pendingCombatCardSwap && (
             <button onClick={() => setLocalModal('combat_card_swap')} className="text-[10px] px-2 py-1 rounded border font-semibold shrink-0 bg-rose-700/80 text-rose-100 border-rose-500 animate-pulse">🔄 Carte combat</button>
@@ -689,8 +691,13 @@ export default function MyZone({
         {/* Choix supplémentaire ID W_3_2 */}
         {hasIdDraft && (
           <button
-            onClick={() => setLocalModal("id_draft")}
-            className="text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 bg-purple-700/80 hover:bg-purple-600 text-purple-100 border-purple-500"
+            onClick={() => canIdDraft && setLocalModal("id_draft")}
+            disabled={!canIdDraft}
+            className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
+              canIdDraft
+                ? "bg-purple-700/80 hover:bg-purple-600 text-purple-100 border-purple-500"
+                : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
+            }`}
           >
             🃏 Choisir carte ({idDraftPending.length})
           </button>
@@ -698,8 +705,13 @@ export default function MyZone({
         {/* Draft ID BI_2 */}
         {idRefreshPending && (
           <button
-            onClick={() => setLocalModal("id_refresh")}
-            className="text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 bg-teal-700/80 hover:bg-teal-600 text-teal-100 border-teal-500"
+            onClick={() => canIdRefresh && setLocalModal("id_refresh")}
+            disabled={!canIdRefresh}
+            className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
+              canIdRefresh
+                ? "bg-teal-700/80 hover:bg-teal-600 text-teal-100 border-teal-500"
+                : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
+            }`}
           >
             🔄 Draft ID
           </button>
