@@ -58,7 +58,9 @@
       "Bash(npx playwright *)",
       "Bash(curl *)",
       "Bash(taskkill //PID 6156 //F)",
-      "Bash(taskkill //PID 17888 //F)"
+      "Bash(taskkill //PID 17888 //F)",
+      "Bash(break)",
+      "Bash(taskkill //PID 4516 //F)"
     ]
   }
 }

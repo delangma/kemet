@@ -1,4 +1,5 @@
 import { COMBAT_CARDS } from "../../constants/cards";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 export default function CombatCardsModal({ cardIds, onClose }) {
   const cards = (cardIds || [])
@@ -30,12 +31,18 @@ export default function CombatCardsModal({ cardIds, onClose }) {
             >
               {cards.map(card => (
                 <div key={card.id} className="flex items-center justify-center">
-                  <img
+                  <HoverZoomImage
                     src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
                     alt={`Force ${card.force}`}
-                    draggable={false}
-                    style={{ width: '100%', height: 'auto', maxHeight: '38vh', objectFit: 'contain', display: 'block', borderRadius: 10, border: '3px solid #4b5563' }}
-                  />
+                    style={{ width: '100%', maxHeight: '38vh' }}
+                  >
+                    <img
+                      src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                      alt={`Force ${card.force}`}
+                      draggable={false}
+                      style={{ width: '100%', height: 'auto', maxHeight: '38vh', objectFit: 'contain', display: 'block', borderRadius: 10, border: '3px solid #4b5563' }}
+                    />
+                  </HoverZoomImage>
                 </div>
               ))}
             </div>

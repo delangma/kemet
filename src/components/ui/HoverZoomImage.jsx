@@ -1,16 +1,16 @@
 import { useCallback, useRef, useState } from "react";
 
 const HOVER_DELAY_MS = 500;
-const ZOOM_WIDTH = 260;
+const ZOOM_SCALE = 2;
 const VIEWPORT_MARGIN = 10;
 const TOUCH_MOVE_TOLERANCE = 10;
 
 // Enveloppe une petite image (tuile pouvoir, carte ID, carte de combat) et affiche
-// un aperçu agrandi ancré à côté d'elle après 500ms de survol (souris) ou d'appui
-// (tactile), jusqu'à ce que le curseur/doigt quitte la miniature d'origine (peu
-// importe où il va ensuite).
+// un aperçu agrandi (x2, bordure dorée) ancré à côté d'elle après 500ms de survol
+// (souris) ou d'appui (tactile), jusqu'à ce que le curseur/doigt quitte la
+// miniature d'origine (peu importe où il va ensuite).
 export default function HoverZoomImage({ src, alt = "", className = "", style, children }) {
-  const [zoomPos, setZoomPos] = useState(null);
+  const [zoom, setZoom] = useState(null);
   const timerRef = useRef(null);
   const wrapperRef = useRef(null);
   const touchStartRef = useRef(null);
@@ -22,24 +22,26 @@ export default function HoverZoomImage({ src, alt = "", className = "", style, c
     timerRef.current = setTimeout(() => {
       const rect = wrapperRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const estimatedHeight = ZOOM_WIDTH * 1.5;
+      const maxWidth = window.innerWidth - VIEWPORT_MARGIN * 2;
+      const width = Math.min(rect.width * ZOOM_SCALE, maxWidth);
+      const estimatedHeight = rect.height > 0 ? width * (rect.height / rect.width) : width * 1.5;
       const spaceRight = window.innerWidth - rect.right;
       const spaceLeft = rect.left;
-      const left = (spaceRight >= ZOOM_WIDTH + VIEWPORT_MARGIN || spaceRight >= spaceLeft)
-        ? Math.min(rect.right + VIEWPORT_MARGIN, window.innerWidth - ZOOM_WIDTH - VIEWPORT_MARGIN)
-        : Math.max(VIEWPORT_MARGIN, rect.left - ZOOM_WIDTH - VIEWPORT_MARGIN);
+      const left = (spaceRight >= width + VIEWPORT_MARGIN || spaceRight >= spaceLeft)
+        ? Math.min(rect.right + VIEWPORT_MARGIN, window.innerWidth - width - VIEWPORT_MARGIN)
+        : Math.max(VIEWPORT_MARGIN, rect.left - width - VIEWPORT_MARGIN);
       const top = Math.min(
         Math.max(VIEWPORT_MARGIN, rect.top),
         Math.max(VIEWPORT_MARGIN, window.innerHeight - estimatedHeight - VIEWPORT_MARGIN)
       );
-      setZoomPos({ left, top });
+      setZoom({ left, top, width });
       zoomShownOnTouchRef.current = true;
     }, HOVER_DELAY_MS);
   }, [src]);
 
   const hideZoom = useCallback(() => {
     clearTimeout(timerRef.current);
-    setZoomPos(null);
+    setZoom(null);
   }, []);
 
   const handleTouchStart = useCallback(e => {
@@ -80,10 +82,10 @@ export default function HoverZoomImage({ src, alt = "", className = "", style, c
       onTouchCancel={hideZoom}
     >
       {children}
-      {zoomPos && (
+      {zoom && (
         <div
-          className="fixed z-[300] pointer-events-none rounded-xl shadow-2xl border border-white/20 bg-gray-950/95 p-1.5"
-          style={{ left: zoomPos.left, top: zoomPos.top, width: ZOOM_WIDTH }}
+          className="fixed z-[300] pointer-events-none rounded-xl shadow-[0_0_24px_rgba(0,0,0,0.6)] border-[3px] border-amber-400 bg-gray-950/95 p-1.5"
+          style={{ left: zoom.left, top: zoom.top, width: zoom.width }}
         >
           <img src={src} alt={alt} className="w-full h-auto object-contain rounded-lg" draggable={false} />
         </div>
