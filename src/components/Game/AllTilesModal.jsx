@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidLevel, getTileImageUrl } from "../../constants/powerTiles";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 const COLORS = ["Rouge", "Bleu", "Blanc", "Noir"];
 
@@ -116,11 +117,13 @@ export default function AllTilesModal({ gameState, session, onClose }) {
                       >
                         {getTileImageUrl(tile.id) && (
                           <div className="w-full bg-gray-950 flex items-center justify-center">
-                            <img
-                              src={getTileImageUrl(tile.id)}
-                              alt={tile.name}
-                              className="max-h-32 w-full object-contain"
-                            />
+                            <HoverZoomImage src={getTileImageUrl(tile.id)} alt={tile.name} className="max-h-32 w-full">
+                              <img
+                                src={getTileImageUrl(tile.id)}
+                                alt={tile.name}
+                                className="max-h-32 w-full object-contain"
+                              />
+                            </HoverZoomImage>
                           </div>
                         )}
                         <div className="p-3">

@@ -45,7 +45,15 @@
       "Bash(where python *)",
       "Bash(where python3 *)",
       "Bash(py --version)",
-      "Bash(C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe *)"
+      "Bash(C:\\\\Users\\\\maxim\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe *)",
+      "Bash(git --no-pager diff --stat)",
+      "Bash(npx --yes playwright --version)",
+      "Bash(lsof -ti:5173 -sTCP:LISTEN)",
+      "Bash(xargs -r kill)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(taskkill //PID 14312 //F)",
+      "Bash(npx eslint *)"
     ]
   }
 }

@@ -7,6 +7,7 @@ import { getCombatCreatureBonus, getCombatResult, CREATURE_POWERS, getJpTokenFla
 import { getCreatureSpriteStyle } from "../../constants/creatures";
 import { ZONE_ADJACENCY } from "../../constants/board";
 import { aiChooseCombatCards, aiChooseCombatCardKnowingOpponent, aiSelectCombatIdCard } from "../../ai/aiPlayer";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 export default function CombatModal({ onClose, session, gameState, effectivePlayerId: epId, isTestMode, testPlayers, testViewPlayerId, onSwitchTestPlayer, logAction }) {
   const { roomCode, playerId: sessionPlayerId, allPlayers } = session;
@@ -985,12 +986,18 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                       <p className="text-purple-300 text-sm font-bold mb-2">Prescience</p>
                       <p className="text-gray-400 text-xs mb-2">Carte adverse révélée :</p>
                       {oppCard && (
-                        <img
+                        <HoverZoomImage
                           src={`/Combat_${oppCard.force}${oppCard.blood}${oppCard.shields}.png`}
                           alt={`Force ${oppCard.force}`}
-                          draggable={false}
-                          style={{ width: 'clamp(90px, 11vw, 180px)', borderRadius: 8, display: 'block', margin: '0 auto' }}
-                        />
+                          style={{ width: 'clamp(90px, 11vw, 180px)', margin: '0 auto' }}
+                        >
+                          <img
+                            src={`/Combat_${oppCard.force}${oppCard.blood}${oppCard.shields}.png`}
+                            alt={`Force ${oppCard.force}`}
+                            draggable={false}
+                            style={{ width: '100%', borderRadius: 8, display: 'block' }}
+                          />
+                        </HoverZoomImage>
                       )}
                     </div>
                   );
@@ -1095,12 +1102,18 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                                 background: 'transparent',
                               }}
                             >
-                              <img
+                              <HoverZoomImage
                                 src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
                                 alt={`F${card.force}`}
-                                draggable={false}
-                                style={{ width: '100%', height: 'auto', display: 'block' }}
-                              />
+                                style={{ width: '100%' }}
+                              >
+                                <img
+                                  src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                                  alt={`F${card.force}`}
+                                  draggable={false}
+                                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                                />
+                              </HoverZoomImage>
                             </button>
                           );
                         })}
@@ -1131,12 +1144,18 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                                 background: 'transparent',
                               }}
                             >
-                              <img
+                              <HoverZoomImage
                                 src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
                                 alt={`F${card.force}`}
-                                draggable={false}
-                                style={{ width: '100%', height: 'auto', display: 'block' }}
-                              />
+                                style={{ width: '100%' }}
+                              >
+                                <img
+                                  src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                                  alt={`F${card.force}`}
+                                  draggable={false}
+                                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                                />
+                              </HoverZoomImage>
                             </button>
                           );
                         })}
@@ -1297,22 +1316,34 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                     <div className="text-center">
                       <p className="text-xs text-gray-400 mb-1">Combat</p>
                       {myCombatCard && (
-                        <img
+                        <HoverZoomImage
                           src={`/Combat_${myCombatCard.force}${myCombatCard.blood}${myCombatCard.shields}.png`}
-                          alt="" draggable={false}
-                          style={{ width: 'clamp(100px, 14vw, 220px)', height: 'auto', borderRadius: 8, border: '2px solid #b45309', display: 'block' }}
-                        />
+                          alt=""
+                          style={{ width: 'clamp(100px, 14vw, 220px)', display: 'inline-block' }}
+                        >
+                          <img
+                            src={`/Combat_${myCombatCard.force}${myCombatCard.blood}${myCombatCard.shields}.png`}
+                            alt="" draggable={false}
+                            style={{ width: '100%', height: 'auto', borderRadius: 8, border: '2px solid #b45309', display: 'block' }}
+                          />
+                        </HoverZoomImage>
                       )}
                     </div>
                     <div className="text-gray-400 text-xl">⇄</div>
                     <div className="text-center">
                       <p className="text-xs text-gray-400 mb-1">Défausse</p>
                       {myDiscardCard && (
-                        <img
+                        <HoverZoomImage
                           src={`/Combat_${myDiscardCard.force}${myDiscardCard.blood}${myDiscardCard.shields}.png`}
-                          alt="" draggable={false}
-                          style={{ width: 'clamp(100px, 14vw, 220px)', height: 'auto', borderRadius: 8, border: '2px solid #b91c1c', display: 'block' }}
-                        />
+                          alt=""
+                          style={{ width: 'clamp(100px, 14vw, 220px)', display: 'inline-block' }}
+                        >
+                          <img
+                            src={`/Combat_${myDiscardCard.force}${myDiscardCard.blood}${myDiscardCard.shields}.png`}
+                            alt="" draggable={false}
+                            style={{ width: '100%', height: 'auto', borderRadius: 8, border: '2px solid #b91c1c', display: 'block' }}
+                          />
+                        </HoverZoomImage>
                       )}
                     </div>
                   </div>

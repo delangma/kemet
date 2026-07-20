@@ -59,7 +59,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
       )
     : [];
 
-  const isMoveMode = (actionMode === "move1" || actionMode === "move2") && isMyTurn;
+  const isMoveMode = (actionMode === "move1" || actionMode === "move2" || actionMode === "move_golden") && isMyTurn;
   const isMoveSourcePhase = isMoveMode && !moveState;
   const isMoveMovingPhase = isMoveMode && moveState?.phase === "moving";
   const teleportPending = moveState?.teleportPending || false;
@@ -344,7 +344,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         <div
           onMouseDown={startHudDrag}
           onTouchStart={startHudDrag}
-          className="absolute z-30 bg-gray-900/90 border border-blue-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto select-none"
+          className="absolute z-30 bg-gray-900/90 border border-blue-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center flex-wrap justify-center gap-2 md:gap-3 pointer-events-auto select-none max-w-[92vw]"
           style={hudPos
             ? { left: hudPos.x, top: hudPos.y, cursor: 'grab' }
             : { bottom: 8, left: '50%', transform: 'translateX(-50%)', cursor: 'grab' }
@@ -360,7 +360,7 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
         <div
           onMouseDown={startHudDrag}
           onTouchStart={startHudDrag}
-          className="absolute z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center gap-2 md:gap-3 pointer-events-auto select-none"
+          className="absolute z-30 bg-gray-900/90 border border-amber-500/60 rounded-lg px-3 py-1.5 md:px-4 md:py-2 flex items-center flex-wrap justify-center gap-2 md:gap-3 pointer-events-auto select-none max-w-[92vw]"
           style={hudPos
             ? { left: hudPos.x, top: hudPos.y, cursor: 'grab' }
             : { bottom: 8, left: '50%', transform: 'translateX(-50%)', cursor: 'grab' }

@@ -1350,7 +1350,7 @@ export default function GameScreen({ session }) {
             defenderId: enemyPlayerId,
             attackerId: effectivePlayerId,
             zoneId: toZoneId,
-            attackerPointsRemaining: newPoints,
+            attackerPointsRemaining: pointsRemaining,
             attackerMoveData: {
               count: moveState?.count ?? 1,
               creatureId: moveState?.creatureId ?? null,
@@ -2059,6 +2059,18 @@ export default function GameScreen({ session }) {
     }
   }
 
+  // Filet de sécurité : une décision d'IA passe la sélection (aiDecideAction)
+  // mais peut échouer à une re-validation stricte à l'exécution (état changé,
+  // incohérence de planification…). Sans ce filet, la fonction ressortait en
+  // silence (aucune écriture Firebase, aucune exception) : currentTurnPlayerId
+  // et actionsThisTurn restaient inchangés, donc l'effet IA ne se redéclenchait
+  // jamais et la partie se figeait sans le moindre message. On termine
+  // proprement le tour à la place, avec un log explicite pour diagnostiquer.
+  async function abortAiAction(aiId, decisionType, reason) {
+    await logAction(aiId, `⚠️ IA : action "${decisionType}" invalide (${reason}) — fin de tour de secours`).catch(() => {});
+    await aiEndTurn(aiId);
+  }
+
   // Résout immédiatement pour l'IA les effets Ta-Seti en attente (le joueur humain
   // les résout par clics via l'interface) : recrutement Ta-Seti et Pluie de Feu.
   // Lit les valeurs déjà présentes dans `updates` (même batch) ou dans l'état courant.
@@ -2536,26 +2548,26 @@ export default function GameScreen({ session }) {
       case "buy_white":
       case "buy_black": {
         const tile = POWER_TILES.find(t => t.id === decision.tileId);
-        if (!tile) return;
+        if (!tile) return abortAiAction(aiId, decision.type, "tuile introuvable");
         const availableTileIds = gameState.availableTileIds || [];
-        if (!availableTileIds.includes(decision.tileId)) return;
+        if (!availableTileIds.includes(decision.tileId)) return abortAiAction(aiId, decision.type, "tuile plus disponible");
         const aiPyramids = gameState.pyramids || {};
-        if (getPlayerPyramidLevel(aiId, tile.color, aiPyramids) < tile.level) return;
-        if (tile.secondaryColor && getPlayerPyramidLevel(aiId, tile.secondaryColor, aiPyramids) < tile.secondaryLevel) return;
+        if (getPlayerPyramidLevel(aiId, tile.color, aiPyramids) < tile.level) return abortAiAction(aiId, decision.type, "niveau de pyramide insuffisant");
+        if (tile.secondaryColor && getPlayerPyramidLevel(aiId, tile.secondaryColor, aiPyramids) < tile.secondaryLevel) return abortAiAction(aiId, decision.type, "niveau de pyramide secondaire insuffisant");
         const hasCoutReduc = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Cout Pouvoir -1");
         const hasAnkReducAI = ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.name === "Réduction d'ank");
         const effectiveCost = Math.max(0, tile.cost - (hasCoutReduc ? 1 : 0) - (hasAnkReducAI ? 1 : 0));
-        if (ank < effectiveCost) return;
+        if (ank < effectiveCost) return abortAiAction(aiId, decision.type, "ank insuffisant");
         // Cerbère : abandon si plus de cible à sécuriser (équipement obligatoire)
         const buyPowerAI = tile.type === "creature" ? CREATURE_POWERS?.[tile.name] : null;
         const cerbereTargetZone = buyPowerAI?.mustEquipOnPurchase
           ? aiFindCerbereTarget(aiColor, boardUnits, gameState.creatureAssignments || {})
           : null;
-        if (buyPowerAI?.mustEquipOnPurchase && !cerbereTargetZone) return;
+        if (buyPowerAI?.mustEquipOnPurchase && !cerbereTargetZone) return abortAiAction(aiId, decision.type, "aucune cible pour la créature obligatoire");
         // Un seul "Point Majeur" (type vp) par joueur
-        if (tile.type === "vp" && ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.type === "vp")) return;
+        if (tile.type === "vp" && ownedTileIds.some(id => POWER_TILES.find(t => t.id === id)?.type === "vp")) return abortAiAction(aiId, decision.type, "tuile Point Majeur déjà possédée");
         // Un seul "Jeton gris" par joueur
-        if (isGrayTokenTile(tile) && ownedTileIds.some(id => isGrayTokenTile(POWER_TILES.find(t => t.id === id)))) return;
+        if (isGrayTokenTile(tile) && ownedTileIds.some(id => isGrayTokenTile(POWER_TILES.find(t => t.id === id)))) return abortAiAction(aiId, decision.type, "jeton gris déjà possédé");
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ank - effectiveCost;
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ownedTileIds`] = [...ownedTileIds, decision.tileId];
         baseUpdates[`rooms/${roomCode}/gameState/availableTileIds`] = availableTileIds.filter(id => id !== decision.tileId);
@@ -2835,7 +2847,7 @@ export default function GameScreen({ session }) {
         const srcPowerAI = srcCreatNameAI ? CREATURE_POWERS[srcCreatNameAI] : null;
         const minKeepAI = srcPowerAI?.immovable ? (srcPowerAI.minUnitsInZone ?? 0) : 0;
         const count = Math.min(rawCount, sourceUnits - minKeepAI);
-        if (count <= 0 || count > sourceUnits) return;
+        if (count <= 0 || count > sourceUnits) return abortAiAction(aiId, decision.type, "effectif de déplacement invalide");
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${sourceZoneId}/${aiColor}`] = sourceUnits - count;
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${targetZoneId}/${aiColor}`] = targetUnits + count;
         let creatureMoved = false;
@@ -2912,14 +2924,14 @@ export default function GameScreen({ session }) {
       case "attack": {
         const { fromZoneId, toZoneId, count: attackCount } = decision;
         const sourceUnits = boardUnits[fromZoneId]?.[aiColor] || 0;
-        if (attackCount > sourceUnits) return;
+        if (attackCount > sourceUnits) return abortAiAction(aiId, decision.type, "effectif d'attaque invalide");
         // Zone protégée par une créature bloquante adverse (Cerbère) : inattaquable
-        if (hasEnemyCerbereInZone(toZoneId, aiColor, gameState.creatureAssignments || {}, POWER_TILES)) return;
+        if (hasEnemyCerbereInZone(toZoneId, aiColor, gameState.creatureAssignments || {}, POWER_TILES)) return abortAiAction(aiId, decision.type, "zone protégée par Cerbère");
 
         const toZoneUnits = boardUnits[toZoneId] || {};
         const enemyColor = Object.keys(toZoneUnits).find(c => c !== aiColor && (toZoneUnits[c] || 0) > 0);
         const enemyPlayerId = currentPlayers.find(p => p.color === enemyColor)?.id;
-        if (!enemyPlayerId) return;
+        if (!enemyPlayerId) return abortAiAction(aiId, decision.type, "adversaire introuvable dans la zone cible");
 
         // Déplacer les unités
         baseUpdates[`rooms/${roomCode}/gameState/boardUnits/${fromZoneId}/${aiColor}`] = sourceUnits - attackCount;
@@ -3032,11 +3044,11 @@ export default function GameScreen({ session }) {
         break;
       }
       case "upgradePyramid": {
-        if (usedActions.includes('upgradePyramid') || usedActions.includes('pyramid')) return;
-        if (tokens <= 0) return;
+        if (usedActions.includes('upgradePyramid') || usedActions.includes('pyramid')) return abortAiAction(aiId, decision.type, "case pyramide déjà utilisée");
+        if (tokens <= 0) return abortAiAction(aiId, decision.type, "plus de jeton d'action");
         const { slotId, targetLevel } = decision;
         const pyr = gameState.pyramids?.[slotId];
-        if (!pyr || pyr.controllerId !== aiId) return;
+        if (!pyr || pyr.controllerId !== aiId) return abortAiAction(aiId, decision.type, "pyramide non contrôlée");
         const fromLevel = pyr.level ?? 0;
         const pyramidCost = (from, to) => (to * (to + 1)) / 2 - (from * (from + 1)) / 2;
         const rawPyrCost = pyramidCost(fromLevel, targetLevel);
@@ -3048,7 +3060,7 @@ export default function GameScreen({ session }) {
         );
         const levelsGainedAI = targetLevel - fromLevel;
         const cost = Math.max(0, rawPyrCost - (hasReductionPyramideAI ? levelsGainedAI : 0) - (hasAnkReducPyrAI ? 1 : 0));
-        if (ank < cost) return;
+        if (ank < cost) return abortAiAction(aiId, decision.type, "ank insuffisant");
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/usedActions`] = [...usedActions, "pyramid"];
         baseUpdates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = targetLevel;
         baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/ank`] = ank - cost;
@@ -3057,7 +3069,7 @@ export default function GameScreen({ session }) {
         break;
       }
       default:
-        return;
+        return abortAiAction(aiId, decision.type, "type de décision non géré");
     }
 
     // Carte ID journée jouée en bonus avec l'action principale — même mécanisme

@@ -1,4 +1,5 @@
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidColors, getTileImageUrl } from "../../constants/powerTiles";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 const PLAYER_COLOR_TEXT = {
   Rouge: "text-red-400", Bleu: "text-blue-400",
@@ -133,11 +134,13 @@ export default function DraftPhaseModal({ session, gameState, onPick, isTestMode
                             >
                               {getTileImageUrl(tile.id) && (
                                 <div className="w-full bg-gray-950">
-                                  <img
-                                    src={getTileImageUrl(tile.id)}
-                                    alt={tile.name}
-                                    className="w-full object-contain max-h-28"
-                                  />
+                                  <HoverZoomImage src={getTileImageUrl(tile.id)} alt={tile.name} className="w-full max-h-28">
+                                    <img
+                                      src={getTileImageUrl(tile.id)}
+                                      alt={tile.name}
+                                      className="w-full object-contain max-h-28"
+                                    />
+                                  </HoverZoomImage>
                                 </div>
                               )}
                               <div className="p-3">

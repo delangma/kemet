@@ -1,6 +1,7 @@
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
 import { CREATURE_POWERS } from "../../constants/creaturePowers";
 import { getCreatureSpriteStyle } from "../../constants/creatures";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 const PLAYER_BADGE = {
   Rouge: "bg-red-700 text-white",
@@ -84,7 +85,9 @@ export default function PlayerTilesModal({ player, gameState, onClose }) {
                       >
                         {imgUrl && (
                           <div className="w-full bg-gray-950 flex items-center justify-center">
-                            <img src={imgUrl} alt={tile.name} className="max-h-28 w-full object-contain" />
+                            <HoverZoomImage src={imgUrl} alt={tile.name} className="max-h-28 w-full">
+                              <img src={imgUrl} alt={tile.name} className="max-h-28 w-full object-contain" />
+                            </HoverZoomImage>
                           </div>
                         )}
                         <div className="p-2.5">

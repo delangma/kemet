@@ -1,5 +1,6 @@
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getPlayerPyramidLevel, getTileImageUrl, isGrayTokenTile } from "../../constants/powerTiles";
 import { CREATURE_POWERS } from "../../constants/creaturePowers";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 const COLOR_META = {
   Rouge: { emoji: "🔴", title: "Pouvoirs Rouges" },
@@ -137,11 +138,13 @@ export default function PowerTileModal({ color, gameState, session, isGoldenBuy 
                       >
                         {getTileImageUrl(tile.id) && (
                           <div className="w-full bg-gray-950 flex items-center justify-center">
-                            <img
-                              src={getTileImageUrl(tile.id)}
-                              alt={tile.name}
-                              className="max-h-32 w-full object-contain"
-                            />
+                            <HoverZoomImage src={getTileImageUrl(tile.id)} alt={tile.name} className="max-h-32 w-full">
+                              <img
+                                src={getTileImageUrl(tile.id)}
+                                alt={tile.name}
+                                className="max-h-32 w-full object-contain"
+                              />
+                            </HoverZoomImage>
                           </div>
                         )}
                         <div className="p-3.5">

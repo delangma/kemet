@@ -1,3 +1,5 @@
+import HoverZoomImage from "../ui/HoverZoomImage";
+
 export const CARD_BACK = "/ID_dos.png";
 
 const CARD_IMAGE = {
@@ -44,12 +46,23 @@ export default function IdCard({ card, size = "md", onClick, selected, faceDown 
       `}
     >
       {imageSrc ? (
-        <img
-          src={imageSrc}
-          alt={faceDown ? "Carte ID" : card?.name}
-          className="w-full h-full object-contain"
-          draggable={false}
-        />
+        size === "lg" ? (
+          <img
+            src={imageSrc}
+            alt={faceDown ? "Carte ID" : card?.name}
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
+        ) : (
+          <HoverZoomImage src={imageSrc} alt={faceDown ? "Carte ID" : card?.name} className="w-full h-full">
+            <img
+              src={imageSrc}
+              alt={faceDown ? "Carte ID" : card?.name}
+              className="w-full h-full object-contain"
+              draggable={false}
+            />
+          </HoverZoomImage>
+        )
       ) : (
         /* Fallback text card for cards without a PNG */
         <div className="w-full h-full bg-gray-800 flex flex-col p-2 gap-1">

@@ -3,6 +3,7 @@ import { db } from "../../firebase";
 import { ref, onValue, update, remove, set, get } from "firebase/database";
 import { COMBAT_CARDS, getPlayerCombatDeck } from "../../constants/cards";
 import { aiChooseCombatCards, aiChooseDawnPosition } from "../../ai/aiPlayer";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 const TEST_BADGES = {
   Rouge: { on: "bg-red-600 text-white border-yellow-400", off: "bg-red-900/50 text-red-300 border-transparent hover:bg-red-800/60" },
@@ -422,12 +423,18 @@ async function handleChoosePosition(position) {
                             background: 'transparent',
                           }}
                         >
-                          <img
+                          <HoverZoomImage
                             src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
                             alt={`F${card.force}`}
-                            draggable={false}
-                            style={{ width: '100%', height: 'auto', display: 'block' }}
-                          />
+                            style={{ width: '100%' }}
+                          >
+                            <img
+                              src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                              alt={`F${card.force}`}
+                              draggable={false}
+                              style={{ width: '100%', height: 'auto', display: 'block' }}
+                            />
+                          </HoverZoomImage>
                         </button>
                       );
                     })}
@@ -457,12 +464,18 @@ async function handleChoosePosition(position) {
                             background: 'transparent',
                           }}
                         >
-                          <img
+                          <HoverZoomImage
                             src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
                             alt={`F${card.force}`}
-                            draggable={false}
-                            style={{ width: '100%', height: 'auto', display: 'block' }}
-                          />
+                            style={{ width: '100%' }}
+                          >
+                            <img
+                              src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                              alt={`F${card.force}`}
+                              draggable={false}
+                              style={{ width: '100%', height: 'auto', display: 'block' }}
+                            />
+                          </HoverZoomImage>
                         </button>
                       );
                     })}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { COMBAT_CARDS } from "../../constants/cards";
+import HoverZoomImage from "../ui/HoverZoomImage";
 
 export default function CombatCardSwapModal({ deckIds, newCardId, onConfirm, onClose }) {
   const [selected, setSelected] = useState(null);
@@ -20,12 +21,18 @@ export default function CombatCardSwapModal({ deckIds, newCardId, onConfirm, onC
         <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0 space-y-5">
           <div className="flex items-center gap-4">
             {newCard && (
-              <img
+              <HoverZoomImage
                 src={`/Combat_${newCard.force}${newCard.blood}${newCard.shields}.png`}
                 alt={`Force ${newCard.force}`}
-                draggable={false}
-                style={{ width: 110, height: 'auto', display: 'block', borderRadius: 8, border: '2px solid #b45309' }}
-              />
+                style={{ width: 110, display: 'inline-block' }}
+              >
+                <img
+                  src={`/Combat_${newCard.force}${newCard.blood}${newCard.shields}.png`}
+                  alt={`Force ${newCard.force}`}
+                  draggable={false}
+                  style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 8, border: '2px solid #b45309' }}
+                />
+              </HoverZoomImage>
             )}
             <p className="text-gray-400 text-sm">
               Choisissez la carte de votre deck combat à remplacer définitivement par cette carte spéciale.
@@ -45,12 +52,18 @@ export default function CombatCardSwapModal({ deckIds, newCardId, onConfirm, onC
                   background: 'transparent', cursor: 'pointer',
                 }}
               >
-                <img
+                <HoverZoomImage
                   src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
                   alt={`Force ${card.force}`}
-                  draggable={false}
-                  style={{ width: '100%', height: 'auto', display: 'block' }}
-                />
+                  style={{ width: '100%' }}
+                >
+                  <img
+                    src={`/Combat_${card.force}${card.blood}${card.shields}.png`}
+                    alt={`Force ${card.force}`}
+                    draggable={false}
+                    style={{ width: '100%', height: 'auto', display: 'block' }}
+                  />
+                </HoverZoomImage>
               </button>
             ))}
           </div>
