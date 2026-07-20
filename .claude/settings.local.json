@@ -53,7 +53,12 @@
       "Bash(netstat -ano)",
       "Bash(awk '{print $5}')",
       "Bash(taskkill //PID 14312 //F)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(npm install *)",
+      "Bash(npx playwright *)",
+      "Bash(curl *)",
+      "Bash(taskkill //PID 6156 //F)",
+      "Bash(taskkill //PID 17888 //F)"
     ]
   }
 }
