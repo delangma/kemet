@@ -27,7 +27,7 @@ function EffectText({ effect }) {
     case "swap_combat_card": return "Remplacer votre carte combat";
     case "ank":            return `+${e.value} 🪙`;
     case "taxation":       return `+${e.value} 🪙, adversaires −1 🪙`;
-    case "units":          return `+${e.value} unités en réserve`;
+    case "units":          return `Recrutez ${e.value} unité${e.value > 1 ? "s" : ""} (cité ou troupe existante)`;
     case "recover_id":     return "Récupérer une carte ID défaussée";
     case "movement":       return `+${e.value} déplacement`;
     case "teleport":       return "Téléporter un groupe";

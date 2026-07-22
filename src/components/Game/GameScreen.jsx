@@ -222,6 +222,29 @@ export default function GameScreen({ session }) {
   const [simMode, setSimMode] = useState(false);
   const simModeRef = useRef(false);
   useEffect(() => { simModeRef.current = simMode; }, [simMode]);
+  // Mode pas à pas : suspend les minuteurs qui déclenchent automatiquement les
+  // décisions IA (setup/draft/placement/tour/réponse carte ID) et les remplace
+  // par une action "armée" que le bouton Suivant déclenche manuellement.
+  const [stepMode, setStepMode] = useState(true);
+  const stepModeRef = useRef(false);
+  useEffect(() => { stepModeRef.current = stepMode; }, [stepMode]);
+  const [hasPendingStep, setHasPendingStep] = useState(false);
+  const pendingStepFnRef = useRef(null);
+  function runOrArmStep(fn, delay) {
+    if (stepModeRef.current) {
+      pendingStepFnRef.current = fn;
+      setHasPendingStep(true);
+      return () => {};
+    }
+    const t = setTimeout(fn, delay);
+    return () => clearTimeout(t);
+  }
+  function handleNextStep() {
+    const fn = pendingStepFnRef.current;
+    pendingStepFnRef.current = null;
+    setHasPendingStep(false);
+    fn?.();
+  }
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [showMobileLog, setShowMobileLog] = useState(false);
   const [placementSelected, setPlacementSelected] = useState([]);
@@ -1072,7 +1095,12 @@ export default function GameScreen({ session }) {
 
       // Unités gratuites à l'achat (ex : Recrutement +2) — placées en cité ou sur
       // une troupe existante, en respectant le plafond de zone (Légion/Bouliste/JP_legion)
-      if (tile.unitsOnPurchase) {
+      if (tile.id === "B_4_4") {
+        // Renforcement 4 unités : recrutement amélioré, comme la carte ID
+        // "Renforts" — le joueur choisit lui-même la répartition (pendingRenforts).
+        updates[`rooms/${roomCode}/gameState/players/${effectivePlayerId}/pendingRenforts`] =
+          (myState.pendingRenforts ?? 0) + tile.unitsOnPurchase;
+      } else if (tile.unitsOnPurchase) {
         const joinOrder = allPlayers.find(p => p.id === effectivePlayerId)?.joinOrder;
         if (joinOrder) {
           let reserve = myState.unitsReserve ?? 0;
@@ -3163,10 +3191,9 @@ export default function GameScreen({ session }) {
     const currentSetupId = setupOrder[setupIndex];
     const currentSetupPlayer = currentPlayers.find(p => p.id === currentSetupId);
     if (!currentSetupPlayer?.isAI) return;
-    const t = setTimeout(() => executeAISetup(currentSetupId), simModeRef.current ? 200 : 1000);
-    return () => clearTimeout(t);
+    return runOrArmStep(() => executeAISetup(currentSetupId), simModeRef.current ? 200 : 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.phase, gameState?.setupIndex]);
+  }, [gameState?.phase, gameState?.setupIndex, stepMode]);
 
   // Draft phase IA
   useEffect(() => {
@@ -3176,10 +3203,9 @@ export default function GameScreen({ session }) {
     const currentDraftId = draftOrder[draftIndex];
     const currentDraftPlayer = currentPlayers.find(p => p.id === currentDraftId);
     if (!currentDraftPlayer?.isAI) return;
-    const t = setTimeout(() => executeAIDraft(currentDraftId), simModeRef.current ? 200 : 1000);
-    return () => clearTimeout(t);
+    return runOrArmStep(() => executeAIDraft(currentDraftId), simModeRef.current ? 200 : 1000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.phase, gameState?.draftIndex]);
+  }, [gameState?.phase, gameState?.draftIndex, stepMode]);
 
   // Placement phase IA (tous les IA simultanément)
   useEffect(() => {
@@ -3189,12 +3215,11 @@ export default function GameScreen({ session }) {
     const placements = gameState.placements || {};
     const unconfirmedAI = aiPlayers.filter(p => !placements[p.id]?.confirmed);
     if (unconfirmedAI.length === 0) return;
-    const t = setTimeout(() => {
+    return runOrArmStep(() => {
       unconfirmedAI.forEach(p => executeAIPlacement(p.id));
     }, simModeRef.current ? 200 : 800);
-    return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState?.phase, JSON.stringify(gameState?.placements)]);
+  }, [gameState?.phase, JSON.stringify(gameState?.placements), stepMode]);
 
   // IA : répond à une offre d'annulation de carte ID — annule si elle possède
   // "Annulation d'ID" (comme le ferait un humain), sinon passe. Même mécanisme
@@ -3206,7 +3231,7 @@ export default function GameScreen({ session }) {
       return status === "waiting" && currentPlayers.find(p => p.id === pid)?.isAI;
     });
     if (aiWaiting.length === 0) return;
-    const t = setTimeout(async () => {
+    return runOrArmStep(async () => {
       // Une IA annule dès qu'elle en a l'occasion (aucune raison de garder la
       // carte : le tempo perdu par l'auteur du coup vaut toujours plus que
       // conserver "Annulation d'ID" pour plus tard).
@@ -3231,9 +3256,8 @@ export default function GameScreen({ session }) {
       });
       await update(ref(db, "/"), updates);
     }, simModeRef.current ? 100 : 500);
-    return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(pendingIdCard?.pendingResponses)]);
+  }, [JSON.stringify(pendingIdCard?.pendingResponses), stepMode]);
 
   // Playing phase IA
   useEffect(() => {
@@ -3247,8 +3271,7 @@ export default function GameScreen({ session }) {
     if (!gameState.currentTurnPlayerId) return;
     const currentTurnPlayer = currentPlayers.find(p => p.id === gameState.currentTurnPlayerId);
     if (!currentTurnPlayer?.isAI) return;
-    const t = setTimeout(() => executeAITurn(currentTurnPlayer.id), simModeRef.current ? 400 : 3000);
-    return () => clearTimeout(t);
+    return runOrArmStep(() => executeAITurn(currentTurnPlayer.id), simModeRef.current ? 400 : 3000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     gameState?.currentTurnPlayerId,
@@ -3259,6 +3282,7 @@ export default function GameScreen({ session }) {
     // (même tour) reste disponible — _executeAITurnInner ne termine alors pas
     // le tour et attend ce nouveau rendu (état Firebase à jour) pour rejouer.
     gameState?.players?.[gameState?.currentTurnPlayerId]?.actionsThisTurn,
+    stepMode,
   ]);
 
   async function handleActionToggle(pid, actionId) {
@@ -4125,6 +4149,38 @@ export default function GameScreen({ session }) {
             🔁 Fin auto IA : {aiAutoEndTurn ? "ON" : "OFF"}
           </button>
         )}
+        {isTestMode && (
+          <button
+            onClick={() => setStepMode(v => !v)}
+            title="Mode pas à pas : suspend les décisions IA jusqu'au clic sur Suivant"
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+              background: stepMode ? 'rgba(59,130,246,0.15)' : 'rgba(107,76,30,0.15)',
+              border: `1px solid ${stepMode ? '#3b82f6' : '#3a2a0c'}`,
+              color: stepMode ? '#93c5fd' : '#6B4C1E',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ⏯ Pas à pas : {stepMode ? "ON" : "OFF"}
+          </button>
+        )}
+        {isTestMode && stepMode && (
+          <button
+            onClick={handleNextStep}
+            disabled={!hasPendingStep}
+            title="Passer au choix IA suivant"
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+              cursor: hasPendingStep ? 'pointer' : 'not-allowed',
+              background: hasPendingStep ? 'rgba(59,130,246,0.3)' : 'rgba(107,76,30,0.1)',
+              border: `1px solid ${hasPendingStep ? '#3b82f6' : '#3a2a0c'}`,
+              color: hasPendingStep ? '#dbeafe' : '#4a3410',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ⏭ Suivant
+          </button>
+        )}
         <VolumeControl volume={volume} onChange={setVolume} />
         <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
           <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
@@ -4144,6 +4200,34 @@ export default function GameScreen({ session }) {
             }}
           >
             🔁
+          </button>
+        )}
+        {isTestMode && (
+          <button
+            onClick={() => setStepMode(v => !v)}
+            title="Mode pas à pas"
+            style={{
+              background: 'none', border: 'none', padding: '0 6px', cursor: 'pointer',
+              fontSize: 14, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center',
+              color: stepMode ? '#93c5fd' : '#6B4C1E',
+            }}
+          >
+            ⏯
+          </button>
+        )}
+        {isTestMode && stepMode && (
+          <button
+            onClick={handleNextStep}
+            disabled={!hasPendingStep}
+            title="Passer au choix IA suivant"
+            style={{
+              background: 'none', border: 'none', padding: '0 6px',
+              cursor: hasPendingStep ? 'pointer' : 'not-allowed',
+              fontSize: 14, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center',
+              color: hasPendingStep ? '#93c5fd' : '#4a3410',
+            }}
+          >
+            ⏭
           </button>
         )}
         <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: '0 8px', cursor: 'pointer', fontSize: 16, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center', borderLeft: isTestMode ? '1px solid #3a2a0c' : 'none' }}>
