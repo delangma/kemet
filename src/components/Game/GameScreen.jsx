@@ -701,6 +701,16 @@ export default function GameScreen({ session }) {
     else if (pending <= 0 && actionMode === "renforts") setActionMode(null);
   }, [gameState?.players?.[effectivePlayerId]?.pendingRenforts]);
 
+  // Renforcement (tuile "Renforcement 4 unités", nuit) : mode placement — sans
+  // ce déclenchement automatique, les unités gagnées restaient simplement en
+  // réserve sans jamais proposer le choix de répartition au joueur, comme le
+  // fait pourtant "Renforts" ci-dessus pour le même genre de bonus.
+  useEffect(() => {
+    const pending = gameState?.players?.[effectivePlayerId]?.reinforcementPending ?? 0;
+    if (pending > 0 && actionMode !== "renforcement") setActionMode("renforcement");
+    else if (pending <= 0 && actionMode === "renforcement") setActionMode(null);
+  }, [gameState?.players?.[effectivePlayerId]?.reinforcementPending]);
+
   // Pluie de Feu : entre en mode ciblage ennemi
   useEffect(() => {
     const pending = gameState?.players?.[effectivePlayerId]?.pendingDestroyUnit ?? false;
@@ -2432,6 +2442,36 @@ export default function GameScreen({ session }) {
           resolveAiTaSetiPendings(aiId, aiColor, aiPlayer.joinOrder, myState, tsUpdates);
           await update(ref(db), tsUpdates);
           await logAction(aiId, `Avancée Ta-Seti (${movedCount} prêtre${movedCount > 1 ? "s" : ""} déplacé${movedCount > 1 ? "s" : ""})`, { type: "taseti" });
+        }
+      }
+    }
+
+    // Augmentation pyramide (tuile "Augmentation pyramide") : amélioration
+    // gratuite d'une pyramide contrôlée — résolution automatique pour l'IA,
+    // comme le bouton 🏛️ + PyramidEvolveModal le font pour un joueur humain.
+    {
+      let pendingPyr = myState.pyramidUpgradePending ?? 0;
+      if (pendingPyr > 0) {
+        const pyrUpdates = {};
+        const pyramidsNow = { ...(gameState.pyramids || {}) };
+        let guard = 0;
+        while (pendingPyr > 0 && guard < 10) {
+          guard++;
+          const candidates = Object.entries(pyramidsNow)
+            .filter(([, p]) => p.controllerId === aiId && (p.level ?? 0) < 4);
+          if (candidates.length === 0) break;
+          // Priorité à la pyramide déjà la plus avancée (pousser vers le niveau 4).
+          candidates.sort(([, a], [, b]) => (b.level ?? 0) - (a.level ?? 0));
+          const [slotId, pyr] = candidates[0];
+          const newLevel = (pyr.level ?? 0) + 1;
+          pyrUpdates[`rooms/${roomCode}/gameState/pyramids/${slotId}/level`] = newLevel;
+          pyramidsNow[slotId] = { ...pyr, level: newLevel };
+          pendingPyr--;
+        }
+        if (Object.keys(pyrUpdates).length > 0) {
+          pyrUpdates[`rooms/${roomCode}/gameState/players/${aiId}/pyramidUpgradePending`] = pendingPyr > 0 ? pendingPyr : null;
+          await update(ref(db, "/"), pyrUpdates);
+          await logAction(aiId, `AMÉLIORATION PYRAMIDE gratuite`, { type: "pyramid" });
         }
       }
     }
