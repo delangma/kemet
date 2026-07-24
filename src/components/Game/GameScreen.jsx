@@ -225,7 +225,7 @@ export default function GameScreen({ session }) {
   // Mode pas à pas : suspend les minuteurs qui déclenchent automatiquement les
   // décisions IA (setup/draft/placement/tour/réponse carte ID) et les remplace
   // par une action "armée" que le bouton Suivant déclenche manuellement.
-  const [stepMode, setStepMode] = useState(true);
+  const [stepMode, setStepMode] = useState(false);
   const stepModeRef = useRef(false);
   useEffect(() => { stepModeRef.current = stepMode; }, [stepMode]);
   const [hasPendingStep, setHasPendingStep] = useState(false);
@@ -448,12 +448,21 @@ export default function GameScreen({ session }) {
   }, []);
 
   const allPlayersAI = currentPlayers.length > 0 && currentPlayers.every(p => p.isAI);
+  // Le widget pas à pas reste accessible dès qu'il y a au moins une IA (pour
+  // qu'un humain puisse le déclencher manuellement s'il le souhaite), mais ne
+  // s'active par défaut qu'en simulation pure (voir l'effet ci-dessous) —
+  // dans une partie humain+IA normale, les IA doivent jouer seules avec juste
+  // un délai, sans qu'on ait à cliquer "Suivant" pour chaque décision.
+  const hasAIOpponent = currentPlayers.some(p => p.isAI);
 
-  // Active le mode simulation automatiquement si tous les joueurs sont IA
+  // Active le mode simulation ET le mode pas à pas automatiquement si tous les
+  // joueurs sont IA (aucun humain aux commandes) — sinon les IA jouent leur
+  // tour automatiquement avec le délai normal (voir simModeRef plus bas).
   useEffect(() => {
     if (!allPlayersAI) return;
     setSimMode(true);
     simModeRef.current = true;
+    setStepMode(true);
   }, [allPlayersAI]);
 
   // Télécharge le journal quand la partie se termine en mode simulation
@@ -3197,6 +3206,15 @@ export default function GameScreen({ session }) {
     // Trace du plan multi-coups de l'IA (recalculé à chaque tour)
     if (logText && decision.planNote) logText += ` | ${decision.planNote}`;
 
+    // Pluie de Feu jouée ce tour-ci : marquer le pending dès maintenant dans
+    // baseUpdates, AVANT resolveAiTaSetiPendings — sinon la carte n'est
+    // appliquée (applyDayIdCardEffect) qu'après cette résolution, et la
+    // destruction n'était vue par l'IA qu'à son tour suivant (voire jamais).
+    const idCardSetsDestroyPending = idCardEffectToApply?.effect?.type === 'destroy_unit';
+    if (idCardSetsDestroyPending) {
+      baseUpdates[`rooms/${roomCode}/gameState/players/${aiId}/pendingDestroyUnit`] = true;
+    }
+
     // Effets Ta-Seti à choix (recrutement, Pluie de Feu) gagnés pendant cette action
     // ou restés en attente : l'IA les résout immédiatement.
     resolveAiTaSetiPendings(aiId, aiColor, aiPlayer.joinOrder, myState, baseUpdates);
@@ -3205,7 +3223,7 @@ export default function GameScreen({ session }) {
 
     await update(ref(db, "/"), baseUpdates);
     if (logText) await logAction(aiId, logText, logMeta);
-    if (idCardEffectToApply) await applyDayIdCardEffect(idCardEffectToApply, aiId);
+    if (idCardEffectToApply && !idCardSetsDestroyPending) await applyDayIdCardEffect(idCardEffectToApply, aiId);
     if (isTestMode && !aiAutoEndTurn) return;
 
     // Jeton gris : si c'est la 1re action du tour et qu'une action bonus (même
@@ -4060,6 +4078,48 @@ export default function GameScreen({ session }) {
     style={{ backgroundImage: 'url(/ui/backend.png)', backgroundRepeat: 'repeat', backgroundSize: 'auto' }}
   >
 
+    {/* Contrôle pas à pas — flottant en z-index élevé : les modales de phase
+        (kmt-overlay, z-50, position:fixed) capturent tous les clics de l'écran,
+        y compris la barre d'en-tête statique. Sans ce widget séparé au-dessus,
+        "Suivant" restait injoignable précisément quand une décision IA (avec
+        modale de statut "En attente de ...") a besoin d'être débloquée. */}
+    {(isTestMode || hasAIOpponent) && (
+      <div
+        className="fixed top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-lg shadow-lg"
+        style={{ zIndex: 250, background: 'rgba(10,8,6,0.95)', border: '1px solid #3a2a0c' }}
+      >
+        <button
+          onClick={() => setStepMode(v => !v)}
+          title="Mode pas à pas : suspend les décisions IA jusqu'au clic sur Suivant"
+          style={{
+            fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
+            background: stepMode ? 'rgba(59,130,246,0.15)' : 'rgba(107,76,30,0.15)',
+            border: `1px solid ${stepMode ? '#3b82f6' : '#3a2a0c'}`,
+            color: stepMode ? '#93c5fd' : '#6B4C1E',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          ⏯ Pas à pas : {stepMode ? "ON" : "OFF"}
+        </button>
+        {stepMode && (
+          <button
+            onClick={handleNextStep}
+            disabled={!hasPendingStep}
+            title="Passer au choix IA suivant"
+            style={{
+              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
+              cursor: hasPendingStep ? 'pointer' : 'not-allowed',
+              background: hasPendingStep ? 'rgba(59,130,246,0.3)' : 'rgba(107,76,30,0.1)',
+              border: `1px solid ${hasPendingStep ? '#3b82f6' : '#3a2a0c'}`,
+              color: hasPendingStep ? '#dbeafe' : '#4a3410',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            ⏭ Suivant
+          </button>
+        )}
+      </div>
+    )}
 
     {/* Bandeau simulation — rappel que l'onglet doit rester ouvert */}
     {allPlayersAI && !gameState?.gameOver && (
@@ -4189,38 +4249,6 @@ export default function GameScreen({ session }) {
             🔁 Fin auto IA : {aiAutoEndTurn ? "ON" : "OFF"}
           </button>
         )}
-        {isTestMode && (
-          <button
-            onClick={() => setStepMode(v => !v)}
-            title="Mode pas à pas : suspend les décisions IA jusqu'au clic sur Suivant"
-            style={{
-              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4, cursor: 'pointer',
-              background: stepMode ? 'rgba(59,130,246,0.15)' : 'rgba(107,76,30,0.15)',
-              border: `1px solid ${stepMode ? '#3b82f6' : '#3a2a0c'}`,
-              color: stepMode ? '#93c5fd' : '#6B4C1E',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ⏯ Pas à pas : {stepMode ? "ON" : "OFF"}
-          </button>
-        )}
-        {isTestMode && stepMode && (
-          <button
-            onClick={handleNextStep}
-            disabled={!hasPendingStep}
-            title="Passer au choix IA suivant"
-            style={{
-              fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 4,
-              cursor: hasPendingStep ? 'pointer' : 'not-allowed',
-              background: hasPendingStep ? 'rgba(59,130,246,0.3)' : 'rgba(107,76,30,0.1)',
-              border: `1px solid ${hasPendingStep ? '#3b82f6' : '#3a2a0c'}`,
-              color: hasPendingStep ? '#dbeafe' : '#4a3410',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            ⏭ Suivant
-          </button>
-        )}
         <VolumeControl volume={volume} onChange={setVolume} />
         <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
           <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
@@ -4240,34 +4268,6 @@ export default function GameScreen({ session }) {
             }}
           >
             🔁
-          </button>
-        )}
-        {isTestMode && (
-          <button
-            onClick={() => setStepMode(v => !v)}
-            title="Mode pas à pas"
-            style={{
-              background: 'none', border: 'none', padding: '0 6px', cursor: 'pointer',
-              fontSize: 14, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center',
-              color: stepMode ? '#93c5fd' : '#6B4C1E',
-            }}
-          >
-            ⏯
-          </button>
-        )}
-        {isTestMode && stepMode && (
-          <button
-            onClick={handleNextStep}
-            disabled={!hasPendingStep}
-            title="Passer au choix IA suivant"
-            style={{
-              background: 'none', border: 'none', padding: '0 6px',
-              cursor: hasPendingStep ? 'pointer' : 'not-allowed',
-              fontSize: 14, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center',
-              color: hasPendingStep ? '#93c5fd' : '#4a3410',
-            }}
-          >
-            ⏭
           </button>
         )}
         <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: '0 8px', cursor: 'pointer', fontSize: 16, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center', borderLeft: isTestMode ? '1px solid #3a2a0c' : 'none' }}>
