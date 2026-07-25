@@ -137,6 +137,14 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
                 </span>
               )}
             </span>
+            <span style={{ position: 'relative', display: 'inline-flex' }}>
+              <img src="/Boutique.png" alt="Tuiles" style={{ height: 16, width: 'auto', objectFit: 'contain' }} />
+              {ownedTileIds.length > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -5, background: '#ea580c', color: '#fff', fontSize: 7, fontWeight: 700, borderRadius: '50%', width: 11, height: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                  {ownedTileIds.length}
+                </span>
+              )}
+            </span>
           </div>
 
         </div>
@@ -244,6 +252,14 @@ export default function PlayerSummary({ player, gameState, currentTurnPlayerId, 
             {idCards.length > 0 && (
               <span style={{ position: 'absolute', top: -5, right: -6, background: '#b45309', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
                 {idCards.length}
+              </span>
+            )}
+          </span>
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <img src="/Boutique.png" alt="Tuiles" style={{ height: 26, width: 'auto', objectFit: 'contain' }} />
+            {ownedTileIds.length > 0 && (
+              <span style={{ position: 'absolute', top: -5, right: -6, background: '#ea580c', color: '#fff', fontSize: 9, fontWeight: 700, borderRadius: '50%', width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                {ownedTileIds.length}
               </span>
             )}
           </span>

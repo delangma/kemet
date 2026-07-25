@@ -5,6 +5,9 @@ import { buildIdDeck, dealCards } from "../../utils/deck";
 import { INITIAL_PLAYER_STATE } from "../../constants/game";
 import { POWER_TILES } from "../../constants/powerTiles";
 import { useSyncedMusic } from "../../hooks/useSyncedMusic";
+import { useVolume } from "../../hooks/useVolume";
+import { getCookie, setCookie } from "../../utils/cookies";
+import VolumeControl from "../ui/VolumeControl";
 import { ROOT_TRACKS } from "virtual:radios";
 
 // Musique de la page d'accueil : les mp3 posés directement à la racine de
@@ -36,9 +39,11 @@ function clearSession() {
 }
 
 export default function Lobby({ onGameStart }) {
-  useSyncedMusic(LOBBY_MUSIC, "globalMusic/lobby");
+  const [musicVolume, setMusicVolume] = useVolume("kmt_music_volume");
+  const [sfxVolume, setSfxVolume] = useVolume("kmt_sfx_volume");
+  useSyncedMusic(LOBBY_MUSIC, "globalMusic/lobby", musicVolume);
   const [screen, setScreen] = useState("home");
-  const [playerName, setPlayerName] = useState("");
+  const [playerName, setPlayerName] = useState(() => getCookie("kmt_player_name") || "");
   const [playerColor, setPlayerColor] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(3);
   const [aiCount, setAiCount] = useState(0);
@@ -46,6 +51,11 @@ export default function Lobby({ onGameStart }) {
   const [rooms, setRooms] = useState({});
   const [currentRoom, setCurrentRoom] = useState(null);
   const [currentPlayerId, setCurrentPlayerId] = useState(null);
+
+  // Mémorise le nom du joueur dans un cookie pour le pré-remplir la prochaine fois
+  useEffect(() => {
+    if (playerName) setCookie("kmt_player_name", playerName);
+  }, [playerName]);
 
   // Restaure la session au chargement
 	useEffect(() => {
@@ -474,6 +484,15 @@ export default function Lobby({ onGameStart }) {
       style={{ backgroundImage: "url('/background.jpg')", backgroundSize: "cover", backgroundPosition: "center" }}
     >
       <div className="absolute inset-0 bg-black/38 pointer-events-none" />
+
+      {/* Paramètres audio — visibles dès la page d'accueil, persistés en cookies */}
+      <div
+        className="absolute top-3 right-3 z-20 flex flex-col gap-2 px-3 py-2.5 rounded-lg"
+        style={{ background: 'rgba(10,8,4,0.75)', border: '1px solid rgba(201,151,58,0.3)' }}
+      >
+        <VolumeControl label="Musique" icon="🎵" volume={musicVolume} onChange={setMusicVolume} />
+        <VolumeControl label="Effets" volume={sfxVolume} onChange={setSfxVolume} />
+      </div>
 
       <div className="relative z-10 flex flex-col items-center gap-8 w-full max-w-md">
 

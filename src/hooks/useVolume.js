@@ -1,17 +1,16 @@
 import { useState } from "react";
+import { getCookie, setCookie } from "../utils/cookies";
 
-const KEY = "kmt_volume";
-
-export function useVolume(defaultVolume = 0.5) {
+export function useVolume(key = "kmt_volume", defaultVolume = 0.5) {
   const [volume, setVolume] = useState(() => {
-    const stored = localStorage.getItem(KEY);
+    const stored = getCookie(key);
     return stored !== null ? parseFloat(stored) : defaultVolume;
   });
 
   function setAndSave(v) {
     const clamped = Math.max(0, Math.min(1, v));
     setVolume(clamped);
-    localStorage.setItem(KEY, String(clamped));
+    setCookie(key, String(clamped));
   }
 
   return [volume, setAndSave];

@@ -1,6 +1,5 @@
 import { POWER_TILES, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl } from "../../constants/powerTiles";
 import { CREATURE_POWERS } from "../../constants/creaturePowers";
-import { getCreatureSpriteStyle } from "../../constants/creatures";
 import HoverZoomImage from "../ui/HoverZoomImage";
 
 const PLAYER_BADGE = {
@@ -142,13 +141,20 @@ export default function PlayerTilesModal({ player, gameState, onClose }) {
                 {creatures.map(tile => {
                   const style = TILE_COLOR_STYLE[tile.color] || TILE_COLOR_STYLE.Noir;
                   const power = CREATURE_POWERS[tile.name];
-                  const spriteStyle = getCreatureSpriteStyle(tile.name, 48);
+                  const imgUrl = getTileImageUrl(tile.id);
                   return (
-                    <div key={tile.id} className={`rounded-lg border-2 p-2.5 flex items-start gap-3 ${style.bg} ${style.border}`}>
-                      {spriteStyle && (
-                        <div style={spriteStyle} className="shrink-0 mt-0.5" />
+                    <div
+                      key={tile.id}
+                      className={`rounded-lg border-2 overflow-hidden ${style.bg} ${style.border}`}
+                    >
+                      {imgUrl && (
+                        <div className="w-full bg-gray-950 flex items-center justify-center">
+                          <HoverZoomImage src={imgUrl} alt={tile.name} className="max-h-28 w-full">
+                            <img src={imgUrl} alt={tile.name} className="max-h-28 w-full object-contain" />
+                          </HoverZoomImage>
+                        </div>
                       )}
-                      <div>
+                      <div className="p-2.5">
                         <span className={`text-sm font-bold ${style.text}`}>{tile.name}</span>
                         {power && (
                           <div className="mt-1 space-y-0.5">

@@ -11,6 +11,8 @@ import { PYRAMID_SLOTS } from "../../constants/pyramids";
 import PyramidMarker from "./PyramidMarker";
 import { BOARD_STATIC_IMAGES } from "../../constants/boardStaticImages";
 
+const PRIEST_IMGS = { Rouge: 'Pretre_rouge', Bleu: 'Pretre_bleu', Vert: 'Pretre_vert', Blanc: 'Pretre_jaune', Noir: 'Pretre_noir' };
+
 export default function Board({ session, gameState, actionMode, moveState, onBoardZoneClick, onMoveDone, onMoveCancel, onMoveUndo, canUndo = false, onTeleportStart, onTeleportCancel, teleportCost, retreatZones = [], onRetreatZoneClick, wallPassActive = false, freeAnyTeleportActive = false, teleportFacileActive = false, victoryRecruitZones = [], onVictoryRecruitClick, tasetiRecruitZones = [], onTasetiRecruitClick, renfortsZones = [], onRenfortsClick, destroyUnitZones = [], onDestroyUnitClick, placementZones = [], placementSelected = [], onPlacementZoneClick, onPlacementReset, onPlacementConfirm, creatureEquipZones = [], onCreatureEquipZoneClick }) {
   const { roomCode, playerId } = session;
   const [selectedZone, setSelectedZone] = useState(null);
@@ -502,7 +504,8 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
               {entries.length > 0 ? (
                 entries.map(([color, count]) => {
                   const hasPriest = !!boardPriests[zone.id]?.[color];
-                  const displayCount = count + (hasPriest ? 1 : 0);
+                  const priestImg = PRIEST_IMGS[color] || 'Pretre_noir';
+                  const priestBadgePx = Math.round(unitPx * 0.62);
                   const creatureName  = getCreatureNameAt(zone.id, color);
                   const creatureName2 = getCreatureNameAt2(zone.id, color);
                   const creatureStyle  = creatureName  ? getCreatureSpriteStyle(creatureName,  creaturePx) : null;
@@ -511,18 +514,34 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                     <div key={color} className="flex flex-col items-center gap-0.5">
                       <div className="flex items-center gap-0.5">
                         <div
-                          className={`rounded-full border-2 flex items-center justify-center font-bold shadow-lg ${
+                          className={`relative rounded-full border-2 flex items-center justify-center font-bold shadow-lg ${
                             isMoveCurrentZone && color === playerColor ? "ring-2 ring-amber-300 ring-offset-1" : ""
                           }`}
                           style={{
                             width: unitPx, height: unitPx,
                             fontSize: fontPx,
                             backgroundColor: (COLOR_MAP[color] || "#666") + "cc",
-                            borderColor: COLOR_MAP[color] || "#666",
+                            borderColor: hasPriest ? "#fbbf24" : (COLOR_MAP[color] || "#666"),
+                            boxShadow: hasPriest ? "0 0 0 2px #fbbf24aa, 0 0 6px 1px #fbbf2488" : undefined,
                             color: color === "Blanc" ? "#111" : "#fff",
                           }}
                         >
-                          {displayCount}
+                          {count}
+                          {hasPriest && (
+                            <img
+                              src={`/${priestImg}.png`}
+                              alt="Prêtre"
+                              title="Prêtre accompagnant cette troupe"
+                              className="absolute rounded-full object-cover"
+                              style={{
+                                width: priestBadgePx, height: priestBadgePx,
+                                top: -priestBadgePx * 0.35, right: -priestBadgePx * 0.35,
+                                border: "1.5px solid #fbbf24",
+                                boxShadow: "0 0 4px 1px rgba(0,0,0,0.7), 0 0 5px #fbbf24",
+                                background: "#1a1508",
+                              }}
+                            />
+                          )}
                         </div>
                         {creatureStyle && (
                           <div
@@ -547,15 +566,6 @@ export default function Board({ session, gameState, actionMode, moveState, onBoa
                           </div>
                         )}
                       </div>
-                      {hasPriest && (
-                        <div
-                          className="text-xs leading-none select-none"
-                          style={{ color: COLOR_MAP[color] || "#fff", textShadow: "0 0 4px #000" }}
-                          title="Prêtre"
-                        >
-                          𓁛
-                        </div>
-                      )}
                     </div>
                   );
                 })

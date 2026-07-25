@@ -23,6 +23,9 @@ export const BOARD_ZONES = [
 
 export const RIVER_ZONES = new Set(["TB", "T3", "DT3", "T2", "DT2"]);
 
+// Obélisques visibles (cibles de téléportation) — le Temple Bleu (TB) en est
+// bien un (confirmé), malgré une note contraire dans Kemet_rules_IA.txt §1.10
+// qui semble erronée sur ce point précis.
 export const TELEPORT_TARGETS = new Set([
   "TB", "T1", "T2", "T3",
   "D12", "D23",

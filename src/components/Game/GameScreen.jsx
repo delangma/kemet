@@ -21,6 +21,7 @@ import Board from "../Board/board";
 import SetupPhaseModal from "./SetupPhaseModal";
 import DraftPhaseModal from "./DraftPhaseModal";
 import MoveConfigModal from "./MoveConfigModal";
+import PyramidEvolveModal from "./PyramidEvolveModal";
 import { POWER_TILES, getPlayerPyramidLevel, TILE_COLOR_STYLE, TYPE_LABEL, getTileImageUrl, isGrayTokenTile, isGoldenTokenTile } from "../../constants/powerTiles";
 import { ZONE_ADJACENCY } from "../../constants/board";
 import { getMovementCreatureBonus, getZoneMaxUnits, CREATURE_POWERS, hasEnemyCerbereInZone, hasFireRainProtection, getJpTokenFlags, getMaxTotalUnits, getTotalTroopCount } from "../../constants/creaturePowers";
@@ -31,12 +32,14 @@ import ActionLogPanel from "./ActionLogPanel";
 import FleeModal from "../Combat/FleeModal";
 import CancelIdModal from "../Combat/CancelIdModal";
 import IdRecoverModal from "../Combat/IdRecoverModal";
+import IdCardModal from "../Cards/IdCardModal";
 import { BOARD_ZONES } from "../../constants/board";
 import { useSyncedMusic } from "../../hooks/useSyncedMusic";
 import { useVolume } from "../../hooks/useVolume";
 import { useCoinSound } from "../../hooks/useCoinSound";
 import { useDrawCardSound } from "../../hooks/useDrawCardSound";
 import { useSwordSound } from "../../hooks/useSwordSound";
+import { useVictorySound } from "../../hooks/useVictorySound";
 import VolumeControl from "../ui/VolumeControl";
 import { aiChooseSetup, aiChooseDraftTile, aiChoosePlacement, aiDecideAction, aiFindCerbereTarget, aiDecideTakeTokens, describeMovePoints } from "../../ai/aiPlayer";
 import { computeTempVP } from "../../utils/vp";
@@ -178,12 +181,21 @@ function ActionToast({ notif }) {
   );
 }
 
+// Bonus de passage Ta-Seti (nœuds I_/C_) : seuls les 3 bonus de combat matérialisés
+// par un jeton physique sur le plateau (bouclier, goutte de sang, +1 force) sont
+// limités à une fois par jour. Tous les autres bonus du même nœud (ank, recrutement
+// Ta-Seti, déplacement, carte ID, pluie de feu...) s'appliquent à chaque passage.
+const DAILY_LIMITED_BONUS_TYPES = new Set(['combatShields', 'combatBlood', 'combatForce']);
+
 export default function GameScreen({ session }) {
   const { roomCode, playerId, allPlayers, isTestMode } = session;
-  const [volume, setVolume] = useVolume();
-  const [currentRadio, changeRadio, prevTrack, nextTrack] = useSyncedMusic(RADIOS, `rooms/${roomCode}/gameMusic`, volume);
+  const [musicVolume, setMusicVolume] = useVolume("kmt_music_volume");
+  const [sfxVolume, setSfxVolume] = useVolume("kmt_sfx_volume");
+  const [currentRadio, changeRadio, prevTrack, nextTrack] = useSyncedMusic(RADIOS, `rooms/${roomCode}/gameMusic`, musicVolume);
   const [gameState, setGameState] = useState(null);
   const [showTaSeti, setShowTaSeti] = useState(false);
+  const [showPhaseIdCards, setShowPhaseIdCards] = useState(false);
+  const [showNightPyramidModal, setShowNightPyramidModal] = useState(false);
   const [showBoutique, setShowBoutique] = useState(false);
   const [showSoundModal, setShowSoundModal] = useState(false);
   const [showCombat, setShowCombat] = useState(false);
@@ -249,13 +261,14 @@ export default function GameScreen({ session }) {
   const [showMobileLog, setShowMobileLog] = useState(false);
   const [placementSelected, setPlacementSelected] = useState([]);
 
-  useCoinSound(gameState, volume);
-  useDrawCardSound(gameState, playerId, volume);
-  useSwordSound(combatData, volume);
+  useCoinSound(gameState, sfxVolume);
+  useDrawCardSound(gameState, playerId, sfxVolume);
+  useSwordSound(combatData, sfxVolume);
+  useVictorySound(combatData, playerId, sfxVolume);
 
   function playRecruitSound() {
     const audio = new Audio("/MP3_sound_effect/unit_recruit.mp3");
-    audio.volume = Math.max(0, Math.min(1, volume));
+    audio.volume = Math.max(0, Math.min(1, sfxVolume));
     audio.play().catch(() => {});
   }
 
@@ -448,12 +461,10 @@ export default function GameScreen({ session }) {
   }, []);
 
   const allPlayersAI = currentPlayers.length > 0 && currentPlayers.every(p => p.isAI);
-  // Le widget pas à pas reste accessible dès qu'il y a au moins une IA (pour
-  // qu'un humain puisse le déclencher manuellement s'il le souhaite), mais ne
-  // s'active par défaut qu'en simulation pure (voir l'effet ci-dessous) —
-  // dans une partie humain+IA normale, les IA doivent jouer seules avec juste
-  // un délai, sans qu'on ait à cliquer "Suivant" pour chaque décision.
-  const hasAIOpponent = currentPlayers.some(p => p.isAI);
+  // Le widget pas à pas n'a de sens qu'en simulation pure (mode test, aucun
+  // humain aux commandes) — dans une partie humain+IA normale, les IA doivent
+  // jouer seules avec juste un délai, sans bouton "Suivant" à cliquer pour
+  // chaque décision.
 
   // Active le mode simulation ET le mode pas à pas automatiquement si tous les
   // joueurs sont IA (aucun humain aux commandes) — sinon les IA jouent leur
@@ -726,6 +737,23 @@ export default function GameScreen({ session }) {
     if (pending && actionMode !== "destroyUnit") setActionMode("destroyUnit");
     else if (!pending && actionMode === "destroyUnit") setActionMode(null);
   }, [gameState?.players?.[effectivePlayerId]?.pendingDestroyUnit]);
+
+  // Augmentation pyramide (tuile "Augmentation pyramide", accordée chaque nuit) :
+  // propose automatiquement le choix de la pyramide à améliorer dès que le bonus
+  // est accordé — ce n'est pas une action de tour, donc pas de bouton à cliquer
+  // "à son tour" comme c'était le cas auparavant.
+  useEffect(() => {
+    const pending = gameState?.players?.[effectivePlayerId]?.pyramidUpgradePending ?? 0;
+    if (pending > 0) setShowNightPyramidModal(true);
+  }, [gameState?.players?.[effectivePlayerId]?.pyramidUpgradePending]);
+
+  // Avancée de nuit Ta-Seti (bonus nocturne) : même principe — proposée
+  // automatiquement dès qu'elle est due plutôt que via un bouton d'action.
+  useEffect(() => {
+    const pending = gameState?.players?.[effectivePlayerId]?.taSetiNightAdvancePending ?? 0;
+    if (pending > 0 && !actionMode && !pendingMoveAction && !showTaSeti) handleNightTaSetiAdvance();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState?.players?.[effectivePlayerId]?.taSetiNightAdvancePending, actionMode]);
 
   // Retourne le prêtre en réserve quand sa troupe est complètement éliminée
   useEffect(() => {
@@ -1879,10 +1907,18 @@ export default function GameScreen({ session }) {
     setMoveHistory([]);
     setActionMode(null);
     // If the action token was never consumed (priest moved in Ta-Seti but unit move cancelled),
-    // restore the full gameState from startState to undo priest positions and any traversal bonuses.
+    // restore the gameState to undo priest positions and any traversal bonuses — but never past
+    // the point where new hidden information (e.g. an ID card draw) was revealed to the player:
+    // that knowledge can't be un-known even if the board state itself is reverted, so once it
+    // happened the underlying reveal must stick (same rule handleCancelTurn already applies).
     const myState = gameState?.players?.[effectivePlayerId] || {};
     if ((myState.actionsThisTurn ?? 0) === 0 && localTurnHistory?.startState) {
-      await set(ref(db, `rooms/${roomCode}/gameState`), localTurnHistory.startState);
+      const restoreState = localTurnHistory.lastInfoState || localTurnHistory.startState;
+      await set(ref(db, `rooms/${roomCode}/gameState`), restoreState);
+      if (localTurnHistory.lastInfoState) {
+        setLocalTurnHistory({ startState: restoreState, lastInfoState: null });
+        await update(ref(db, `rooms/${roomCode}/turnSnapshot`), { lastInfoState: null });
+      }
     }
   }
 
@@ -2415,24 +2451,28 @@ export default function GameScreen({ session }) {
           if (iNode) {
             const iSection = parseInt(iNode.match(/^I_(\d+)_/)[1]);
             const iFaceKey = `${iSection}${faces[iSection - 1]}`;
-            const isDailyI = ['I_1_1', 'I_1_3', 'I_1_4', 'I_3_1'].includes(iNode);
-            if (!isDailyI || !dailyBonusesUsed[iNode]) {
-              const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
-              iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, tsUpdates));
-              if (isDailyI) { tsUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNode}`] = true; dailyBonusesUsed[iNode] = true; }
-            }
+            const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
+            let iUsedLimited = false;
+            iBonuses.forEach(b => {
+              if (DAILY_LIMITED_BONUS_TYPES.has(b.type) && dailyBonusesUsed[iNode]) return;
+              applyTaSetiBonusToUpdates(b, aiId, myState, tsUpdates);
+              if (DAILY_LIMITED_BONUS_TYPES.has(b.type)) iUsedLimited = true;
+            });
+            if (iUsedLimited) { tsUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNode}`] = true; dailyBonusesUsed[iNode] = true; }
           }
 
           const cNode = getTraversedCNode(oldPos, nodeId, layout);
           if (cNode) {
             const cSection = parseInt(cNode.split('_')[1]);
             const cFaceKey = `${cSection}${faces[cSection - 1]}`;
-            const isDailyC = cNode === 'C_3_1';
-            if (!isDailyC || !dailyBonusesUsed[cNode]) {
-              const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
-              cBonuses.forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, tsUpdates));
-              if (isDailyC) { tsUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNode}`] = true; dailyBonusesUsed[cNode] = true; }
-            }
+            const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
+            let cUsedLimited = false;
+            cBonuses.forEach(b => {
+              if (DAILY_LIMITED_BONUS_TYPES.has(b.type) && dailyBonusesUsed[cNode]) return;
+              applyTaSetiBonusToUpdates(b, aiId, myState, tsUpdates);
+              if (DAILY_LIMITED_BONUS_TYPES.has(b.type)) cUsedLimited = true;
+            });
+            if (cUsedLimited) { tsUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNode}`] = true; dailyBonusesUsed[cNode] = true; }
           }
 
           const eMatch = nodeId.match(/^E_(\d+)_/);
@@ -2485,7 +2525,18 @@ export default function GameScreen({ session }) {
       }
     }
 
-    const decision = aiDecideAction(gameState, aiId, currentPlayers, {
+    // Relit boardUnits depuis Firebase juste avant de décider : les résolutions
+    // gratuites ci-dessus (créatures, avancée Ta-Seti, pyramide...) viennent
+    // d'écrire directement en base sans jamais rafraîchir la closure React
+    // `gameState` — sans cette relecture, la décision (et le calcul des
+    // unités attaquantes / du plafond de zone) pouvait se baser sur un
+    // plateau périmé, permettant par ex. à un recrutement Ta-Seti tout juste
+    // posé de dépasser silencieusement le plafond d'une zone déjà pleine
+    // avant qu'une attaque n'en parte.
+    const freshBoardSnap = await get(ref(db, `rooms/${roomCode}/gameState/boardUnits`));
+    const freshBoardUnits = freshBoardSnap.exists() ? freshBoardSnap.val() : (gameState.boardUnits || {});
+
+    const decision = aiDecideAction({ ...gameState, boardUnits: freshBoardUnits }, aiId, currentPlayers, {
       tileRatings: tileRatingsRef.current,
       tileCombinations: tileCombinationsRef.current,
     });
@@ -2498,7 +2549,7 @@ export default function GameScreen({ session }) {
         const { updates: gUpdates, log: gLog } = computeGoldenActionUpdates(decision.goldenAction, {
           aiId, aiColor, aiPlayer,
           ownedTileIds: myState.ownedTileIds || [],
-          boardUnits: gameState.boardUnits || {},
+          boardUnits: freshBoardUnits,
           gameState,
           ank: myState.ank ?? 7,
           reserve: myState.unitsReserve ?? 0,
@@ -2519,7 +2570,7 @@ export default function GameScreen({ session }) {
     const tokens = myState.tokens ?? 5;
     const usedActions = myState.usedActions || [];
     const ownedTileIds = myState.ownedTileIds || [];
-    const boardUnits = gameState.boardUnits || {};
+    const boardUnits = freshBoardUnits;
 
     const baseUpdates = {
       [`rooms/${roomCode}/gameState/players/${aiId}/usedActions`]: [...usedActions, decision.type],
@@ -2816,41 +2867,38 @@ export default function GameScreen({ session }) {
 
             baseUpdates[`rooms/${roomCode}/gameState/taSetiPriestPositions/${aiId}/${pi}`] = chosenDest;
 
-            // Bonus du nœud I traversé (certains nœuds : une seule fois par jour)
-            const AI_DAILY_I_NODES = new Set(['I_1_1', 'I_1_3', 'I_1_4', 'I_3_1']);
+            // Bonus du nœud I traversé (seuls les 3 bonus combat matérialisés par un
+            // jeton — bouclier/sang/force — sont limités à une fois par jour)
             const iNodeAi = getTraversedINode(pPos[pi], chosenDest, layout);
             if (iNodeAi) {
               const im = iNodeAi.match(/^I_(\d+)_/);
               if (im) {
                 const iFk = `${im[1]}${faces[parseInt(im[1]) - 1]}`;
-                if (AI_DAILY_I_NODES.has(iNodeAi)) {
-                  const alreadyConsumed = baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNodeAi}`] ?? gameState?.taSetiDailyBonuses?.[iNodeAi];
-                  if (!alreadyConsumed) {
-                    (TASETI_I_BONUSES[iFk]?.[iNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
-                    baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNodeAi}`] = true;
-                  }
-                } else {
-                  (TASETI_I_BONUSES[iFk]?.[iNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
-                }
+                const alreadyConsumed = baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNodeAi}`] ?? gameState?.taSetiDailyBonuses?.[iNodeAi];
+                let iUsedLimited = false;
+                (TASETI_I_BONUSES[iFk]?.[iNodeAi] ?? []).forEach(b => {
+                  if (DAILY_LIMITED_BONUS_TYPES.has(b.type) && alreadyConsumed) return;
+                  applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates);
+                  if (DAILY_LIMITED_BONUS_TYPES.has(b.type)) iUsedLimited = true;
+                });
+                if (iUsedLimited) baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNodeAi}`] = true;
               }
             }
 
             // Bonus du nœud C traversé (mouvement intra-section 3B)
-            const AI_DAILY_C_NODES = new Set(['C_3_1']);
             const cNodeAi = getTraversedCNode(pPos[pi], chosenDest, layout);
             if (cNodeAi) {
               const cm = cNodeAi.match(/^C_(\d+)_/);
               if (cm) {
                 const cFk = `${cm[1]}${faces[parseInt(cm[1]) - 1]}`;
-                if (AI_DAILY_C_NODES.has(cNodeAi)) {
-                  const alreadyConsumedC = baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNodeAi}`] ?? gameState?.taSetiDailyBonuses?.[cNodeAi];
-                  if (!alreadyConsumedC) {
-                    (TASETI_C_BONUSES[cFk]?.[cNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
-                    baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNodeAi}`] = true;
-                  }
-                } else {
-                  (TASETI_C_BONUSES[cFk]?.[cNodeAi] ?? []).forEach(b => applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates));
-                }
+                const alreadyConsumedC = baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNodeAi}`] ?? gameState?.taSetiDailyBonuses?.[cNodeAi];
+                let cUsedLimited = false;
+                (TASETI_C_BONUSES[cFk]?.[cNodeAi] ?? []).forEach(b => {
+                  if (DAILY_LIMITED_BONUS_TYPES.has(b.type) && alreadyConsumedC) return;
+                  applyTaSetiBonusToUpdates(b, aiId, myState, baseUpdates);
+                  if (DAILY_LIMITED_BONUS_TYPES.has(b.type)) cUsedLimited = true;
+                });
+                if (cUsedLimited) baseUpdates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNodeAi}`] = true;
               }
             }
 
@@ -3203,8 +3251,10 @@ export default function GameScreen({ session }) {
       if (gLog) logText += `${logText ? " + " : ""}${gLog}`;
     }
 
-    // Trace du plan multi-coups de l'IA (recalculé à chaque tour)
-    if (logText && decision.planNote) logText += ` | ${decision.planNote}`;
+    // Trace du plan multi-coups de l'IA (recalculé à chaque tour) — réservée
+    // au mode test en simulation pure (3 IA) : dans une vraie partie, ça
+    // révèlerait la stratégie de l'IA au joueur humain qui l'affronte.
+    if (logText && decision.planNote && isTestMode && allPlayersAI) logText += ` | ${decision.planNote}`;
 
     // Pluie de Feu jouée ce tour-ci : marquer le pending dès maintenant dans
     // baseUpdates, AVANT resolveAiTaSetiPendings — sinon la carte n'est
@@ -3447,43 +3497,44 @@ export default function GameScreen({ session }) {
         Math.max(0, (myState.taSetiNightAdvancePending ?? 0) - 1);
     }
 
-    // Nœud I traversé → appliquer ses bonus (certains nœuds : une seule fois par jour)
-    const DAILY_I_NODES = new Set(['I_1_1', 'I_1_3', 'I_1_4', 'I_3_1']);
+    // Toute nouvelle information révélée (ex : pioche d'une ID) verrouille l'annulation
+    // de l'action en cours — voir markInfoEvent()/handleMoveCancel.
+    let revealedInfo = false;
+
+    // Nœud I traversé → appliquer ses bonus (seuls les 3 bonus combat matérialisés
+    // par un jeton — bouclier/sang/force — sont limités à une fois par jour)
     const iNode = getTraversedINode(oldPos, nodeId, layout);
     if (iNode) {
       const iMatch = iNode.match(/^I_(\d+)_/);
       if (iMatch) {
         const iSection = parseInt(iMatch[1]);
         const iFaceKey = `${iSection}${faces[iSection - 1]}`;
-        if (DAILY_I_NODES.has(iNode)) {
-          if (!gameState?.taSetiDailyBonuses?.[iNode]) {
-            const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
-            iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
-            updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNode}`] = true;
-          }
-        } else {
-          const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
-          iBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
-        }
+        const iAlreadyUsed = gameState?.taSetiDailyBonuses?.[iNode];
+        const iBonuses = TASETI_I_BONUSES[iFaceKey]?.[iNode] ?? [];
+        let iUsedLimited = false;
+        iBonuses.forEach(b => {
+          if (DAILY_LIMITED_BONUS_TYPES.has(b.type) && iAlreadyUsed) return;
+          if (applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates)) revealedInfo = true;
+          if (DAILY_LIMITED_BONUS_TYPES.has(b.type)) iUsedLimited = true;
+        });
+        if (iUsedLimited) updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${iNode}`] = true;
       }
     }
 
     // Nœud C traversé (mouvement intra-section 3B) → appliquer ses bonus
-    const DAILY_C_NODES = new Set(['C_3_1']);
     const cNode = getTraversedCNode(oldPos, nodeId, layout);
     if (cNode) {
       const cSection = parseInt(cNode.split('_')[1]);
       const cFaceKey = `${cSection}${faces[cSection - 1]}`;
-      if (DAILY_C_NODES.has(cNode)) {
-        if (!gameState?.taSetiDailyBonuses?.[cNode]) {
-          const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
-          cBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
-          updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNode}`] = true;
-        }
-      } else {
-        const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
-        cBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
-      }
+      const cAlreadyUsed = gameState?.taSetiDailyBonuses?.[cNode];
+      const cBonuses = TASETI_C_BONUSES[cFaceKey]?.[cNode] ?? [];
+      let cUsedLimited = false;
+      cBonuses.forEach(b => {
+        if (DAILY_LIMITED_BONUS_TYPES.has(b.type) && cAlreadyUsed) return;
+        if (applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates)) revealedInfo = true;
+        if (DAILY_LIMITED_BONUS_TYPES.has(b.type)) cUsedLimited = true;
+      });
+      if (cUsedLimited) updates[`rooms/${roomCode}/gameState/taSetiDailyBonuses/${cNode}`] = true;
     }
 
     // E_4_2 : bout de piste → 1er prêtre du jour +1 PV, prêtre retourne en réserve
@@ -3496,6 +3547,7 @@ export default function GameScreen({ session }) {
       }
       updates[`rooms/${roomCode}/gameState/taSetiPriestPositions/${effectivePlayerId}/${priestIndex}`] = '';
       await update(ref(db, "/"), updates);
+      if (revealedInfo) await markInfoEvent();
       setActionMode(pendingMoveAction);
       setPendingMoveAction(null);
       setSelectedPriestIndex(null);
@@ -3509,11 +3561,12 @@ export default function GameScreen({ session }) {
       const eSection = parseInt(eMatch[1]);
       const eFaceKey = `${eSection}${faces[eSection - 1]}`;
       const eBonuses = TASETI_E_BONUSES[eFaceKey]?.[nodeId] ?? [];
-      eBonuses.forEach(b => applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates));
+      eBonuses.forEach(b => { if (applyTaSetiBonusToUpdates(b, effectivePlayerId, myState, updates)) revealedInfo = true; });
 
       if (isNightAdv) {
         // Mode nuit : pas de ramassage de jetons
         await update(ref(db, "/"), updates);
+        if (revealedInfo) await markInfoEvent();
         setActionMode(null);
         setPendingMoveAction(null);
         setSelectedPriestIndex(null);
@@ -3534,6 +3587,7 @@ export default function GameScreen({ session }) {
         .filter(Boolean);
 
       await update(ref(db, "/"), updates);
+      if (revealedInfo) await markInfoEvent();
       setActionMode(pendingMoveAction);
       setPendingMoveAction(null);
       setSelectedPriestIndex(null);
@@ -3548,6 +3602,7 @@ export default function GameScreen({ session }) {
     }
 
     await update(ref(db, "/"), updates);
+    if (revealedInfo) await markInfoEvent();
     setActionMode(isNightAdv ? null : pendingMoveAction);
     setPendingMoveAction(null);
     setSelectedPriestIndex(null);
@@ -3565,9 +3620,10 @@ export default function GameScreen({ session }) {
     const juTokens = tokens.filter(t => t.nodeId.startsWith('JU'));
 
     // JI → effet immédiat
+    let revealedInfo = false;
     jiTokens.forEach(token => {
       const effect = JI_EFFECT_MAP[token.cardId];
-      if (effect) applyTaSetiBonusToUpdates(effect, effectivePlayerId, myState, updates);
+      if (effect && applyTaSetiBonusToUpdates(effect, effectivePlayerId, myState, updates)) revealedInfo = true;
       updates[`rooms/${roomCode}/gameState/jiAssignment/${token.nodeId}`] = null;
     });
 
@@ -3601,6 +3657,7 @@ export default function GameScreen({ session }) {
     }
 
     await update(ref(db, "/"), updates);
+    if (revealedInfo) await markInfoEvent();
     setPendingTokenPickup(null);
     setShowTaSeti(false);
   }
@@ -3645,10 +3702,11 @@ export default function GameScreen({ session }) {
           updates[`rooms/${roomCode}/gameState/idDeck`] = remaining;
           updates[`${base}/idCards`] = [...currentCards, ...hand];
         }
-        break;
+        return true;
       }
       default: break;
     }
+    return false;
   }
 
   function checkVictoryAtTurnStart(nextPlayerId) {
@@ -4083,7 +4141,7 @@ export default function GameScreen({ session }) {
         y compris la barre d'en-tête statique. Sans ce widget séparé au-dessus,
         "Suivant" restait injoignable précisément quand une décision IA (avec
         modale de statut "En attente de ...") a besoin d'être débloquée. */}
-    {(isTestMode || hasAIOpponent) && (
+    {(isTestMode && allPlayersAI) && (
       <div
         className="fixed top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-lg shadow-lg"
         style={{ zIndex: 250, background: 'rgba(10,8,6,0.95)', border: '1px solid #3a2a0c' }}
@@ -4249,7 +4307,9 @@ export default function GameScreen({ session }) {
             🔁 Fin auto IA : {aiAutoEndTurn ? "ON" : "OFF"}
           </button>
         )}
-        <VolumeControl volume={volume} onChange={setVolume} />
+        <button onClick={() => setShowSoundModal(true)} title="Son &amp; musique" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 16, lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+          {musicVolume === 0 && sfxVolume === 0 ? '🔇' : '🔊'}
+        </button>
         <div style={{ borderLeft: '1px solid #3a2a0c', paddingLeft: 10, height: '60%', display: 'flex', alignItems: 'center' }}>
           <RadioSelector radios={RADIOS} currentRadio={currentRadio} onSelect={changeRadio} onPrev={prevTrack} onNext={nextTrack} />
         </div>
@@ -4271,7 +4331,7 @@ export default function GameScreen({ session }) {
           </button>
         )}
         <button onClick={() => setShowSoundModal(true)} style={{ background: 'none', border: 'none', padding: '0 8px', cursor: 'pointer', fontSize: 16, lineHeight: 1, height: '100%', display: 'flex', alignItems: 'center', borderLeft: isTestMode ? '1px solid #3a2a0c' : 'none' }}>
-          {volume === 0 ? '🔇' : '🔊'}
+          {musicVolume === 0 && sfxVolume === 0 ? '🔇' : '🔊'}
         </button>
         <button onClick={() => setShowBoutique(true)} title="Voir toutes les tuiles disponibles" style={{ background: 'none', border: 'none', borderLeft: '1px solid #3a2a0c', padding: '0 6px', cursor: 'pointer', height: '100%', display: 'flex', alignItems: 'center' }}>
           <img src="/Boutique.png" alt="Boutique" style={{ height: 30, width: 'auto', objectFit: 'contain', display: 'block' }} />
@@ -4529,7 +4589,6 @@ export default function GameScreen({ session }) {
           onGoldenTokenPrayerActivate={handleGoldenTokenPrayerActivate}
           onGoldenTokenBuyActivate={handleGoldenTokenBuyActivate}
           onRenforcementActivate={handleRenforcementActivate}
-          onNightTaSetiAdvance={handleNightTaSetiAdvance}
           onUseJuToken={handleUseJuToken}
           onPlayDayIdCard={handlePlayDayIdCard}
           onStartEquipCreature={tileId => { setEquipCreatureId(tileId); setActionMode("equip_creature"); }}
@@ -4555,6 +4614,8 @@ export default function GameScreen({ session }) {
         isTestMode={isTestMode}
         testPlayers={isTestMode ? currentPlayers : null}
         onSwitchTestPlayer={id => { setTestViewPlayerId(id); setActionMode(null); setMoveState(null); setMoveConfig(null); }}
+        onShowTaSeti={() => setShowTaSeti(true)}
+        onShowIdCards={() => setShowPhaseIdCards(true)}
       />
     )}
 
@@ -4569,6 +4630,24 @@ export default function GameScreen({ session }) {
       />
     )}
 
+    {showPhaseIdCards && (
+      <IdCardModal
+        cards={gameState?.players?.[effectivePlayerId]?.idCards || []}
+        onClose={() => setShowPhaseIdCards(false)}
+      />
+    )}
+
+    {/* Augmentation pyramide (bonus de nuit) — proposée automatiquement,
+        voir l'effet déclencheur plus haut ; pas un bouton d'action de tour. */}
+    {showNightPyramidModal && (gameState?.players?.[effectivePlayerId]?.pyramidUpgradePending ?? 0) > 0 && (
+      <PyramidEvolveModal
+        player={me}
+        gameState={gameState}
+        free={true}
+        onConfirm={params => handleActionActivate("pyramid_free", params)}
+        onClose={() => setShowNightPyramidModal(false)}
+      />
+    )}
 
     {/* Modale config déplacement */}
     {moveConfig && (
@@ -4670,8 +4749,12 @@ export default function GameScreen({ session }) {
             <button onClick={() => setShowSoundModal(false)} className="kmt-close">✕</button>
           </div>
           <div>
-            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Volume</p>
-            <VolumeControl volume={volume} onChange={setVolume} />
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Musique</p>
+            <VolumeControl volume={musicVolume} onChange={setMusicVolume} />
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Effets sonores</p>
+            <VolumeControl volume={sfxVolume} onChange={setSfxVolume} />
           </div>
           <div>
             <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Radio</p>
@@ -4952,7 +5035,7 @@ export default function GameScreen({ session }) {
 	    winnerId={gameState.gameOver.winnerId}
 	    allPlayers={currentPlayers}
 	    gameState={gameState}
-	    volume={volume}
+	    volume={sfxVolume}
 	    onReturnHome={async () => {
 	      await remove(ref(db, `rooms/${roomCode}`));
 	      localStorage.removeItem("kemet_session");

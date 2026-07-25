@@ -1020,6 +1020,14 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
           return enemy2 && unitsAfterMove >= enemy2.count * 1.5;
         });
 
+        // Le "tremplin vers un temple vide" (adjToEmpty) ne doit jamais justifier
+        // d'abandonner complètement un temple déjà contrôlé (sourceIsTemple, aucune
+        // unité gardée derrière) : quitter T3 pour un désert sur la seule promesse
+        // d'atteindre un AUTRE temple vide 2 cases plus loin fait perdre une valeur
+        // sûre (60) contre une simple chance future (25) — cf. bug "Anubis quitte
+        // le Temple Bleu/T3 pour le désert sans raison".
+        const abandonsControlledTemple = sourceIsTemple && keepBack === 0;
+
         // Une cible n'a de valeur stratégique que si elle rapproche d'un temple,
         // permet de renforcer/attaquer, ou de contrôler 2 temples. Un désert vide
         // sans aucun de ces atouts est une mauvaise destination (cf. règles IA).
@@ -1027,7 +1035,7 @@ export function aiDecideAction(gameState, aiPlayerId, allPlayers, ratingsData = 
         // (vrai dès qu'un prêtre a un coup jouable, peu importe la destination),
         // déjà crédité séparément via tasetiMoveValue ; l'inclure ici neutralisait
         // la pénalité désert sur quasi tous les tours.
-        const hasStrategicValue = (isTemple && zoneEmpty) || adjToEmpty
+        const hasStrategicValue = (isTemple && zoneEmpty) || (adjToEmpty && !abandonsControlledTemple)
           || existingFriendly > 0 || wouldControl2 || hasAttackOpportunity;
         const isEmptyDesert = zoneEmpty && !isTemple && !hasStrategicValue;
 

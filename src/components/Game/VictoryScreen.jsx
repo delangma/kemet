@@ -14,7 +14,7 @@ export default function VictoryScreen({ winnerId, allPlayers, gameState, onRetur
   const ws = COLOR_STYLE[winner?.color] || COLOR_STYLE.Blanc;
 
   useEffect(() => {
-    const audio = new Audio("/MP3_sound_effect/Victory%20sound.mp3");
+    const audio = new Audio("/MP3_sound_effect/Victory_Sound.wav");
     audio.volume = Math.max(0, Math.min(1, volume));
     audio.play().catch(() => {});
   }, []);

@@ -19,6 +19,11 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   const [blessureCards, setBlessureCards] = useState([]);
   const [phase, setPhase] = useState("declare");
   const [sceauPickerToken, setSceauPickerToken] = useState(null); // jeton Sceau Divin en cours de ciblage
+  // Une fois ce combat quitté vers le choix de carte, on ne revient plus en
+  // arrière : évite qu'un jeton Ta-Seti "à jouer avant le combat" passe
+  // inaperçu, mélangé à la grille de cartes, et devienne injouable sans
+  // que le joueur ait eu l'occasion explicite de le jouer ou de refuser.
+  const [tokenStepAcknowledged, setTokenStepAcknowledged] = useState(false);
 
   const me = allPlayers.find(p => p.id === playerId);
   const myState = gameState?.players?.[playerId] || {};
@@ -901,6 +906,166 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
   const hasPrescience   = combat?.prescience   === playerId;
   const hasPrescienceId = combat?.prescienceId === playerId;
 
+  // ── Statistiques connues (publiques) avant révélation de la carte combat ──
+  // Toutes ces sources sont des informations publiques (armées, créatures,
+  // prêtres visibles, pouvoirs achetés — cf. règles §21.12) : seule la carte
+  // combat encore en main reste secrète. Sert de base de décision au joueur
+  // pendant le choix de sa carte et le jeu de ses cartes ID.
+  function getKnownCombatStats(pid) {
+    if (!combat) return null;
+    const zoneId = combat.zoneId;
+    const isAtk = pid === combat.attacker;
+    const opponentId = isAtk ? combat.defender : combat.attacker;
+    const color = allPlayers.find(p => p.id === pid)?.color;
+    const disabledTileIds = gameState?.disabledTileIds || {};
+
+    const units = gameState?.boardUnits?.[zoneId]?.[color] ?? 0;
+    const creatureBonus = getCombatCreatureBonus(
+      pid, opponentId, zoneId,
+      gameStateForCombat.creatureAssignments || {}, gameStateForCombat.players || {},
+      POWER_TILES, gameStateForCombat.creatureAssignments2 || {}, disabledTileIds
+    );
+    const tileBonus = getPowerTileCombatBonus(gameState?.players?.[pid]?.ownedTileIds, isAtk, POWER_TILES, disabledTileIds);
+    const jpBonus = getJpTokenCombatBonus(gameState?.boardPriests, zoneId, color, isAtk);
+    const tasetiForce   = gameState?.players?.[pid]?.tasetiForce   ?? 0;
+    const tasetiBlood   = gameState?.players?.[pid]?.tasetiBlood   ?? 0;
+    const tasetiShields = gameState?.players?.[pid]?.tasetiShields ?? 0;
+
+    const creatureForce   = creatureBonus.nullified ? 0 : creatureBonus.force;
+    const creatureBlood   = (creatureBonus.nullified || creatureBonus.creatureBloodNullifiedByEnemy) ? 0 : creatureBonus.blood;
+    const creatureShields = (creatureBonus.nullified || creatureBonus.shieldsNullifiedByEnemy) ? 0 : creatureBonus.shields;
+
+    return {
+      units,
+      creatureBonus,
+      knownForce:   units + creatureForce + tileBonus.force + jpBonus.force + tasetiForce,
+      knownBlood:   creatureBlood + tileBonus.blood + tileBonus.unblockableBlood + jpBonus.blood + tasetiBlood,
+      knownShields: creatureShields + tileBonus.shields + jpBonus.shields + tasetiShields,
+    };
+  }
+
+  function KnownStatsPanel() {
+    if (!combat || !isParticipant) return null;
+    const oppId = isAttacker ? combat.defender : combat.attacker;
+    const mine = getKnownCombatStats(playerId);
+    const theirs = getKnownCombatStats(oppId);
+    if (!mine || !theirs) return null;
+    const rows = [
+      { pid: playerId, label: "Vous", stats: mine },
+      { pid: oppId, label: getPlayerName(oppId), stats: theirs },
+    ];
+    return (
+      <div className="bg-gray-800/70 border border-gray-700 rounded-lg p-3">
+        <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wide mb-2">
+          Forces connues (hors carte combat secrète)
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {rows.map(({ pid, label, stats }) => (
+            <div key={pid} className="bg-gray-900/50 rounded-lg p-2.5">
+              <p className="text-white font-semibold text-xs mb-1.5">
+                {label} <span className="text-gray-500 font-normal">({pid === combat.attacker ? "Attaquant" : "Défenseur"})</span>
+              </p>
+              <div className="flex items-center justify-between text-xs text-gray-300 mb-1">
+                <span>Unités</span><span className="font-bold">{stats.units}</span>
+              </div>
+              {(stats.creatureBonus.myCreatureName || stats.creatureBonus.myCreatureName2) && (
+                <div className="flex items-center gap-1 flex-wrap mb-1">
+                  {[stats.creatureBonus.myCreatureName, stats.creatureBonus.myCreatureName2].filter(Boolean).map(name => (
+                    <span key={name} className={`text-[10px] px-1.5 py-0.5 rounded bg-amber-900/50 border border-amber-700/50 text-amber-300 ${stats.creatureBonus.nullified ? "line-through opacity-50" : ""}`}>
+                      {name}
+                    </span>
+                  ))}
+                  {stats.creatureBonus.nullified && <span className="text-red-400 text-[10px]">(annulée)</span>}
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1.5 mt-1 border-t border-gray-700">
+                <span className="text-yellow-400 text-xs font-semibold">Force (hors carte)</span>
+                <span className="text-yellow-400 font-bold">{stats.knownForce}</span>
+              </div>
+              <div className="flex items-center justify-between mt-1 text-xs">
+                <span className="text-red-400">🩸 Sang +{stats.knownBlood}</span>
+                <span className="text-blue-400">🛡 Bouclier +{stats.knownShields}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-gray-500 mt-2">+ carte combat (1 à 8, secrète jusqu'à la révélation)</p>
+      </div>
+    );
+  }
+
+  // ── Jetons Ta-Seti jouables au démarrage du combat — par n'importe quel
+  // participant qui en possède un (chacun ne concerne que le joueur qui le
+  // joue). Regroupés ici pour être partagés entre le portail de décision
+  // (avant le choix de carte) et l'état "déjà décidé" affiché ensuite.
+  function getMyJuTokens() {
+    const opponentId = isAttacker ? combat?.defender : combat?.attacker;
+    const hand = myState.juTokenHand || [];
+    const pointsToken = !combat?.pointsTokenPlayerId ? hand.find(t => t.cardId === 'PU_points') : null;
+    const simpleToken = !combat?.simpleCombat ? hand.find(t => t.cardId === 'PU_combat_simple') : null;
+    const sceauToken  = hand.find(t => t.cardId === 'PU_sceau_divin');
+    const opponentTiles = (gameState?.players?.[opponentId]?.ownedTileIds || [])
+      .map(id => POWER_TILES.find(t => t.id === id))
+      .filter(t => t && !(gameState?.disabledTileIds || {})[t.id]);
+    return {
+      opponentId, pointsToken, simpleToken, sceauToken, opponentTiles,
+      hasAny: !!(pointsToken || simpleToken || sceauToken),
+    };
+  }
+
+  function JuTokenPanel() {
+    const { opponentId, pointsToken, simpleToken, sceauToken, opponentTiles, hasAny } = getMyJuTokens();
+    if (!hasAny) return null;
+    return (
+      <div className="bg-amber-950/40 border border-amber-800/50 rounded-lg p-3">
+        <p className="text-amber-300 text-xs font-bold mb-2">🪬 Jetons Ta-Seti (démarrage du combat)</p>
+        <div className="flex flex-wrap gap-2">
+          {pointsToken && (
+            <button
+              onClick={() => handlePlayPointsToken(pointsToken)}
+              title="+1 PV si victoire avec au moins 1 unité survivante · rien si victoire sans survivant · -1 PV si défaite"
+              className="text-xs px-2.5 py-1 rounded border font-semibold bg-yellow-800/70 text-yellow-100 border-yellow-600 hover:bg-yellow-700"
+            >
+              🪬 Points
+            </button>
+          )}
+          {simpleToken && (
+            <button
+              onClick={() => handlePlaySimpleToken(simpleToken)}
+              title="Seules les unités et les cartes combat comptent dans ce combat"
+              className="text-xs px-2.5 py-1 rounded border font-semibold bg-cyan-900/70 text-cyan-100 border-cyan-600 hover:bg-cyan-800"
+            >
+              🪬 Combat Simple
+            </button>
+          )}
+          {sceauToken && opponentTiles.length > 0 && (
+            <button
+              onClick={() => setSceauPickerToken(sceauPickerToken ? null : sceauToken)}
+              title="Annule une tuile pouvoir adverse jusqu'à son prochain tour"
+              className="text-xs px-2.5 py-1 rounded border font-semibold bg-purple-900/70 text-purple-100 border-purple-600 hover:bg-purple-800"
+            >
+              🪬 Sceau Divin{sceauPickerToken ? " ▲" : ""}
+            </button>
+          )}
+        </div>
+        {sceauPickerToken && (
+          <div className="mt-2 flex flex-col gap-1">
+            <p className="text-purple-300 text-[11px]">Tuile adverse à annuler :</p>
+            {opponentTiles.map(t => (
+              <button
+                key={t.id}
+                onClick={() => handlePlaySceauToken(sceauPickerToken, t.id, opponentId)}
+                className="text-left text-xs px-2 py-1 rounded border bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700"
+              >
+                {t.name} <span className="text-gray-500">· {t.color} niv.{t.level}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 flex flex-col gap-3 w-full h-full">
 
@@ -961,6 +1126,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
               </p>
             </div>
 
+            {isParticipant && <KnownStatsPanel />}
+
             {!isParticipant && (
               <div className="text-center py-8">
                 <p className="text-gray-400 text-lg">Vous observez le combat</p>
@@ -1013,70 +1180,42 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                       </p>
                     ))}
                   </div>
+                ) : (getMyJuTokens().hasAny && !tokenStepAcknowledged) ? (
+                  // Portail de décision obligatoire : joue le(s) jeton(s) Ta-Seti — ou
+                  // passe explicitement — AVANT de voir la grille de cartes combat.
+                  // Empêche qu'un jeton "à jouer avant le combat" passe inaperçu et
+                  // devienne injouable sans que le joueur ait pu choisir en connaissance
+                  // de cause (cf. retour utilisateur : bouton introuvable une fois la
+                  // sélection de carte commencée).
+                  <div className="flex flex-col gap-4">
+                    <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 text-center">
+                      <p className="text-amber-300 text-sm font-semibold">
+                        Vous possédez un ou plusieurs jetons Ta-Seti jouables avant ce combat.
+                      </p>
+                      <p className="text-gray-400 text-xs mt-1">
+                        Décidez maintenant — ils ne seront plus jouables une fois passé au choix de la carte combat.
+                      </p>
+                    </div>
+                    <JuTokenPanel />
+                    <button
+                      onClick={() => setTokenStepAcknowledged(true)}
+                      className="px-4 py-2 rounded-lg font-semibold text-sm bg-gray-700 hover:bg-gray-600"
+                    >
+                      Continuer sans (autre) jeton →
+                    </button>
+                  </div>
                 ) : (
                   <>
-                    {/* Jetons Ta-Seti jouables au démarrage du combat (attaquant uniquement) */}
-                    {playerId === combat?.attacker && (() => {
-                      const hand = myState.juTokenHand || [];
-                      const pointsToken = !combat?.pointsTokenPlayerId ? hand.find(t => t.cardId === 'PU_points') : null;
-                      const simpleToken = !combat?.simpleCombat ? hand.find(t => t.cardId === 'PU_combat_simple') : null;
-                      const sceauToken  = hand.find(t => t.cardId === 'PU_sceau_divin');
-                      if (!pointsToken && !simpleToken && !sceauToken) return null;
-                      const defenderTiles = (gameState?.players?.[combat?.defender]?.ownedTileIds || [])
-                        .map(id => POWER_TILES.find(t => t.id === id))
-                        .filter(t => t && !(gameState?.disabledTileIds || {})[t.id]);
-                      return (
-                        <div className="bg-amber-950/40 border border-amber-800/50 rounded-lg p-3">
-                          <p className="text-amber-300 text-xs font-bold mb-2">🪬 Jetons Ta-Seti (démarrage du combat)</p>
-                          <div className="flex flex-wrap gap-2">
-                            {pointsToken && (
-                              <button
-                                onClick={() => handlePlayPointsToken(pointsToken)}
-                                title="+1 PV si victoire avec au moins 1 unité survivante · rien si victoire sans survivant · -1 PV si défaite"
-                                className="text-xs px-2.5 py-1 rounded border font-semibold bg-yellow-800/70 text-yellow-100 border-yellow-600 hover:bg-yellow-700"
-                              >
-                                🪬 Points
-                              </button>
-                            )}
-                            {simpleToken && (
-                              <button
-                                onClick={() => handlePlaySimpleToken(simpleToken)}
-                                title="Seules les unités et les cartes combat comptent dans ce combat"
-                                className="text-xs px-2.5 py-1 rounded border font-semibold bg-cyan-900/70 text-cyan-100 border-cyan-600 hover:bg-cyan-800"
-                              >
-                                🪬 Combat Simple
-                              </button>
-                            )}
-                            {sceauToken && defenderTiles.length > 0 && (
-                              <button
-                                onClick={() => setSceauPickerToken(sceauPickerToken ? null : sceauToken)}
-                                title="Annule une tuile pouvoir du défenseur jusqu'à son prochain tour"
-                                className="text-xs px-2.5 py-1 rounded border font-semibold bg-purple-900/70 text-purple-100 border-purple-600 hover:bg-purple-800"
-                              >
-                                🪬 Sceau Divin{sceauPickerToken ? " ▲" : ""}
-                              </button>
-                            )}
-                          </div>
-                          {combat?.simpleCombat && (
-                            <p className="text-cyan-300 text-[11px] mt-2">Combat simple actif : unités + cartes combat uniquement.</p>
-                          )}
-                          {sceauPickerToken && (
-                            <div className="mt-2 flex flex-col gap-1">
-                              <p className="text-purple-300 text-[11px]">Tuile du défenseur à annuler :</p>
-                              {defenderTiles.map(t => (
-                                <button
-                                  key={t.id}
-                                  onClick={() => handlePlaySceauToken(sceauPickerToken, t.id, combat.defender)}
-                                  className="text-left text-xs px-2 py-1 rounded border bg-gray-800 border-gray-600 text-gray-200 hover:bg-gray-700"
-                                >
-                                  {t.name} <span className="text-gray-500">· {t.color} niv.{t.level}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
+                    {(combat?.simpleCombat || combat?.pointsTokenPlayerId === playerId) && (
+                      <div className="bg-amber-950/30 border border-amber-800/40 rounded-lg px-3 py-2 text-xs text-amber-300 space-y-0.5">
+                        {combat?.pointsTokenPlayerId === playerId && (
+                          <p>🪬 Jeton Points actif : +1 PV si victoire avec survivants, -1 PV si défaite.</p>
+                        )}
+                        {combat?.simpleCombat && (
+                          <p>🪬 Combat simple actif : unités + cartes combat uniquement.</p>
+                        )}
+                      </div>
+                    )}
 
                     <div>
                       <p className="text-sm text-gray-400 mb-2">Choisis ta carte combat :</p>
@@ -1192,6 +1331,8 @@ export default function CombatModal({ onClose, session, gameState, effectivePlay
                 Tour de : <span className="font-bold">{getPlayerName(combat?.currentTurn)}</span>
               </p>
             </div>
+
+            {isParticipant && <KnownStatsPanel />}
 
             <div className="flex gap-4">
               {[combat?.attacker, combat?.defender].map(pid => {

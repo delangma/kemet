@@ -58,7 +58,7 @@ export default function MyZone({
   onEndTurn, canEndTurn: canEndTurnProp, onOpenTaSeti, onOpenCombat, onOpenDawn, session,
   onMoveCancel, onGoldenTokenMoveActivate, onGoldenTokenRecruitActivate,
   onGoldenTokenPrayerActivate, onGoldenTokenBuyActivate, onRenforcementActivate,
-  onNightTaSetiAdvance, onUseJuToken,
+  onUseJuToken,
   onPlayDayIdCard, onCancelTurn, canCancelTurn, onInfoEvent, onViewMyTiles,
   onStartEquipCreature,
 }) {
@@ -118,7 +118,11 @@ export default function MyZone({
   }
 
   const currentTurnPlayerId = gameState?.currentTurnPlayerId;
-  const isMyTurn  = currentTurnPlayerId === player.id;
+  // currentTurnPlayerId est déjà fixé au 1er joueur dès la création de la
+  // room, avant même les phases setup/draft/placement — sans le garde de
+  // phase, ce joueur pouvait lancer une action (recrutement, déplacement...)
+  // avant d'avoir déployé ses troupes initiales.
+  const isMyTurn  = currentTurnPlayerId === player.id && gameState?.phase === "playing";
   // Jeton gris : une 2e action (bonus) est autorisée dans le même tour qu'une
   // action classique, une seule fois par jour — jamais comme un tour indépendant.
   const hasGrayTokenForBonus = ownedTileIds.some(id => (POWER_TILES.find(t => t.id === id)?.name ?? "").toLowerCase().startsWith("jeton gris"));
@@ -170,12 +174,6 @@ export default function MyZone({
   // Renforcement
   const reinforcementPending = state.reinforcementPending ?? 0;
   const canRenforce = isMyTurn && reinforcementPending > 0 && !actionMode;
-  // Augmentation pyramide
-  const pyramidUpgradePending = state.pyramidUpgradePending ?? 0;
-  const canUpgradeFree = isMyTurn && pyramidUpgradePending > 0 && !actionMode;
-  // Avancée de nuit Ta-Seti
-  const taSetiNightAdvancePending = state.taSetiNightAdvancePending ?? 0;
-  const canNightTaSetiAdvance = isMyTurn && taSetiNightAdvancePending > 0 && !actionMode;
   // Draft ID (Choix supplémentaire)
   const idDraftPending = state.idDraftPending || null;
   const hasIdDraft = Array.isArray(idDraftPending) && idDraftPending.length > 0;
@@ -325,12 +323,12 @@ export default function MyZone({
             <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{state.ank ?? 7}</span>
           </span>
           <span className="flex items-center gap-0.5 text-xs shrink-0" title={`${vpPermanent}p+${vpTemp}t`}>
-            <span style={{ color: '#fbbf24' }}>☀</span>
+            <span style={{ color: '#f97316' }}>🏆</span>
             <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{vpTotal}</span>
           </span>
           {(state.dawnTokens ?? 0) > 0 && (
             <span className="flex items-center gap-0.5 text-xs shrink-0">
-              <span style={{ color: '#f97316' }}>🏆</span>
+              <span style={{ color: '#fbbf24' }}>☀</span>
               <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{state.dawnTokens}</span>
             </span>
           )}
@@ -415,12 +413,6 @@ export default function MyZone({
           {reinforcementPending > 0 && (
             <button onClick={onRenforcementActivate} disabled={!canRenforce} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canRenforce ? 'bg-cyan-700/80 text-cyan-100 border-cyan-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🔰 Renf.({reinforcementPending})</button>
           )}
-          {pyramidUpgradePending > 0 && (
-            <button onClick={() => canUpgradeFree && setLocalModal('pyramid_free')} disabled={!canUpgradeFree} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canUpgradeFree ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🏛️ Pyr.({pyramidUpgradePending})</button>
-          )}
-          {taSetiNightAdvancePending > 0 && (
-            <button onClick={() => canNightTaSetiAdvance && onNightTaSetiAdvance?.()} disabled={!canNightTaSetiAdvance} className={`text-[10px] px-2 py-1 rounded border font-semibold shrink-0 ${canNightTaSetiAdvance ? 'bg-red-900/80 text-red-200 border-red-700' : 'bg-gray-800/50 text-gray-600 border-gray-700'}`}>🌙 TS({taSetiNightAdvancePending})</button>
-          )}
           {juTokenHand.map((token, idx) => {
             const puCard = PU_CARDS.find(c => c.id === token.cardId);
             const enabled = canUseJuTokenFor(token.cardId);
@@ -486,12 +478,12 @@ export default function MyZone({
             className="flex items-center gap-1"
             title={`Permanent: ${vpPermanent} | Temporaire: ${vpTemp}`}
           >
-            <span style={{ color: '#fbbf24' }}>☀</span>
+            <span style={{ color: '#f97316' }}>🏆</span>
             <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{vpTotal}</span>
             <span style={{ color: '#6B4C1E', fontSize: 10 }}>({vpPermanent}+{vpTemp})</span>
           </span>
           <span className="flex items-center gap-1">
-            <span style={{ color: '#f97316' }}>🏆</span>
+            <span style={{ color: '#fbbf24' }}>☀</span>
             <span style={{ color: '#e5d5b0', fontWeight: 600 }}>{state.dawnTokens ?? 0}</span>
           </span>
         </div>
@@ -638,34 +630,6 @@ export default function MyZone({
             }`}
           >
             🔰 Renforcer ({reinforcementPending})
-          </button>
-        )}
-        {/* Augmentation pyramide W_3_1 */}
-        {pyramidUpgradePending > 0 && (
-          <button
-            onClick={() => canUpgradeFree && setLocalModal("pyramid_free")}
-            disabled={!canUpgradeFree}
-            className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
-              canUpgradeFree
-                ? "bg-indigo-700/80 hover:bg-indigo-600 text-indigo-100 border-indigo-500"
-                : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
-            }`}
-          >
-            🏛️ Améliorer pyramide ({pyramidUpgradePending})
-          </button>
-        )}
-        {/* Avancée de nuit Ta-Seti R_2_4 */}
-        {taSetiNightAdvancePending > 0 && (
-          <button
-            onClick={() => canNightTaSetiAdvance && onNightTaSetiAdvance?.()}
-            disabled={!canNightTaSetiAdvance}
-            className={`text-xs px-2.5 py-1 rounded-md font-semibold border transition-all shrink-0 ${
-              canNightTaSetiAdvance
-                ? "bg-red-900/80 hover:bg-red-800 text-red-200 border-red-700"
-                : "bg-gray-800/50 text-gray-600 border-gray-700 cursor-not-allowed"
-            }`}
-          >
-            🌙 Avancée Ta-Seti ({taSetiNightAdvancePending})
           </button>
         )}
         {/* Jetons JU (PU) : disponibilité selon le type (voir canUseJuTokenFor) */}
@@ -977,16 +941,6 @@ export default function MyZone({
           session={session}
           isGoldenBuy={actionMode === "buy_golden"}
           onBuy={tileId => { onActionActivate(localModal, { tileId }); setLocalModal(null); }}
-          onClose={() => setLocalModal(null)}
-        />
-      )}
-
-      {localModal === "pyramid_free" && (
-        <PyramidEvolveModal
-          player={player}
-          gameState={gameState}
-          free={true}
-          onConfirm={params => { onActionActivate("pyramid_free", params); setLocalModal(null); }}
           onClose={() => setLocalModal(null)}
         />
       )}
